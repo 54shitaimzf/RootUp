@@ -1,38 +1,77 @@
-# Slint Rust Template
+# RootUp
 
-A template for a Rust application that's using [Slint](https://slint.rs/) for the user interface.
+## 中文
 
-## About
+RootUp 是一个使用 Rust + Slint 开发的桌面工具，面向学生场景，目标是帮助管理下载文件并提供更清晰的本地文件整理体验。
 
-This template helps you get started developing a Rust application with Slint as toolkit
-for the user interface. It demonstrates the integration between the `.slint` UI markup and
-Rust code, how to react to callbacks, get and set properties, and use basic widgets.
+### 当前能力
 
-## Usage
+- 图形界面主窗口（Slint）
+- 系统托盘驻留与菜单（打开 / 退出）
+- 关闭窗口时可选择最小化到托盘或直接退出
+- 统一资源路径管理（图标、配置与数据目录）
 
-1. Install Rust by following its [getting-started guide](https://www.rust-lang.org/learn/get-started).
-   Once this is done, you should have the `rustc` compiler and the `cargo` build system installed in your `PATH`.
-2. Download and extract the [ZIP archive of this repository](https://github.com/slint-ui/slint-rust-template/archive/refs/heads/main.zip).
-3. Rename the extracted directory and change into it:
-    ```
-    mv slint-rust-template-main my-project
-    cd my-project    
-    ```
-4. Build with `cargo`:
-    ```
-    cargo build
-    ```
-5. Run the application binary:
-    ```
-    cargo run
-    ```
+### 快速开始
 
-We recommend using an IDE for development, along with our [LSP-based IDE integration for `.slint` files](https://github.com/slint-ui/slint/blob/master/tools/lsp/README.md). You can also load this project directly in [Visual Studio Code](https://code.visualstudio.com) and install our [Slint extension](https://marketplace.visualstudio.com/items?itemName=Slint.slint).
+1. 安装 Rust（建议 stable）
+2. 克隆仓库并进入项目目录
+3. 运行：
 
-## Next Steps
+```bash
+cargo run
+```
 
-We hope that this template helps you get started, and that you enjoy exploring making user interfaces with Slint. To learn more
-about the Slint APIs and the `.slint` markup language, check out our [online documentation](https://slint.dev/docs).
+4. 发布构建：
 
-Don't forget to edit this readme to replace it by yours, and edit the `name =` field in `Cargo.toml` to match the name of your
-project.
+```bash
+cargo build --release
+```
+
+### 项目结构（简要）
+
+- `src/`：核心 Rust 代码
+- `ui/`：Slint 界面定义
+- `resources/`：图标、配置、数据与字体资源
+
+### 许可证
+
+本项目使用 **GNU AGPLv3**，详见 `LICENSE`。
+
+---
+
+## English
+
+RootUp is a desktop utility built with Rust + Slint. It targets student workflows and aims to improve local download/file organization with a lightweight UI experience.
+
+### Current Features
+
+- Main GUI window powered by Slint
+- System tray integration with menu actions (Open / Quit)
+- Close confirmation: minimize to tray or exit directly
+- Centralized resource path management (icons, config, data)
+
+### Quick Start
+
+1. Install Rust (stable recommended)
+2. Clone this repository and enter the project folder
+3. Run:
+
+```bash
+cargo run
+```
+
+4. Build release:
+
+```bash
+cargo build --release
+```
+
+### Project Layout (Brief)
+
+- `src/`: core Rust code
+- `ui/`: Slint UI definitions
+- `resources/`: icons, configs, data, and fonts
+
+### License
+
+This project is licensed under **GNU AGPLv3**. See `LICENSE` for details.
