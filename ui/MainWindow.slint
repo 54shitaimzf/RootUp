@@ -1,0 +1,143 @@
+import {
+    VerticalBox,
+    HorizontalBox,
+    Button,
+    ComboBox,
+    StandardButton,
+} from "std-widgets.slint";
+
+
+export enum Confirmation{
+    DoNotExit,
+    CloseWithoutExit,
+    CloseAndExit
+}
+
+//关闭确认弹窗
+component CloseConfirm inherits PopupWindow {
+    callback confirm_result(result: Confirmation);
+    close-policy: no-auto-close;
+    width: 392px;
+    height: 188px;
+
+    Rectangle {
+        border-radius: 10px;
+        border-width: 1px;
+        border-color: #1f1f1f;
+        background: #000000;
+
+        VerticalBox {
+            padding: 14px;
+            spacing: 10px;
+
+            Text {
+                text: "是否关闭RootUp?";
+                color: #d9dee7;
+                font-size: 16px;
+                font-weight: 600;
+            }
+
+            Text {
+                text: "你可以最小化到系统托盘，或直接退出程序。";
+                color: #64748b;
+                wrap: word-wrap;
+            }
+
+            exit_method := ComboBox {
+                width: 220px;
+                model: ["最小化到系统托盘", "直接退出"];
+                current-value: "最小化到系统托盘";
+            }
+
+            HorizontalBox {
+                spacing: 10px;
+                Rectangle {
+                    min-width: 96px;
+                    height: 34px;
+                    border-radius: 6px;
+                    border-width: 1px;
+                    border-color: #3a3f47;
+                    background: #121212;
+                    Text {
+                        text: "确认";
+                        color: #d9dee7;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea {
+                        clicked => {
+                            exit_method.current-value == "最小化到系统托盘" ? root.confirm_result(Confirmation.CloseWithoutExit) : root.confirm_result(Confirmation.CloseAndExit);
+                            root.close();
+                        }
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+
+                Rectangle {
+                    min-width: 88px;
+                    height: 34px;
+                    border-radius: 6px;
+                    border-width: 1px;
+                    border-color: #3a3f47;
+                    background: #0c0c0c;
+                    Text {
+                        text: "取消";
+                        color: #b8bec9;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea {
+                        clicked => {
+                            root.confirm_result(Confirmation.DoNotExit);
+                            root.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    //创建系统托盘图标触发的监视器回调
+    callback monitor_triggered();
+    callback close_confirmed(result: Confirmation);
+    callback show_confirm();
+    show_confirm => {
+        close_confirm.show();
+    }
+    default-font-size: 10px;
+    background: #f6f8fb;
+    height: 540px;
+    width: 960px;
+    
+
+    Text {
+        x: 20px;
+        y: 20px;
+        text: "RootUp 正在后台运行";
+        color: #334155;
+        font-size: 20px;
+        font-weight: 600;
+    }
+
+    //系统托盘图标触发的监视定时器
+    tray_monitor := Timer {
+        interval: 100ms;
+        running: true;
+        triggered => {
+            root.monitor_triggered();
+        }
+    }
+
+    close_confirm := CloseConfirm {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        confirm_result(result) => {
+            root.close_confirmed(result);
+        }
+    }
+}
+
+

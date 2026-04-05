@@ -1,0 +1,24 @@
+[package]
+name = "RootUp"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+slint = "1.15.1"
+tray-icon = "0.21.3"
+
+# 注释掉暂时不用的包提高编译速度
+
+# serde = "1.0.228"
+# toml = "1.1.1"
+# self_update = "0.43.1"
+# walkdir = "2.5.0"
+
+[build-dependencies]
+slint-build = "1.15.1"
+
+[profile.release]
+codegen-units = 1
+lto = true
