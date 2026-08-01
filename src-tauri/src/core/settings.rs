@@ -18,6 +18,9 @@ pub struct Settings {
     pub theme: String,
     /// "zh-CN" | "en"
     pub language: String,
+    /// 监控目录列表（迭代 A：文件监听与索引）
+    #[serde(default)]
+    pub watched_dirs: Vec<String>,
 }
 
 impl Default for Settings {
@@ -25,6 +28,7 @@ impl Default for Settings {
         Self {
             theme: THEME_SYSTEM.to_string(),
             language: LANG_ZH_CN.to_string(),
+            watched_dirs: Vec::new(),
         }
     }
 }

@@ -1,0 +1,78 @@
+import type { FileRecord } from "./tauri";
+
+/** 按名称/路径过滤（大小写不敏感）。 */
+export function filterFiles(files: FileRecord[], query: string): FileRecord[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return files;
+  return files.filter(
+    (f) =>
+      f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
+  );
+}
+
+/**
+ * 合并实时批次到现有列表：
+ * - state=deleted 的记录从列表移除
+ * - 其余按 path upsert
+ * - 按 modified 倒序并截断
+ */
+export function mergeFiles(
+  prev: FileRecord[],
+  incoming: FileRecord[],
+  limit = 200,
+): FileRecord[] {
+  const map = new Map<string, FileRecord>(prev.map((f) => [f.path, f]));
+  for (const rec of incoming) {
+    if (rec.state === "deleted") {
+      map.delete(rec.path);
+    } else {
+      map.set(rec.path, rec);
+    }
+  }
+  return [...map.values()]
+    .sort((a, b) => b.modified - a.modified)
+    .slice(0, limit);
+}
+
+/** 状态徽标元数据（文案 key 与颜色类分离，便于主题/皮肤调整）。 */
+export interface FileStateMeta {
+  labelKey: string;
+  dotClass: string;
+}
+
+export function fileStateMeta(state: FileRecord["state"]): FileStateMeta {
+  switch (state) {
+    case "pending":
+      return { labelKey: "files.statePending", dotClass: "bg-amber-400" };
+    case "indexed":
+      return { labelKey: "files.stateIndexed", dotClass: "bg-brand-500" };
+    case "archived":
+      return { labelKey: "files.stateArchived", dotClass: "bg-sky-500" };
+    case "deleted":
+      return { labelKey: "files.stateDeleted", dotClass: "bg-slate-400" };
+  }
+}
+
+/** 人类可读的文件大小。 */
+export function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let i = 1; i < units.length && value >= 1024; i++) {
+    value /= 1024;
+    unit = units[i];
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+}
+
+/** 毫秒时间戳 → 本地可读时间。 */
+export function formatTimestamp(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "—";
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
+}

@@ -13,7 +13,7 @@ export default {
     files: {
       title: "Files",
       description:
-        "Folder watching, smart sorting and auto archiving are coming in future releases.",
+        "New files in watched folders are indexed here in real time.",
     },
     homework: {
       title: "Homework",
@@ -43,6 +43,22 @@ export default {
     language: "Language",
     languageZh: "中文",
     languageEn: "English",
+    watchedDirs: "Watched folders",
+    watchedDirsDesc:
+      "Add download or study folders; new files are indexed automatically.",
+    addDir: "Add",
+    dirPlaceholder: "Folder path, e.g. D:\\Downloads",
+    remove: "Remove",
+    dirEmpty: "No watched folders yet",
+  },
+  files: {
+    searchPlaceholder: "Search file name or path…",
+    empty: "No files yet. Add a watched folder in Settings.",
+    loading: "Loading…",
+    statePending: "Checking",
+    stateIndexed: "Indexed",
+    stateArchived: "Archived",
+    stateDeleted: "Deleted",
   },
   close: {
     title: "Close RootUp?",

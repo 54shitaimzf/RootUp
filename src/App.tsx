@@ -5,6 +5,7 @@ import { Sidebar, type PageKey } from "./components/Sidebar";
 import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";
 import { SettingsPage } from "./pages/SettingsPage";
+import { FilePage } from "./pages/FilePage";
 import { ThemeProvider } from "./theme/ThemeProvider";
 
 function renderPage(page: PageKey) {
@@ -12,12 +13,7 @@ function renderPage(page: PageKey) {
     case "settings":
       return <SettingsPage />;
     case "files":
-      return (
-        <PagePlaceholder
-          titleKey="pages.files.title"
-          descriptionKey="pages.files.description"
-        />
-      );
+      return <FilePage />;
     case "homework":
       return (
         <PagePlaceholder

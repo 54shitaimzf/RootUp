@@ -12,7 +12,7 @@ export default {
   pages: {
     files: {
       title: "文件",
-      description: "文件夹监听、智能分类与自动归档将在后续版本上线。",
+      description: "监控目录中出现的新文件会实时索引到这里。",
     },
     homework: {
       title: "作业",
@@ -39,6 +39,21 @@ export default {
     language: "语言",
     languageZh: "中文",
     languageEn: "English",
+    watchedDirs: "监控目录",
+    watchedDirsDesc: "添加下载目录或资料目录，新文件会自动进入索引。",
+    addDir: "添加",
+    dirPlaceholder: "输入目录路径，如 D:\\Downloads",
+    remove: "移除",
+    dirEmpty: "尚未添加监控目录",
+  },
+  files: {
+    searchPlaceholder: "搜索文件名或路径…",
+    empty: "暂无文件，先在设置中添加监控目录。",
+    loading: "加载中…",
+    statePending: "确认中",
+    stateIndexed: "已索引",
+    stateArchived: "已归档",
+    stateDeleted: "已删除",
   },
   close: {
     title: "关闭 RootUp？",
