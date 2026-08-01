@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CloseConfirmDialog } from "./components/CloseConfirmDialog";
 import { PagePlaceholder } from "./components/PagePlaceholder";
 import { Sidebar, type PageKey } from "./components/Sidebar";
-import { useSettings } from "./hooks/useSettings";
+import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
@@ -43,6 +43,14 @@ function renderPage(page: PageKey) {
 }
 
 export default function App() {
+  return (
+    <SettingsProvider>
+      <Shell />
+    </SettingsProvider>
+  );
+}
+
+function Shell() {
   const [page, setPage] = useState<PageKey>("files");
   const { settings } = useSettings();
 

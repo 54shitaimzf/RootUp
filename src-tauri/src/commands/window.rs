@@ -1,5 +1,7 @@
+use crate::app::QuitFlag;
 use crate::infra::window;
-use tauri::AppHandle;
+use std::sync::atomic::Ordering;
+use tauri::{AppHandle, State};
 
 /// 关闭确认弹窗中选择"后台运行"：销毁窗口，仅保留托盘。
 #[tauri::command]
@@ -9,6 +11,7 @@ pub fn hide_to_tray(app: AppHandle) -> Result<(), String> {
 
 /// 关闭确认弹窗中选择"退出程序"：完全退出应用。
 #[tauri::command]
-pub fn quit_app(app: AppHandle) {
+pub fn quit_app(app: AppHandle, quit_flag: State<QuitFlag>) {
+    quit_flag.0.store(true, Ordering::SeqCst);
     app.exit(0);
 }

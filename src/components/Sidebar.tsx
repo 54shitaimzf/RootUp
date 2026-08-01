@@ -31,12 +31,12 @@ export function Sidebar({
   return (
     <aside className="flex w-52 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-brand-500 text-white shadow-card">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-700 text-white shadow-card">
           <Sprout className="size-5" />
         </div>
         <div className="min-w-0">
           <div className="text-sm font-semibold leading-tight">RootUp</div>
-          <div className="truncate text-xs text-slate-400 dark:text-slate-500">
+          <div className="truncate text-xs text-slate-500 dark:text-slate-400">
             {t("app.tagline")}
           </div>
         </div>
@@ -63,7 +63,7 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto px-5 py-4 text-xs text-slate-400 dark:text-slate-600">
+      <div className="mt-auto px-5 py-4 text-xs text-slate-500 dark:text-slate-400">
         RootUp v0.1.0
       </div>
     </aside>

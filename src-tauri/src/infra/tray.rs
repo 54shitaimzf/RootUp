@@ -1,6 +1,7 @@
+use std::sync::atomic::Ordering;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::App;
+use tauri::{App, Manager};
 
 pub fn init(app: &App) -> tauri::Result<()> {
     let open_item = MenuItem::with_id(app, "open", "打开", true, None::<&str>)?;
@@ -8,7 +9,7 @@ pub fn init(app: &App) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
 
     let icon = tauri::image::Image::from_bytes(include_bytes!(
-        "../../../resources/icons/RootUp_64x64.png"
+        "../../../resources/icons/rootup-sprout.png"
     ))?;
 
     let _tray = TrayIconBuilder::with_id("rootup-tray")
@@ -20,7 +21,12 @@ pub fn init(app: &App) -> tauri::Result<()> {
                 "open" => {
                     let _ = crate::infra::window::ensure_main_window(app);
                 }
-                "quit" => app.exit(0),
+                "quit" => {
+                    app.state::<crate::app::QuitFlag>()
+                        .0
+                        .store(true, Ordering::SeqCst);
+                    app.exit(0);
+                }
                 _ => {}
             }
         })

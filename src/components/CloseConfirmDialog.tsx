@@ -32,10 +32,12 @@ export function CloseConfirmDialog() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-96 rounded-xl border border-slate-200 bg-white p-6 shadow-pop dark:border-slate-700 dark:bg-slate-900"
+        className="w-96 rounded-xl border border-slate-200 bg-white p-6 text-slate-700 shadow-pop dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="text-base font-semibold">{t("close.title")}</h2>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          {t("close.title")}
+        </h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           {t("close.description")}
         </p>
@@ -50,7 +52,7 @@ export function CloseConfirmDialog() {
           <button
             type="button"
             onClick={() => void hideToTray()}
-            className="rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+            className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800"
           >
             {t("close.background")}
           </button>
