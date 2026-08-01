@@ -65,13 +65,16 @@
 
 ## 模块落点
 
-- `core`：`events`（状态机）、`index`（索引模型）、`open`（OpenMethod）。
-- `infra`：`watcher`（notify + 事件归一）、`opener`（打开 + lnk）、`storage`（扩展）。
-- `commands`：监控目录管理、文件查询、`open_item`、`create_shortcut`、`refresh_shortcut`。
-- 前端：文件页（列表/搜索/打开/快捷方式）、设置页（监控目录管理）。
+- `core`：`events`（状态机）、`ignore`（忽略规则）、`index`（索引模型 + trait）、`log`（日志契约）。
+- `infra`：`watcher`（notify + 事件归一）、`index_store`（SQLite）、`logging`（文件日志）；迭代 B 引入 `opener`。
+- `commands`：监控目录管理、文件查询、`log_event`；迭代 B 引入 `open_item`、`create_shortcut`、`refresh_shortcut`。
+- 前端：文件页（列表/搜索/状态）、设置页（监控目录管理）；迭代 B 加入打开/快捷方式。
+- 日志：任意模块经 `log` facade 写入，独立于业务模块，可单独演进。
+
+实施计划见 [PLAN_FILE_MONITORING.md](PLAN_FILE_MONITORING.md)。
 
 ## 迭代拆分
 
-- **迭代 A（进行中规划）**：事件管道 + 索引 + 文件页浏览 + 打开/桌面快捷方式 + 监控目录设置。
-- **迭代 B**：分类建议（规则/偏好标签）与受控归档（含快捷方式路径联动）。
+- **迭代 A（进行中规划）**：事件管道 + 索引分类 + 文件页浏览 + 监控目录设置 + 日志系统。
+- **迭代 B**：打开/桌面快捷方式、分类建议（规则/偏好标签）与受控归档（含快捷方式路径联动）。
 - **迭代 C**：全自动归档模式、单元分类树、撤销与路径跟随强化。
