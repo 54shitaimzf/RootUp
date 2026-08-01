@@ -1,0 +1,80 @@
+# 架构说明（ARCHITECTURE）
+
+## 技术栈
+
+- 桌面壳：Tauri v2（Rust），负责托盘、窗口生命周期、单实例与设置存储
+- 前端：React + TypeScript + Vite + Tailwind CSS v4 + i18next + lucide-react
+- 许可证：GPL-3.0-or-later
+
+## 目录结构与依赖规则
+
+```
+RootUp/
+├── src/                          # React 前端
+│   ├── main.tsx                  # 入口（仅挂载 App）
+│   ├── App.tsx                   # 布局组装：Sidebar + 页面切换 + 主题/i18n
+│   ├── pages/                    # 页面层：Files / Homework / Courses / Tools / Settings
+│   ├── components/               # 通用 UI 层：Sidebar、CloseConfirmDialog、PagePlaceholder
+│   ├── hooks/                    # 通用逻辑层：useSettings
+│   ├── lib/                      # 基础设施层：类型化 invoke 封装（Tauri API 边界）
+│   ├── theme/                    # 横切：tokens.css（设计令牌）+ ThemeProvider
+│   ├── i18n/                     # 横切：i18next 配置与 zh-CN / en 字典
+│   └── styles/
+├── src-tauri/
+│   ├── src/
+│   │   ├── main.rs               # 入口（仅调用 run()）
+│   │   ├── lib.rs                # run()：模块组装入口
+│   │   ├── app.rs                # Builder：插件、托盘、窗口事件、命令注册
+│   │   ├── commands/             # API 边界层：参数校验 → 调 core / infra
+│   │   ├── core/                 # 业务逻辑层：纯 Rust，不依赖 Tauri
+│   │   └── infra/                # 平台适配层：storage、tray、window
+│   ├── tauri.conf.json
+│   └── capabilities/
+├── docs/                         # VISION / ROADMAP / ARCHITECTURE
+└── resources/                    # 图标等非代码资源
+```
+
+**依赖方向**（上层可依赖下层，禁止反向依赖；同层模块通过上层协调，不互相直连）：
+
+```
+pages → components → hooks → lib(API) → Tauri commands → core 业务逻辑
+                                        ↑                        ↑
+                       theme / i18n（横切，任意层可读）    infra（持久化/托盘/窗口）
+```
+
+## 后台生命周期（关闭即销毁）
+
+1. 用户点击窗口关闭 → Rust 拦截 `CloseRequested` 并 `prevent_close`，向前端广播 `close-requested`。
+2. 前端弹出确认框，三个选择：
+   - **取消**：仅关闭弹窗，窗口保持。
+   - **后台运行**：调用 `hide_to_tray` 命令，Rust 销毁窗口——WebView 进程退出，后台只保留轻量托盘进程（零浏览器内存）。
+   - **退出程序**：调用 `quit_app` 命令，完全退出应用。
+3. 托盘菜单"打开"：窗口不存在则按统一配置重建，存在则显示并聚焦。
+4. 单实例插件保证二次启动时唤起已有窗口，不重复开窗。
+
+## 设置数据流
+
+`Settings { theme: system|light|dark, language: zh-CN|en }`
+
+```
+前端 lib/tauri.ts → invoke → commands/settings.rs（校验）
+                    → infra/storage.rs（tauri-plugin-store，settings.json）
+                    → core/settings.rs（模型与默认值）
+```
+
+`core` 层为纯 Rust 数据结构，不依赖 Tauri 类型，便于后续扩展字段与单元测试。
+
+## 扩展点
+
+- **多语言**：在 `src/i18n/locales/` 新增语言文件，并在 `core/settings.rs` 的校验常量中登记语言代码。
+- **主题**：三态（跟随系统/浅/深）由 `theme/ThemeProvider.tsx` 管理，`matchMedia` 监听系统变化。
+- **皮肤**：皮肤 = 一套设计令牌。默认皮肤为 `theme/tokens.css` 的 `@theme` 变量；新增皮肤时替换/叠加令牌即可，组件零改动。
+- **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/`（自包含组件 + hooks + API），`pages/` 只保留入口。
+- **托盘菜单**：在 `infra/tray.rs` 中扩展菜单项与事件处理。
+- **后端命令**：在 `commands/` 新增模块，并在 `app.rs` 的 `invoke_handler` 中注册。
+
+## 演进规则
+
+- `components/` 只放跨功能可复用的组件；页面私有组件随功能生长到 `features/`。
+- 新增依赖前先评估必要性（轻量原则）；当前不引入路由、状态管理等非必要库。
+- 保持单向依赖，代码审查时以本文件依赖图为基准。

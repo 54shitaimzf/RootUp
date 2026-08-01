@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "../theme/tokens.css";
+
+/* 深色模式采用 class 策略，由 ThemeProvider 控制 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply antialiased;
+  }
+}

@@ -1,0 +1,38 @@
+/*
+ * RootUp 设计令牌（默认皮肤）
+ *
+ * 皮肤机制：皮肤 = 一套令牌覆盖。未来新增皮肤时，
+ * 通过替换/叠加 @theme 变量实现，组件无需改动。
+ * v1 仅提供 default 皮肤，结构已预留。
+ */
+
+@theme {
+  /* 字体：中文走系统字体栈，保证无字体文件依赖 */
+  --font-sans:
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI",
+    system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, ui-monospace, monospace;
+
+  /* 品牌色：薄荷绿（整理、生长、秩序） */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+  --color-brand-950: #022c22;
+
+  /* 圆角：按钮 8px、卡片 12px、弹窗 16px */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* 柔和层级阴影 */
+  --shadow-card:
+    0 1px 2px rgb(15 23 42 / 0.06), 0 4px 16px rgb(15 23 42 / 0.06);
+  --shadow-pop: 0 8px 30px rgb(15 23 42 / 0.16);
+}
