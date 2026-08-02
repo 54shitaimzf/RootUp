@@ -99,6 +99,27 @@ Write-Host "== RootUp 冒烟测试 =="
 Write-Host "测试目录: $TestRoot"
 Write-Host "日志: $LogFile"
 
+# ---- 资源嵌入检查（防止误用 cargo build 构建出无前端资源的发布版） ----
+$HtmlPath = Join-Path $Repo "dist\index.html"
+$AssetEmbedded = $false
+if (Test-Path $HtmlPath) {
+    $html = Get-Content $HtmlPath -Raw
+    if ($html -match 'src="[^"]*/([^"/]+\.js)"') {
+        $assetName = $Matches[1]
+        $exeBytes = [System.IO.File]::ReadAllBytes($ExePath)
+        $exeText = [System.Text.Encoding]::UTF8.GetString($exeBytes)
+        $AssetEmbedded = $exeText.Contains($assetName)
+    }
+}
+Write-Result "发布版嵌入前端资源" $AssetEmbedded "请用 npm run tauri build -- --no-bundle 构建（cargo build 不会嵌入 dist）"
+if (-not $AssetEmbedded) {
+    Write-Host "中止：请先用 tauri build 构建后再运行冒烟。" -ForegroundColor Red
+    if ($Proc -and -not $Proc.HasExited) { Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $Backup) { Move-Item $Backup $SettingsPath -Force } else { Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue }
+    Remove-Item $TestRoot -Recurse -Force -ErrorAction SilentlyContinue
+    exit 1
+}
+
 # ---- 启动并等待首次扫描 ----
 $Proc = Start-Process -FilePath $ExePath -PassThru
 $ScanDone = Wait-LogLine $LogFile "scan: 完成 dir=$TestDir" 120

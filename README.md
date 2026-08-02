@@ -47,6 +47,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 3. 安装前端依赖：`npm install`
 4. 开发运行：`npm run tauri dev`
 5. 发布构建：`npm run tauri build`
+> 注意：发布构建必须使用 `npm run tauri build`。直接运行 `cargo build --release` 不会把前端资源嵌入程序，窗口会显示 `localhost 拒绝连接`。
 
 ### 项目结构（简要）
 
@@ -112,6 +113,7 @@ File watching, smart classification, course schedules, homework management and d
 3. Install frontend dependencies: `npm install`
 4. Run in development: `npm run tauri dev`
 5. Build for release: `npm run tauri build`
+> Note: release builds must use `npm run tauri build`. Running `cargo build --release` directly does not embed the frontend assets, and the window will show `localhost connection refused`.
 
 ### Project Layout (Brief)
 
