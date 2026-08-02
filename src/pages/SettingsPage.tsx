@@ -26,10 +26,10 @@ import {
   summarizeIgnoreRules,
 } from "../lib/effectiveMap";
 import { useTheme } from "../theme/ThemeProvider";
-import { IgnoreRulesDialog } from "../components/IgnoreRulesDialog";
-import { ClassifyMappingDialog } from "../components/ClassifyMappingDialog";
-import { SchemeDialog } from "../components/SchemeDialog";
-import { SchemeApplyDialog } from "../components/SchemeApplyDialog";
+import { IgnoreRulesDialog } from "../features/settings/IgnoreRulesDialog";
+import { ClassifyMappingDialog } from "../features/settings/ClassifyMappingDialog";
+import { SchemeDialog } from "../features/settings/SchemeDialog";
+import { SchemeApplyDialog } from "../features/settings/SchemeApplyDialog";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";

@@ -5,7 +5,7 @@ import { FilterBar } from "../components/FilterBar";
 import { SyntaxHelp } from "../components/SyntaxHelp";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
-import type { PageKey } from "../components/Sidebar";
+import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
 import type { ScanController } from "../hooks/useScan";
 import {

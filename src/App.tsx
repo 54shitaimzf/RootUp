@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { CloseConfirmDialog } from "./components/CloseConfirmDialog";
 import { PagePlaceholder } from "./components/PagePlaceholder";
-import { Sidebar, type PageKey } from "./components/Sidebar";
+import { Sidebar } from "./components/Sidebar";
+import type { PageKey } from "./lib/nav";
 import { useScan, type ScanController } from "./hooks/useScan";
 import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";

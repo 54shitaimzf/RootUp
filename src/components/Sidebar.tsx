@@ -9,8 +9,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { APP_NAME, APP_VERSION } from "../lib/constants";
-
-export type PageKey = "files" | "homework" | "courses" | "tools" | "settings";
+import type { PageKey } from "../lib/nav";
 
 const NAV_ITEMS: { key: PageKey; icon: LucideIcon; labelKey: string }[] = [
   { key: "files", icon: FolderOpen, labelKey: "nav.files" },

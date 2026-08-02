@@ -5,10 +5,10 @@ import {
   buildEffectiveMap,
   resetExtensionCategory,
   setExtensionCategory,
-} from "../lib/effectiveMap";
-import type { ClassifyDefaultEntry, ClassifyRule } from "../lib/tauri";
-import { Button } from "./Button";
-import { Modal } from "./Modal";
+} from "../../lib/effectiveMap";
+import type { ClassifyDefaultEntry, ClassifyRule } from "../../lib/tauri";
+import { Button } from "../../components/Button";
+import { Modal } from "../../components/Modal";
 
 interface EditorAnchor {
   top: number;

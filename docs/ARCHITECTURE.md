@@ -13,9 +13,10 @@ RootUp/
 ├── src/                          # React 前端
 │   ├── main.tsx                  # 入口（仅挂载 App）
 │   ├── App.tsx                   # 布局组装：Sidebar + 页面切换 + 主题/i18n
-│   ├── pages/                    # 页面层：Files / Homework / Courses / Tools / Settings
-│   ├── components/               # 通用 UI 层：Sidebar、CloseConfirmDialog、PagePlaceholder
-│   ├── hooks/                    # 通用逻辑层：useSettings
+│   ├── pages/                    # 页面层入口：Files / Homework / Courses / Tools / Settings
+│   ├── features/                 # 功能域私有组件：settings/（四个规则弹窗），随功能生长
+│   ├── components/               # 通用 UI 层：Modal、Button、Banner、Sidebar 等跨功能复用组件
+│   ├── hooks/                    # 通用逻辑层：useSettings / useFiles / useScan
 │   ├── lib/                      # 基础设施层：类型化 invoke 封装（Tauri API 边界）
 │   ├── theme/                    # 横切：tokens.css（设计令牌）+ ThemeProvider
 │   ├── i18n/                     # 横切：i18next 配置与 zh-CN / en 字典

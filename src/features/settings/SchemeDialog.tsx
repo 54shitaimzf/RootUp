@@ -8,10 +8,10 @@ import {
   type ClassifyRule,
   type IgnoreRules,
   type RuleScheme,
-} from "../lib/tauri";
-import { Button } from "./Button";
-import { ConfirmButton } from "./ConfirmButton";
-import { Modal } from "./Modal";
+} from "../../lib/tauri";
+import { Button } from "../../components/Button";
+import { ConfirmButton } from "../../components/ConfirmButton";
+import { Modal } from "../../components/Modal";
 
 const MAX_NAME_LEN = 40;
 

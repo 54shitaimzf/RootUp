@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { IgnoreRules } from "../lib/tauri";
-import { Button } from "./Button";
-import { ChipGroup } from "./ChipGroup";
-import { Modal } from "./Modal";
+import type { IgnoreRules } from "../../lib/tauri";
+import { Button } from "../../components/Button";
+import { ChipGroup } from "../../components/ChipGroup";
+import { Modal } from "../../components/Modal";
 
 export function IgnoreRulesDialog({
   open,
