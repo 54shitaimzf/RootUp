@@ -1,5 +1,10 @@
+pub mod classify;
 pub mod events;
 pub mod ignore;
 pub mod index;
 pub mod log;
+pub mod path;
+pub mod query;
+pub mod scan;
 pub mod settings;
+pub mod watched;

@@ -1,5 +1,32 @@
 import type { FileRecord } from "./tauri";
 
+/** 筛选器组合参数（新手路径：点选 → 生成查询串） */
+export interface QueryParts {
+  text?: string;
+  types?: string[];
+  states?: string[];
+  labels?: string[];
+}
+
+/** 将筛选器状态组合为搜索语法字符串（后端 query_files 解析） */
+export function buildQuery(parts: QueryParts): string {
+  const tokens: string[] = [];
+  const text = parts.text?.trim();
+  if (text) tokens.push(text);
+  for (const type of parts.types ?? []) tokens.push(`type:${type}`);
+  for (const state of parts.states ?? []) tokens.push(`state:${state}`);
+  for (const label of parts.labels ?? []) tokens.push(`label:${label}`);
+  return tokens.join(" ");
+}
+
+/** 解析逗号分隔的标签字段为数组 */
+export function parseLabels(labels: string): string[] {
+  return labels
+    .split(",")
+    .map((label) => label.trim())
+    .filter(Boolean);
+}
+
 /** 按名称/路径过滤（大小写不敏感）。 */
 export function filterFiles(files: FileRecord[], query: string): FileRecord[] {
   const q = query.trim().toLowerCase();

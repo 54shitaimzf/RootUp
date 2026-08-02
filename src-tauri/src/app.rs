@@ -1,10 +1,15 @@
 use crate::commands::files as files_commands;
 use crate::commands::settings as settings_commands;
 use crate::commands::window as window_commands;
+use crate::core::classify::{ClassifierChain, ExtensionClassifier};
 use crate::core::events::StabilityParams;
+use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::IndexStore;
+use crate::core::scan::{ScanEvent, ScanEventSink, ScanParams};
+use crate::core::watched::dedupe_watched;
 use crate::infra::index_store::SqliteIndexStore;
 use crate::infra::logging::FileLogger;
+use crate::infra::scanner::ScanService;
 use crate::infra::storage;
 use crate::infra::tray;
 use crate::infra::watcher::WatchService;
@@ -13,7 +18,7 @@ use log::LevelFilter;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
 /// 主动退出标志。
 ///
@@ -21,6 +26,24 @@ use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 /// 这会让"后台运行（关闭即销毁）"失效。因此事件循环中默认阻止退出，
 /// 仅当用户明确选择退出（托盘菜单 / 确认弹窗）并先置位此标志时才放行。
 pub struct QuitFlag(pub Arc<AtomicBool>);
+
+/// 扫描事件 → Tauri 前端事件（Progress → scan-progress，其余 → scan-finished）。
+struct TauriScanSink {
+    app: AppHandle,
+}
+
+impl ScanEventSink for TauriScanSink {
+    fn on_event(&self, event: ScanEvent) {
+        match &event {
+            ScanEvent::Progress { .. } => {
+                let _ = self.app.emit("scan-progress", event);
+            }
+            _ => {
+                let _ = self.app.emit("scan-finished", event);
+            }
+        }
+    }
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -37,6 +60,14 @@ pub fn run() {
             files_commands::remove_watched_dir,
             files_commands::list_watched_dirs,
             files_commands::list_files,
+            files_commands::query_files,
+            files_commands::list_labels,
+            files_commands::list_categories,
+            files_commands::scan_all,
+            files_commands::scan_now,
+            files_commands::get_scan_status,
+            files_commands::cancel_scan,
+            files_commands::get_log_dir,
             files_commands::log_event,
             window_commands::hide_to_tray,
             window_commands::quit_app,
@@ -74,14 +105,24 @@ pub fn run() {
             app.manage(store.clone());
             log::info!("索引库就绪: {:?}", data_dir.join("rootup.db"));
 
+            // 监控目录：启动自愈（规范化 + 防重叠修正），修正结果写回设置
+            let mut settings = storage::load_settings(app.handle());
+            let (fixed_dirs, fixes) = dedupe_watched(&settings.watched_dirs);
+            if !fixes.is_empty() {
+                for (sub, parent) in &fixes {
+                    log::info!("watch: 启动修正 {sub} -> {parent}");
+                }
+                settings.watched_dirs = fixed_dirs;
+                storage::save_settings(app.handle(), &settings)?;
+            }
+
             // 文件监听服务：事件批次广播到前端
             let emit_handle = app.handle().clone();
             let mut service =
-                WatchService::new(store, StabilityParams::default(), move |records| {
+                WatchService::new(store.clone(), StabilityParams::default(), move |records| {
                     let _ = emit_handle.emit("files-changed", records);
                 })
                 .map_err(|e| format!("监听服务创建失败: {e}"))?;
-            let settings = storage::load_settings(app.handle());
             for dir in &settings.watched_dirs {
                 if let Err(e) = service.add_dir(dir) {
                     log::warn!("watch: 无法监听 {dir}: {e}");
@@ -90,6 +131,31 @@ pub fn run() {
             service.start();
             app.manage(Mutex::new(service));
             log::info!("监听服务已启动（{} 个目录）", settings.watched_dirs.len());
+
+            // 初始化扫描服务：后台全量扫描 + 快照差集 + 风暴保护
+            let classifier = Arc::new(ClassifierChain::new(vec![
+                Box::new(ExtensionClassifier) as Box<dyn crate::core::classify::Classifier>
+            ]));
+            let scan_service = ScanService::new(
+                store,
+                classifier,
+                IgnoreMatcher::new(),
+                ScanParams::default(),
+                Arc::new(TauriScanSink {
+                    app: app.handle().clone(),
+                }),
+            );
+            app.manage(Mutex::new(scan_service));
+            let scan_service = app.state::<Mutex<ScanService>>();
+            {
+                let scan_service = scan_service.lock().map_err(|e| e.to_string())?;
+                for dir in &settings.watched_dirs {
+                    scan_service.enqueue(dir.clone());
+                }
+                let mut scan_service = scan_service;
+                scan_service.start();
+            }
+            log::info!("扫描服务已启动");
 
             tray::init(app)?;
             Ok(())

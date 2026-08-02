@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { FileRecord } from "./tauri";
 import {
+  buildQuery,
   fileStateMeta,
   filterFiles,
   formatFileSize,
   formatTimestamp,
   mergeFiles,
+  parseLabels,
 } from "./fileUtils";
 
 function rec(
@@ -46,6 +48,42 @@ describe("filterFiles", () => {
 
   it("无匹配返回空", () => {
     expect(filterFiles(files, "nothing")).toHaveLength(0);
+  });
+});
+
+describe("buildQuery", () => {
+  it("组合文本、类型、状态与标签", () => {
+    expect(
+      buildQuery({
+        text: "高数",
+        types: ["pdf"],
+        states: ["pending"],
+        labels: ["course"],
+      }),
+    ).toBe("高数 type:pdf state:pending label:course");
+  });
+
+  it("空筛选器返回空串", () => {
+    expect(buildQuery({})).toBe("");
+    expect(buildQuery({ text: "  " })).toBe("");
+  });
+
+  it("多值保留顺序并去空白文本", () => {
+    expect(buildQuery({ types: ["pdf", "docx"], states: [] })).toBe(
+      "type:pdf type:docx",
+    );
+  });
+});
+
+describe("parseLabels", () => {
+  it("拆分逗号分隔标签", () => {
+    expect(parseLabels("document,course")).toEqual(["document", "course"]);
+  });
+
+  it("空与空白标签被过滤", () => {
+    expect(parseLabels("")).toEqual([]);
+    expect(parseLabels(" , , ")).toEqual([]);
+    expect(parseLabels("document, ,code")).toEqual(["document", "code"]);
   });
 });
 

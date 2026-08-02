@@ -7,6 +7,7 @@ use crate::core::events::{
 };
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::{FileRecord, IndexStore};
+use crate::core::path::normalize_path;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
@@ -87,7 +88,7 @@ impl EventProcessor {
             }
             FileEventKind::Removed => {
                 self.pending.remove(&event.path);
-                let path_str = event.path.to_string_lossy().into_owned();
+                let path_str = normalize_path(&event.path.to_string_lossy());
                 let removed_record = {
                     let mut store = match self.store.lock() {
                         Ok(s) => s,
@@ -165,7 +166,7 @@ impl EventProcessor {
                 Err(_) => return,
             };
             for path in done {
-                let path_str = path.to_string_lossy().into_owned();
+                let path_str = normalize_path(&path.to_string_lossy());
                 let size = std::fs::metadata(&path)
                     .map(|m| m.len() as i64)
                     .unwrap_or(0);
@@ -203,6 +204,7 @@ impl EventProcessor {
         if due {
             let records = std::mem::take(&mut self.batch);
             self.batch_started = None;
+            log::info!("watch: 索引批次 size={}", records.len());
             (self.on_batch)(records);
         }
     }
@@ -490,7 +492,7 @@ mod tests {
             store
                 .lock()
                 .unwrap()
-                .get_by_path(good.to_str().unwrap())
+                .get_by_path(&normalize_path(&good.to_string_lossy()))
                 .unwrap()
                 .unwrap()
                 .state,
@@ -500,7 +502,7 @@ mod tests {
             store
                 .lock()
                 .unwrap()
-                .get_by_path(transient.to_str().unwrap())
+                .get_by_path(&normalize_path(&transient.to_string_lossy()))
                 .unwrap(),
             None
         );
@@ -652,7 +654,7 @@ mod tests {
             store
                 .lock()
                 .unwrap()
-                .get_by_path(final_path.to_str().unwrap())
+                .get_by_path(&normalize_path(&final_path.to_string_lossy()))
                 .unwrap()
                 .is_some(),
             "正式路径应有记录"
@@ -661,7 +663,7 @@ mod tests {
             store
                 .lock()
                 .unwrap()
-                .get_by_path(temp.to_str().unwrap())
+                .get_by_path(&normalize_path(&temp.to_string_lossy()))
                 .unwrap(),
             None,
             "临时路径不应有记录"
@@ -712,7 +714,7 @@ mod tests {
         let rec = store
             .lock()
             .unwrap()
-            .get_by_path(f.to_str().unwrap())
+            .get_by_path(&normalize_path(&f.to_string_lossy()))
             .unwrap()
             .unwrap();
         assert_eq!(rec.size, 60);
@@ -800,7 +802,7 @@ mod tests {
             store
                 .lock()
                 .unwrap()
-                .get_by_path(sub.to_str().unwrap())
+                .get_by_path(&normalize_path(&sub.to_string_lossy()))
                 .unwrap(),
             None,
             "目录本身不应入库"

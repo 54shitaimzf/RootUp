@@ -2,6 +2,8 @@
 
 use serde::Serialize;
 
+use crate::core::query::{parse_query, FileQuery, QueryPage};
+
 /// 文件索引记录（与数据库表 `files` 对应）。
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FileRecord {
@@ -48,9 +50,26 @@ pub trait IndexStore: Send + Sync {
     fn upsert(&mut self, record: &FileRecord) -> Result<(), String>;
     fn get_by_path(&self, path: &str) -> Result<Option<FileRecord>, String>;
     /// 最近优先列表（limit/offset 分页）。
+    #[allow(dead_code)]
     fn list(&self, limit: i64, offset: i64) -> Result<Vec<FileRecord>, String>;
     /// 按名称/路径模糊搜索。
-    fn search(&self, query: &str, limit: i64) -> Result<Vec<FileRecord>, String>;
+    #[allow(dead_code)]
+    fn search(&self, text: &str, limit: i64) -> Result<Vec<FileRecord>, String> {
+        let mut query = parse_query(text);
+        query.limit = limit;
+        query.offset = 0;
+        Ok(self.query(&query)?.items)
+    }
+    /// 结构化查询（过滤 + 分页 + 总数）。
+    fn query(&self, query: &FileQuery) -> Result<QueryPage, String>;
+    /// 批量幂等写入（单事务）。
+    fn upsert_many(&mut self, records: &[FileRecord]) -> Result<(), String>;
+    /// 返回某目录（含子目录）下非 deleted 的路径列表（差集快照用）。
+    fn paths_with_prefix(&self, dir: &str) -> Result<Vec<String>, String>;
+    /// 批量标记 deleted（单事务），返回实际变更数。
+    fn mark_missing(&mut self, paths: &[String]) -> Result<i64, String>;
+    /// 库中现存标签 key 列表（去重排序）。
+    fn list_labels(&self) -> Result<Vec<String>, String>;
     fn mark_deleted(&mut self, path: &str) -> Result<(), String>;
     #[cfg_attr(not(test), allow(dead_code))]
     fn count(&self) -> Result<i64, String>;
