@@ -6,6 +6,7 @@ import {
   filterFiles,
   formatFileSize,
   formatTimestamp,
+  loadMoreMerge,
   mergeFiles,
   parseLabels,
 } from "./fileUtils";
@@ -111,6 +112,47 @@ describe("mergeFiles", () => {
     expect(result).toHaveLength(200);
     expect(result[0].modified).toBe(249);
     expect(result[199].modified).toBe(50);
+  });
+});
+
+describe("loadMoreMerge", () => {
+  it("下一页追加到已有列表并去重", () => {
+    const result = loadMoreMerge(
+      [rec("C:/a.txt", 2)],
+      [rec("C:/b.txt", 3), rec("C:/a.txt", 4)],
+      100,
+    );
+    expect(result).toHaveLength(2);
+    expect(result.find((f) => f.path === "C:/a.txt")?.modified).toBe(4);
+  });
+
+  it("按 modified 倒序排列", () => {
+    const result = loadMoreMerge(
+      [rec("C:/old.txt", 1)],
+      [rec("C:/new.txt", 5)],
+      100,
+    );
+    expect(result.map((f) => f.path)).toEqual(["C:/new.txt", "C:/old.txt"]);
+  });
+
+  it("cap 等于 offset+limit 时截断到已加载总量", () => {
+    const first = Array.from({ length: 50 }, (_, i) => rec(`C:/f${i}.txt`, i));
+    const second = Array.from(
+      { length: 50 },
+      (_, i) => rec(`C:/g${i}.txt`, 100 + i),
+    );
+    const result = loadMoreMerge(first, second, 100);
+    expect(result).toHaveLength(100);
+    expect(result[0].modified).toBe(149);
+  });
+
+  it("deleted 记录从累计列表移除", () => {
+    const result = loadMoreMerge(
+      [rec("C:/a.txt", 1)],
+      [rec("C:/a.txt", 1, "deleted")],
+      100,
+    );
+    expect(result).toEqual([]);
   });
 });
 

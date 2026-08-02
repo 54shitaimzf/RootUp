@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { mergeFiles } from "../lib/fileUtils";
+import { loadMoreMerge, mergeFiles } from "../lib/fileUtils";
 import { logEvent, queryFiles, type FileRecord } from "../lib/tauri";
 
 /**
@@ -24,9 +24,13 @@ export function useFiles(
     queryFiles(query, limit, offset)
       .then((page) => {
         if (cancelled) return;
-        setItems(page.items);
         setTotal(page.total);
         setStale(false);
+        setItems((prev) =>
+          offset === 0
+            ? page.items
+            : loadMoreMerge(prev, page.items, offset + limit),
+        );
       })
       .catch((err) => {
         if (cancelled) return;

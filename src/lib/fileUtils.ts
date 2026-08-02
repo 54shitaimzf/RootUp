@@ -61,6 +61,15 @@ export function mergeFiles(
     .slice(0, limit);
 }
 
+/** “加载更多”语义：新页追加到已有列表，上限为已加载总量（offset + limit）。 */
+export function loadMoreMerge(
+  prev: FileRecord[],
+  incoming: FileRecord[],
+  cap: number,
+): FileRecord[] {
+  return mergeFiles(prev, incoming, cap);
+}
+
 /** 状态徽标元数据（文案 key 与颜色类分离，便于主题/皮肤调整）。 */
 export interface FileStateMeta {
   labelKey: string;
