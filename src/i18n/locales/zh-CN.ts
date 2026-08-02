@@ -130,14 +130,8 @@ export default {
     scanProgress: "已处理 {{processed}} / 发现 {{discovered}}",
     cancelScan: "取消扫描",
     syntaxHelpTitle: "搜索语法",
-    syntaxHelpList: [
-      "type:pdf — 按扩展名筛选",
-      "label:document — 按分类标签筛选",
-      "state:pending — 按状态筛选",
-      "size:>10MB — 按大小筛选",
-      "before:2026-08-01 — 按修改时间筛选",
-      "多个条件可组合，如 type:pdf 高数",
-    ],
+    syntaxHelpHint:
+      "搜索框支持特殊搜索语法，可按类型、标签、状态、大小、修改时间筛选，并可和文字组合使用；直接使用下方筛选器效果相同。",
     statePending: "确认中",
     stateIndexed: "已索引",
     stateArchived: "已归档",

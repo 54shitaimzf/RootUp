@@ -136,14 +136,8 @@ export default {
     scanProgress: "{{processed}} processed / {{discovered}} discovered",
     cancelScan: "Cancel scan",
     syntaxHelpTitle: "Search syntax",
-    syntaxHelpList: [
-      "type:pdf — filter by extension",
-      "label:document — filter by category label",
-      "state:pending — filter by state",
-      "size:>10MB — filter by size",
-      "before:2026-08-01 — filter by modified date",
-      "Combine conditions, e.g. type:pdf notes",
-    ],
+    syntaxHelpHint:
+      "The search box supports special syntax to filter by type, label, state, size or modified time, combinable with plain text; the filters below work the same way.",
     statePending: "Checking",
     stateIndexed: "Indexed",
     stateArchived: "Archived",
