@@ -1,5 +1,7 @@
 # RootUp
 
+[![CI](https://github.com/54shitaimzf/RootUp/actions/workflows/ci.yml/badge.svg)](https://github.com/54shitaimzf/RootUp/actions/workflows/ci.yml)
+
 ## 中文
 
 RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
