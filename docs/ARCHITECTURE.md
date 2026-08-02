@@ -127,7 +127,8 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 - **多语言**：在 `src/i18n/locales/` 新增语言文件，并在 `core/settings.rs` 的校验常量中登记语言代码。
 - **主题**：三态（跟随系统/浅/深）由 `theme/ThemeProvider.tsx` 管理，`matchMedia` 监听系统变化。
-- **皮肤**：皮肤 = 一套设计令牌。默认皮肤为 `theme/tokens.css` 的 `@theme` 变量；新增皮肤时替换/叠加令牌即可，组件零改动。
+- **皮肤**：皮肤 = 一套令牌 + 全局变量 + 组件变体的整套覆盖。默认皮肤由三部分组成：`theme/tokens.css` 的 `@theme` 品牌令牌（颜色/圆角/阴影）、`styles/global.css` 的全局 CSS 变量（如 `--scrollbar-thumb` 系滚动条色）、共享组件变体（`Button` 的 variant / `Banner` 的 variant）。新增皮肤时整体替换/叠加即可，组件逻辑零改动；v1 仅提供 default。
+- **共享交互组件**：`components/Button.tsx`（primary/secondary/danger/amber/ghost × xs/sm/md，样式等价映射见组件内注释与 README）、`components/Banner.tsx`（brand/warn/error，可选关闭）、`components/ConfirmDialog.tsx`（基于 Modal 的确认弹窗）、`components/ConfirmButton.tsx`（两步确认状态封装）。所有新页面优先复用，禁止复制手写变体。
 - **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/`（自包含组件 + hooks + API），`pages/` 只保留入口。
 - **托盘菜单**：在 `infra/tray.rs` 中扩展菜单项与事件处理。
 - **后端命令**：在 `commands/` 新增模块，并在 `app.rs` 的 `invoke_handler` 中注册。
