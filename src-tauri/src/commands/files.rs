@@ -1,5 +1,5 @@
 //! 文件监听、索引、扫描与查询相关命令。
-use crate::core::classify::Category;
+use crate::core::classify::{Category, DEFAULT_EXTENSION_MAP};
 use crate::core::index::{FileRecord, IndexStore};
 use crate::core::path::{normalize_path, path_key};
 use crate::core::query::{parse_query, QueryPage};
@@ -20,6 +20,14 @@ const DEFAULT_LIST_LIMIT: i64 = 50;
 #[serde(rename_all = "camelCase")]
 pub struct AddDirOutcome {
     pub message: Option<String>,
+}
+
+/// 内置扩展名 → 类别映射条目（设置页只读展示用，单一来源在后端）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassifyDefaultEntry {
+    pub extension: String,
+    pub category: String,
 }
 
 /// 添加监控目录：两向防重叠校验 → 持久化 → 启动监听 → 入队扫描。
@@ -165,6 +173,18 @@ pub fn list_labels(store: State<'_, Arc<Mutex<dyn IndexStore>>>) -> Result<Vec<S
 #[tauri::command]
 pub fn list_categories() -> Vec<String> {
     Category::ALL.iter().map(|c| c.key().to_string()).collect()
+}
+
+/// 内置扩展名映射表（只读）。
+#[tauri::command]
+pub fn list_classify_defaults() -> Vec<ClassifyDefaultEntry> {
+    DEFAULT_EXTENSION_MAP
+        .iter()
+        .map(|(ext, category)| ClassifyDefaultEntry {
+            extension: (*ext).to_string(),
+            category: category.key().to_string(),
+        })
+        .collect()
 }
 
 /// 全部监控目录入队扫描。

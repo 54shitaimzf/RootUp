@@ -62,7 +62,7 @@ New-Item -ItemType Directory -Path $TestRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $TestRoot "sub") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $TestRoot '$RECYCLE.BIN') -Force | Out-Null
 
-# 样本：5 个正式文件（含子目录 1 个）、2 个忽略文件（crdownload/desktop.ini）、1 个噪音目录
+# 样本：5 个正式文件（含子目录 1 个）、3 个忽略文件（crdownload/desktop.ini/自定义 zzz）、1 个噪音目录
 Set-Content -Path (Join-Path $TestRoot "course.pdf") -Value "pdf" -Encoding UTF8
 Set-Content -Path (Join-Path $TestRoot "photo.png") -Value "png" -Encoding UTF8
 Set-Content -Path (Join-Path $TestRoot "code.rs") -Value "fn main() {}" -Encoding UTF8
@@ -70,6 +70,7 @@ Set-Content -Path (Join-Path $TestRoot "archive.zip") -Value "zip" -Encoding UTF
 Set-Content -Path (Join-Path $TestRoot "sub\notes.txt") -Value "notes" -Encoding UTF8
 Set-Content -Path (Join-Path $TestRoot "movie.crdownload") -Value "partial" -Encoding UTF8
 Set-Content -Path (Join-Path $TestRoot "desktop.ini") -Value "[ViewState]" -Encoding UTF8
+Set-Content -Path (Join-Path $TestRoot "test.zzz") -Value "custom" -Encoding UTF8
 Set-Content -Path (Join-Path $TestRoot '$RECYCLE.BIN\trash.txt') -Value "x" -Encoding UTF8
 
 # 设置：父目录 + 子目录重叠，验证启动自愈
@@ -79,8 +80,14 @@ $Settings = @{
         theme = "system"
         language = "zh-CN"
         watched_dirs = @($TestDir, "$TestDir/sub")
+        ignore_rules = @{
+            extensions = @("crdownload","part","download","tmp","temp","zzz")
+            prefixes = @("~$")
+            exact_names = @("desktop.ini","thumbs.db",".ds_store",'$recycle.bin')
+        }
+        classify_overrides = @()
     }
-} | ConvertTo-Json -Depth 4
+} | ConvertTo-Json -Depth 6
 # 无 BOM 的 UTF-8：serde_json 无法解析带 BOM 的 JSON
 [System.IO.File]::WriteAllText($SettingsPath, $Settings, (New-Object System.Text.UTF8Encoding $false))
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
@@ -99,7 +106,7 @@ Write-Result "首次全量扫描完成" $ScanDone "期望日志行 scan: 完成 
 $LogContent = if (Test-Path $LogFile) { Get-Content $LogFile -Raw -Encoding UTF8 } else { "" }
 
 Write-Result "扫描摘要含 added=5" ($LogContent -match "scan: 完成 dir=$TestDir .*added=5") "样本 5 个正式文件应全部入库"
-Write-Result "扫描摘要含 ignored=2" ($LogContent -match "scan: 完成 dir=$TestDir .*ignored=2") "crdownload 与 desktop.ini 应被忽略"
+Write-Result "扫描摘要含 ignored=3" ($LogContent -match "scan: 完成 dir=$TestDir .*ignored=3") "crdownload、desktop.ini 与自定义 zzz 应被忽略（配置生效）"
 Write-Result "启动自愈移除重叠子目录" ($LogContent -match "watch: 启动修正 $TestDir/sub -> $TestDir") "父+子目录配置应在启动时保留父移除子"
 
 # ---- 监听场景：新增、删除 ----

@@ -432,7 +432,7 @@ mod tests {
     }
 
     fn test_classifier() -> Arc<dyn Classifier> {
-        Arc::new(crate::core::classify::ExtensionClassifier)
+        Arc::new(crate::core::classify::ExtensionClassifier::new())
     }
 
     fn temp_dir(tag: &str) -> PathBuf {

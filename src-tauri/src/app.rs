@@ -56,6 +56,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             settings_commands::get_settings,
             settings_commands::set_settings,
+            settings_commands::reset_settings,
             files_commands::add_watched_dir,
             files_commands::remove_watched_dir,
             files_commands::list_watched_dirs,
@@ -63,6 +64,7 @@ pub fn run() {
             files_commands::query_files,
             files_commands::list_labels,
             files_commands::list_categories,
+            files_commands::list_classify_defaults,
             files_commands::scan_all,
             files_commands::scan_now,
             files_commands::get_scan_status,
@@ -117,10 +119,36 @@ pub fn run() {
             }
 
             // 文件监听服务：事件批次广播到前端
-            let classifier = Arc::new(ClassifierChain::new(vec![
-                Box::new(ExtensionClassifier) as Box<dyn crate::core::classify::Classifier>
-            ]));
-            let ignore_matcher = IgnoreMatcher::new();
+            let extension_rules: Vec<&str> = settings
+                .ignore_rules
+                .extensions
+                .iter()
+                .map(String::as_str)
+                .collect();
+            let prefix_rules: Vec<&str> = settings
+                .ignore_rules
+                .prefixes
+                .iter()
+                .map(String::as_str)
+                .collect();
+            let exact_rules: Vec<&str> = settings
+                .ignore_rules
+                .exact_names
+                .iter()
+                .map(String::as_str)
+                .collect();
+            let ignore_matcher =
+                IgnoreMatcher::from_rules(&extension_rules, &prefix_rules, &exact_rules);
+            let overrides: Vec<(Vec<String>, String)> = settings
+                .classify_overrides
+                .iter()
+                .map(|rule| (rule.extensions.clone(), rule.category.clone()))
+                .collect();
+            let classifier =
+                Arc::new(ClassifierChain::new(vec![
+                    Box::new(ExtensionClassifier::with_overrides(&overrides))
+                        as Box<dyn crate::core::classify::Classifier>,
+                ]));
             let emit_handle = app.handle().clone();
             let mut service = WatchService::new(
                 store.clone(),

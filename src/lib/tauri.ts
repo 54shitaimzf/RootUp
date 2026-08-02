@@ -3,16 +3,47 @@ import { invoke } from "@tauri-apps/api/core";
 export type ThemeMode = "system" | "light" | "dark";
 export type Language = "zh-CN" | "en";
 
+/** 忽略规则：临时扩展名 / 文件名前缀 / 完整文件名（与后端 IgnoreRules 对应） */
+export interface IgnoreRules {
+  extensions: string[];
+  prefixes: string[];
+  exact_names: string[];
+}
+
+/** 分类覆盖规则（与后端 ClassifyRule 对应） */
+export interface ClassifyRule {
+  extensions: string[];
+  category: string;
+}
+
 /** 与 Rust 侧 core::settings::Settings 一一对应 */
 export interface Settings {
+  version: number;
   theme: ThemeMode;
   language: Language;
+  watched_dirs: string[];
+  ignore_rules: IgnoreRules;
+  classify_overrides: ClassifyRule[];
 }
 
 export const defaultSettings: Settings = {
+  version: 1,
   theme: "system",
   language: "zh-CN",
+  watched_dirs: [],
+  ignore_rules: {
+    extensions: ["crdownload", "part", "download", "tmp", "temp"],
+    prefixes: ["~$"],
+    exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
+  },
+  classify_overrides: [],
 };
+
+/** 内置扩展名 → 类别映射条目（设置页只读展示） */
+export interface ClassifyDefaultEntry {
+  extension: string;
+  category: string;
+}
 
 /** 与 Rust 侧 core::index::FileRecord 对应 */
 export interface FileRecord {
@@ -83,6 +114,11 @@ export function saveSettings(settings: Settings): Promise<void> {
   return invoke<void>("set_settings", { settings });
 }
 
+/** 恢复默认设置（保留监控目录），返回新设置 */
+export function resetSettings(): Promise<Settings> {
+  return invoke<Settings>("reset_settings");
+}
+
 export function addWatchedDir(dir: string): Promise<AddDirOutcome> {
   return invoke<AddDirOutcome>("add_watched_dir", { dir });
 }
@@ -122,6 +158,11 @@ export function listLabels(): Promise<string[]> {
 
 export function listCategories(): Promise<string[]> {
   return invoke<string[]>("list_categories");
+}
+
+/** 内置扩展名映射表（只读，单一来源在后端） */
+export function listClassifyDefaults(): Promise<ClassifyDefaultEntry[]> {
+  return invoke<ClassifyDefaultEntry[]>("list_classify_defaults");
 }
 
 export function scanAll(): Promise<void> {

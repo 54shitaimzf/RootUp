@@ -17,6 +17,8 @@ interface SettingsContextValue {
   settings: Settings | null;
   /** 合并式更新：即时生效并落盘持久化 */
   update: (patch: Partial<Settings>) => void;
+  /** 整体替换：同步内存状态并落盘，返回 Promise 供调用方捕获错误 */
+  replace: (next: Settings) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -52,8 +54,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const replace = useCallback((next: Settings) => {
+    setSettings(next);
+    return saveSettings(next);
+  }, []);
+
   return (
-    <SettingsContext.Provider value={{ settings, update }}>
+    <SettingsContext.Provider value={{ settings, update, replace }}>
       {children}
     </SettingsContext.Provider>
   );

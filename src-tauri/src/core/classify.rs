@@ -1,4 +1,5 @@
-//! 可插拔的文件分类体系：类别枚举、分类器接口与内置扩展名映射。
+//! 可插拔的文件分类体系：类别枚举、分类器接口与内置扩展名映射（可配置覆盖）。
+use std::collections::HashMap;
 
 /// 文件大类类别。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,6 +44,138 @@ impl Category {
     }
 }
 
+/// 内置扩展名 → 大类映射（单一来源，前端只读展示与分类器共用）。
+pub static DEFAULT_EXTENSION_MAP: &[(&str, Category)] = &[
+    ("pdf", Category::Document),
+    ("doc", Category::Document),
+    ("docx", Category::Document),
+    ("docm", Category::Document),
+    ("dotx", Category::Document),
+    ("txt", Category::Document),
+    ("md", Category::Document),
+    ("rtf", Category::Document),
+    ("odt", Category::Document),
+    ("xls", Category::Document),
+    ("xlsx", Category::Document),
+    ("xlsm", Category::Document),
+    ("csv", Category::Document),
+    ("tsv", Category::Document),
+    ("ppt", Category::Document),
+    ("pptx", Category::Document),
+    ("pptm", Category::Document),
+    ("ppsx", Category::Document),
+    ("epub", Category::Document),
+    ("mobi", Category::Document),
+    ("log", Category::Document),
+    ("jpg", Category::Image),
+    ("jpeg", Category::Image),
+    ("png", Category::Image),
+    ("gif", Category::Image),
+    ("webp", Category::Image),
+    ("bmp", Category::Image),
+    ("svg", Category::Image),
+    ("ico", Category::Image),
+    ("heic", Category::Image),
+    ("heif", Category::Image),
+    ("tif", Category::Image),
+    ("tiff", Category::Image),
+    ("avif", Category::Image),
+    ("jfif", Category::Image),
+    ("mp4", Category::Video),
+    ("mkv", Category::Video),
+    ("avi", Category::Video),
+    ("mov", Category::Video),
+    ("wmv", Category::Video),
+    ("flv", Category::Video),
+    ("webm", Category::Video),
+    ("m4v", Category::Video),
+    ("mpeg", Category::Video),
+    ("mpg", Category::Video),
+    ("3gp", Category::Video),
+    ("mp3", Category::Audio),
+    ("wav", Category::Audio),
+    ("flac", Category::Audio),
+    ("aac", Category::Audio),
+    ("ogg", Category::Audio),
+    ("m4a", Category::Audio),
+    ("wma", Category::Audio),
+    ("opus", Category::Audio),
+    ("aiff", Category::Audio),
+    ("mka", Category::Audio),
+    ("zip", Category::Archive),
+    ("rar", Category::Archive),
+    ("7z", Category::Archive),
+    ("tar", Category::Archive),
+    ("gz", Category::Archive),
+    ("bz2", Category::Archive),
+    ("xz", Category::Archive),
+    ("tgz", Category::Archive),
+    ("zst", Category::Archive),
+    ("lz4", Category::Archive),
+    ("cab", Category::Archive),
+    ("iso", Category::Archive),
+    ("rs", Category::Code),
+    ("py", Category::Code),
+    ("js", Category::Code),
+    ("ts", Category::Code),
+    ("tsx", Category::Code),
+    ("jsx", Category::Code),
+    ("html", Category::Code),
+    ("css", Category::Code),
+    ("scss", Category::Code),
+    ("sass", Category::Code),
+    ("less", Category::Code),
+    ("java", Category::Code),
+    ("c", Category::Code),
+    ("cpp", Category::Code),
+    ("cxx", Category::Code),
+    ("h", Category::Code),
+    ("hpp", Category::Code),
+    ("hh", Category::Code),
+    ("go", Category::Code),
+    ("rb", Category::Code),
+    ("php", Category::Code),
+    ("swift", Category::Code),
+    ("kt", Category::Code),
+    ("kts", Category::Code),
+    ("sh", Category::Code),
+    ("bash", Category::Code),
+    ("bat", Category::Code),
+    ("cmd", Category::Code),
+    ("ps1", Category::Code),
+    ("psd1", Category::Code),
+    ("json", Category::Code),
+    ("yaml", Category::Code),
+    ("yml", Category::Code),
+    ("toml", Category::Code),
+    ("xml", Category::Code),
+    ("sql", Category::Code),
+    ("ini", Category::Code),
+    ("cfg", Category::Code),
+    ("conf", Category::Code),
+    ("vue", Category::Code),
+    ("svelte", Category::Code),
+    ("exe", Category::Installer),
+    ("msi", Category::Installer),
+    ("msix", Category::Installer),
+    ("msp", Category::Installer),
+    ("appx", Category::Installer),
+    ("dmg", Category::Installer),
+    ("pkg", Category::Installer),
+    ("appimage", Category::Installer),
+    ("deb", Category::Installer),
+    ("rpm", Category::Installer),
+    ("apk", Category::Installer),
+    ("db", Category::Data),
+    ("sqlite", Category::Data),
+    ("sqlite3", Category::Data),
+    ("db3", Category::Data),
+    ("sqlitedb", Category::Data),
+    ("parquet", Category::Data),
+    ("avro", Category::Data),
+    ("arrow", Category::Data),
+];
+
 /// 分类器输入：只读文件基础信息，未来 AI/课程分类器同样消费该结构。
 #[derive(Debug, Clone, Copy)]
 pub struct ClassifyInput<'a> {
@@ -64,37 +197,60 @@ pub trait Classifier: Send + Sync {
     fn labels(&self, input: &ClassifyInput<'_>) -> Vec<String>;
 }
 
-/// 按扩展名映射大类的内置分类器。
-pub struct ExtensionClassifier;
+/// 按扩展名映射大类的内置分类器（内置表 + 用户覆盖合并）。
+pub struct ExtensionClassifier {
+    overrides: HashMap<String, Category>,
+}
 
 impl ExtensionClassifier {
-    fn categories_for(file_type: &str) -> &'static [Category] {
-        match file_type {
-            "pdf" | "doc" | "docx" | "docm" | "dotx" | "txt" | "md" | "rtf" | "odt" | "xls"
-            | "xlsx" | "xlsm" | "csv" | "tsv" | "ppt" | "pptx" | "pptm" | "ppsx" | "epub"
-            | "mobi" | "log" => &[Category::Document],
-            "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "svg" | "ico" | "heic" | "heif"
-            | "tif" | "tiff" | "avif" | "jfif" => &[Category::Image],
-            "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpeg" | "mpg"
-            | "3gp" => &[Category::Video],
-            "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "wma" | "opus" | "aiff" | "mka" => {
-                &[Category::Audio]
-            }
-            "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "tgz" | "zst" | "lz4" | "cab"
-            | "iso" => &[Category::Archive],
-            "rs" | "py" | "js" | "ts" | "tsx" | "jsx" | "html" | "css" | "scss" | "sass"
-            | "less" | "java" | "c" | "cpp" | "cxx" | "h" | "hpp" | "hh" | "go" | "rb" | "php"
-            | "swift" | "kt" | "kts" | "sh" | "bash" | "bat" | "cmd" | "ps1" | "psd1" | "json"
-            | "yaml" | "yml" | "toml" | "xml" | "sql" | "ini" | "cfg" | "conf" | "vue"
-            | "svelte" => &[Category::Code],
-            "exe" | "msi" | "msix" | "msp" | "appx" | "dmg" | "pkg" | "appimage" | "deb"
-            | "rpm" | "apk" => &[Category::Installer],
-            "db" | "sqlite" | "sqlite3" | "db3" | "sqlitedb" | "parquet" | "avro" | "arrow" => {
-                &[Category::Data]
-            }
-            _ => &[],
+    pub fn new() -> Self {
+        Self {
+            overrides: HashMap::new(),
         }
     }
+
+    /// 用户覆盖（扩展名列表 → 类别 key）：覆盖或新增内置映射，非法项忽略并记 warn。
+    pub fn with_overrides(overrides: &[(Vec<String>, String)]) -> Self {
+        let mut map = HashMap::new();
+        for (extensions, category_key) in overrides {
+            let Some(category) = Category::ALL.iter().find(|c| c.key() == category_key) else {
+                log::warn!("classify: 忽略非法覆盖 category={category_key}");
+                continue;
+            };
+            for ext in extensions {
+                let ext = ext.trim().to_ascii_lowercase();
+                if !ext.is_empty() && !ext.contains('.') {
+                    map.insert(ext, *category);
+                } else {
+                    log::warn!("classify: 忽略非法覆盖 ext={ext}");
+                }
+            }
+        }
+        Self { overrides: map }
+    }
+
+    fn category_for(&self, file_type: &str) -> Option<Category> {
+        let key = file_type.to_ascii_lowercase();
+        if let Some(category) = self.overrides.get(&key) {
+            return Some(*category);
+        }
+        default_categories_for(&key).into_iter().next()
+    }
+}
+
+impl Default for ExtensionClassifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 内置表查找（返回匹配类别，当前每个扩展名至多一个类别）。
+pub fn default_categories_for(file_type: &str) -> Vec<Category> {
+    DEFAULT_EXTENSION_MAP
+        .iter()
+        .filter(|(ext, _)| *ext == file_type)
+        .map(|(_, category)| *category)
+        .collect()
 }
 
 impl Classifier for ExtensionClassifier {
@@ -103,9 +259,9 @@ impl Classifier for ExtensionClassifier {
     }
 
     fn labels(&self, input: &ClassifyInput<'_>) -> Vec<String> {
-        Self::categories_for(&input.file_type.to_ascii_lowercase())
-            .iter()
+        self.category_for(input.file_type)
             .map(|c| c.key().to_string())
+            .into_iter()
             .collect()
     }
 }
@@ -175,7 +331,7 @@ mod tests {
 
     #[test]
     fn common_extensions_map_to_categories() {
-        let c = ExtensionClassifier;
+        let c = ExtensionClassifier::new();
         let cases = [
             ("a.pdf", "pdf", "document"),
             ("a.docx", "docx", "document"),
@@ -199,16 +355,11 @@ mod tests {
                 "{name} 应映射为 {expected}"
             );
         }
-        assert_eq!(
-            c.labels(&input("a.pdf", "pdf")),
-            vec!["document".to_string()]
-        );
-        assert_eq!(c.labels(&input("a.rs", "rs")), vec!["code".to_string()]);
     }
 
     #[test]
     fn extension_matching_is_case_insensitive() {
-        let c = ExtensionClassifier;
+        let c = ExtensionClassifier::new();
         assert_eq!(
             c.labels(&input("A.PDF", "PDF")),
             vec!["document".to_string()]
@@ -217,7 +368,7 @@ mod tests {
 
     #[test]
     fn no_extension_and_unknown_extension_yield_no_labels() {
-        let c = ExtensionClassifier;
+        let c = ExtensionClassifier::new();
         assert!(c.labels(&input("Makefile", "")).is_empty());
         assert!(c.labels(&input(".gitignore", "")).is_empty());
         assert!(c.labels(&input("weird.xyzabc", "xyzabc")).is_empty());
@@ -225,8 +376,7 @@ mod tests {
 
     #[test]
     fn multi_extension_uses_last() {
-        let c = ExtensionClassifier;
-        // tar.gz 取最后一个扩展名 gz -> archive
+        let c = ExtensionClassifier::new();
         assert_eq!(
             c.labels(&input("archive.tar.gz", "gz")),
             vec!["archive".to_string()]
@@ -234,14 +384,58 @@ mod tests {
     }
 
     #[test]
+    fn overrides_replace_and_extend_defaults() {
+        // 覆盖：pdf -> code
+        let c = ExtensionClassifier::with_overrides(&[(vec!["pdf".into()], "code".to_string())]);
+        assert_eq!(c.labels(&input("a.pdf", "pdf")), vec!["code".to_string()]);
+        // 新增：psd -> image
+        let c = ExtensionClassifier::with_overrides(&[(vec!["psd".into()], "image".to_string())]);
+        assert_eq!(c.labels(&input("a.psd", "psd")), vec!["image".to_string()]);
+        // 未覆盖项保持默认
+        assert_eq!(c.labels(&input("a.rs", "rs")), vec!["code".to_string()]);
+    }
+
+    #[test]
+    fn overrides_normalize_case() {
+        let c = ExtensionClassifier::with_overrides(&[(vec!["PDF".into()], "image".to_string())]);
+        assert_eq!(c.labels(&input("a.pdf", "pdf")), vec!["image".to_string()]);
+    }
+
+    #[test]
+    fn invalid_overrides_are_ignored() {
+        let c = ExtensionClassifier::with_overrides(&[
+            (vec!["psd".into()], "unknown".to_string()),
+            (vec!["bad.ext".into()], "image".to_string()),
+        ]);
+        assert_eq!(c.labels(&input("a.psd", "psd")), Vec::<String>::new());
+        assert_eq!(c.labels(&input("a.rs", "rs")), vec!["code".to_string()]);
+    }
+
+    #[test]
+    fn default_map_covers_every_category() {
+        // Other 保留给未来分类器（AI/课程），内置扩展名映射不强制覆盖
+        for category in Category::ALL.iter().filter(|c| **c != Category::Other) {
+            assert!(
+                DEFAULT_EXTENSION_MAP.iter().any(|(_, c)| c == category),
+                "内置映射应覆盖类别 {}",
+                category.key()
+            );
+        }
+        // 无重复扩展名
+        let mut seen = std::collections::HashSet::new();
+        for (ext, _) in DEFAULT_EXTENSION_MAP {
+            assert!(seen.insert(*ext), "扩展名重复: {ext}");
+        }
+    }
+
+    #[test]
     fn chain_deduplicates_across_classifiers() {
         let mut chain = ClassifierChain::new(vec![
-            Box::new(ExtensionClassifier),
+            Box::new(ExtensionClassifier::new()),
             Box::new(DuplicateClassifier),
         ]);
         let labels = chain.labels(&input("a.pdf", "pdf"));
         assert_eq!(labels, vec!["document".to_string()]);
-        // 可追加新分类器
         chain.push(Box::new(ExtraClassifier));
         let labels = chain.labels(&input("a.pdf", "pdf"));
         assert_eq!(labels, vec!["document".to_string(), "extra".to_string()]);

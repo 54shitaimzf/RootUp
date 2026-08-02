@@ -490,7 +490,7 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let loop_body = ScanLoop {
             store,
-            classifier: Arc::new(ExtensionClassifier),
+            classifier: Arc::new(ExtensionClassifier::new()),
             matcher: IgnoreMatcher::new(),
             params: test_params(),
             sink: Arc::new(CollectSink(events.clone())),
@@ -766,7 +766,7 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let mut service = ScanService::new(
             store.clone(),
-            Arc::new(ExtensionClassifier),
+            Arc::new(ExtensionClassifier::new()),
             IgnoreMatcher::new(),
             test_params(),
             Arc::new(CollectSink(events.clone())),

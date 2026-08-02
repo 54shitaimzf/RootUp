@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn record_from_scan_applies_labels_and_modified() {
-        let classifier = ExtensionClassifier;
+        let classifier = ExtensionClassifier::new();
         let record = record_from_scan("C:/x/notes.pdf", 1024, 999, 1000, &classifier);
         assert_eq!(record.name, "notes.pdf");
         assert_eq!(record.file_type, "pdf");
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn record_from_scan_unknown_type_has_empty_labels() {
-        let classifier = ExtensionClassifier;
+        let classifier = ExtensionClassifier::new();
         let record = record_from_scan("C:/x/Makefile", 1, 1, 2, &classifier);
         assert_eq!(record.labels, "");
     }

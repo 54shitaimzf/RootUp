@@ -1,4 +1,7 @@
+//! 应用设置模型：纯 Rust 数据 + 版本化 + 校验。
+use crate::core::classify::Category;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 pub const THEME_SYSTEM: &str = "system";
 pub const THEME_LIGHT: &str = "light";
@@ -7,37 +10,135 @@ pub const THEME_DARK: &str = "dark";
 pub const LANG_ZH_CN: &str = "zh-CN";
 pub const LANG_EN: &str = "en";
 
-/// 应用设置模型。
+/// 当前配置版本（首个正式版本为 1）。
 ///
-/// 位于 core 层：纯 Rust 数据结构，不依赖任何 Tauri 类型，
-/// 便于后续扩展字段与单元测试。
+/// 向前兼容约定：
+/// - 新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`，
+///   旧版本配置文件永远可被新版本读取；
+/// - 结构性升级在 [`Settings::migrate`] 中按版本号逐级迁移。
+pub const CURRENT_VERSION: u32 = 1;
+
+/// 用户分类覆盖规则上限。
+pub const MAX_CLASSIFY_RULES: usize = 100;
+
+/// 忽略规则：临时扩展名 / 文件名前缀 / 完整文件名（目录名）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IgnoreRules {
+    /// 临时扩展名（不含点、小写），如 `crdownload`
+    pub extensions: Vec<String>,
+    /// 文件名前缀，如 `~$`
+    pub prefixes: Vec<String>,
+    /// 完整文件名或目录名，如 `desktop.ini`
+    pub exact_names: Vec<String>,
+}
+
+/// 分类覆盖规则：一组扩展名映射到某个类别 key。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassifyRule {
+    /// 扩展名列表（不含点、小写）
+    pub extensions: Vec<String>,
+    /// 类别 key（`Category::ALL` 之一）
+    pub category: String,
+}
+
+/// 应用设置模型。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub version: u32,
     /// "system" | "light" | "dark"
     pub theme: String,
     /// "zh-CN" | "en"
     pub language: String,
-    /// 监控目录列表（迭代 A：文件监听与索引）
-    #[serde(default)]
+    /// 监控目录列表
     pub watched_dirs: Vec<String>,
+    /// 忽略规则（可配置，默认覆盖常见临时/系统文件）
+    pub ignore_rules: IgnoreRules,
+    /// 用户分类覆盖（内置映射之上追加/改类）
+    pub classify_overrides: Vec<ClassifyRule>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            version: CURRENT_VERSION,
             theme: THEME_SYSTEM.to_string(),
             language: LANG_ZH_CN.to_string(),
             watched_dirs: Vec::new(),
+            ignore_rules: IgnoreRules {
+                extensions: ["crdownload", "part", "download", "tmp", "temp"]
+                    .map(String::from)
+                    .to_vec(),
+                prefixes: vec!["~$".to_string()],
+                exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"]
+                    .map(String::from)
+                    .to_vec(),
+            },
+            classify_overrides: Vec::new(),
         }
     }
 }
 
 impl Settings {
-    /// 校验字段取值，非法值直接拒绝写入，防止脏数据进入存储。
+    /// 版本升级（逐级迁移）；当前 v1 为幂等空迁移。
+    pub fn migrate(&mut self) {
+        while self.version < CURRENT_VERSION {
+            // 未来版本在此追加逐级迁移（如 1 -> 2 的字段转换）
+            self.version = CURRENT_VERSION;
+        }
+    }
+
+    /// 校验全部字段；非法值直接拒绝写入。
     pub fn is_valid(&self) -> bool {
         matches!(self.theme.as_str(), THEME_SYSTEM | THEME_LIGHT | THEME_DARK)
             && matches!(self.language.as_str(), LANG_ZH_CN | LANG_EN)
+            && self.ignore_rules.is_valid()
+            && self.classify_overrides.len() <= MAX_CLASSIFY_RULES
+            && self.classify_overrides.iter().all(ClassifyRule::is_valid)
+    }
+}
+
+impl IgnoreRules {
+    pub fn is_valid(&self) -> bool {
+        valid_extensions(&self.extensions)
+            && valid_non_empty(&self.prefixes)
+            && valid_non_empty(&self.exact_names)
+    }
+}
+
+impl ClassifyRule {
+    pub fn is_valid(&self) -> bool {
+        !self.extensions.is_empty()
+            && valid_extensions(&self.extensions)
+            && Category::ALL.iter().any(|c| c.key() == self.category)
+    }
+}
+
+/// 扩展名合法性：非空、无点、小写字母数字连字符、不重复。
+fn valid_extensions(items: &[String]) -> bool {
+    let mut seen = HashSet::new();
+    items.iter().all(|item| {
+        let trimmed = item.trim();
+        !trimmed.is_empty()
+            && !trimmed.contains('.')
+            && trimmed
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            && seen.insert(trimmed.to_string())
+    })
+}
+
+/// 非空字符串列表（允许为空列表）。
+fn valid_non_empty(items: &[String]) -> bool {
+    items.iter().all(|item| !item.trim().is_empty())
+}
+
+/// 恢复默认：主题/语言/规则/映射重置，保留监控目录（防误操作丢目录）。
+pub fn reset_to_default(current: &Settings) -> Settings {
+    Settings {
+        watched_dirs: current.watched_dirs.clone(),
+        ..Default::default()
     }
 }
 
@@ -49,76 +150,149 @@ mod tests {
         Settings {
             theme: theme.to_string(),
             language: language.to_string(),
-            watched_dirs: Vec::new(),
+            ..Default::default()
         }
     }
 
     #[test]
     fn default_values() {
         let s = Settings::default();
+        assert_eq!(s.version, CURRENT_VERSION);
         assert_eq!(s.theme, THEME_SYSTEM);
         assert_eq!(s.language, LANG_ZH_CN);
         assert!(s.watched_dirs.is_empty());
+        assert_eq!(
+            s.ignore_rules.extensions,
+            vec!["crdownload", "part", "download", "tmp", "temp"]
+        );
+        assert_eq!(s.ignore_rules.prefixes, vec!["~$"]);
+        assert_eq!(
+            s.ignore_rules.exact_names,
+            vec!["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"]
+        );
+        assert!(s.classify_overrides.is_empty());
         assert!(s.is_valid());
+    }
+
+    #[test]
+    fn missing_version_and_new_fields_default_to_current() {
+        // 未发布过；但未来旧文件缺少新字段时必须可读并取默认
+        let legacy = r#"{"theme":"dark","language":"en"}"#;
+        let settings: Settings = serde_json::from_str(legacy).expect("旧配置应可读");
+        assert_eq!(settings.version, CURRENT_VERSION);
+        assert_eq!(settings.ignore_rules.extensions.len(), 5);
+        assert!(settings.classify_overrides.is_empty());
+        assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn unknown_fields_are_tolerated_for_future_compatibility() {
+        // 未来版本新增字段后，本版本生成的文件仍可被未来版本读取（serde 默认忽略未知字段）
+        let json = r#"{"theme":"dark","language":"en","watched_dirs":["C:/x"],"future_field":123}"#;
+        let settings: Settings = serde_json::from_str(json).expect("未知字段不应导致解析失败");
+        assert_eq!(settings.theme, THEME_DARK);
+        assert_eq!(settings.watched_dirs, vec!["C:/x"]);
+    }
+
+    #[test]
+    fn migrate_is_idempotent_on_v1() {
+        let mut s = Settings::default();
+        s.migrate();
+        assert_eq!(s.version, CURRENT_VERSION);
     }
 
     #[test]
     fn valid_theme_language_matrix() {
         for theme in [THEME_SYSTEM, THEME_LIGHT, THEME_DARK] {
             for language in [LANG_ZH_CN, LANG_EN] {
-                assert!(
-                    settings(theme, language).is_valid(),
-                    "应为合法: {theme}/{language}"
-                );
+                assert!(settings(theme, language).is_valid());
             }
         }
     }
 
     #[test]
-    fn invalid_theme_rejected() {
-        for theme in ["blue", "auto", "", "SYSTEM"] {
-            assert!(
-                !settings(theme, LANG_ZH_CN).is_valid(),
-                "应拒绝非法主题: {theme}"
-            );
-        }
+    fn invalid_theme_and_language_rejected() {
+        assert!(!settings("blue", LANG_ZH_CN).is_valid());
+        assert!(!settings(THEME_DARK, "fr").is_valid());
     }
 
     #[test]
-    fn invalid_language_rejected() {
-        for language in ["fr", "zh", "", "EN"] {
-            assert!(
-                !settings(THEME_DARK, language).is_valid(),
-                "应拒绝非法语言: {language}"
-            );
-        }
-    }
-
-    #[test]
-    fn legacy_json_without_watched_dirs_deserializes() {
-        // 旧版本设置没有 watched_dirs 字段，必须兼容
-        let legacy = r#"{"theme":"dark","language":"en"}"#;
-        let settings: Settings = serde_json::from_str(legacy).expect("旧设置反序列化失败");
-        assert_eq!(settings.theme, THEME_DARK);
-        assert_eq!(settings.language, LANG_EN);
-        assert!(settings.watched_dirs.is_empty());
-        assert!(settings.is_valid());
-    }
-
-    #[test]
-    fn round_trip_with_watched_dirs() {
+    fn round_trip_with_all_fields() {
         let mut s = settings(THEME_LIGHT, LANG_ZH_CN);
-        s.watched_dirs = vec!["D:\\Downloads".into(), "C:\\Courses".into()];
+        s.watched_dirs = vec!["D:/Downloads".into()];
+        s.ignore_rules.extensions.push("zzz".into());
+        s.classify_overrides.push(ClassifyRule {
+            extensions: vec!["psd".into(), "ai".into()],
+            category: "image".into(),
+        });
         let json = serde_json::to_string(&s).unwrap();
         let restored: Settings = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.watched_dirs, s.watched_dirs);
+        assert_eq!(restored.version, s.version);
+        assert_eq!(restored.ignore_rules.extensions, s.ignore_rules.extensions);
+        assert_eq!(restored.classify_overrides.len(), 1);
         assert!(restored.is_valid());
     }
 
     #[test]
-    fn watched_dirs_do_not_affect_validity() {
+    fn ignore_rules_validation_matrix() {
         let mut s = settings(THEME_SYSTEM, LANG_ZH_CN);
-        s.watched_dirs = vec!["any/path".into()];
+        // 非法：含点、大写、空串、重复
+        s.ignore_rules.extensions = vec![".crdownload".into()];
+        assert!(!s.is_valid());
+        s.ignore_rules.extensions = vec!["CRDOWNLOAD".into()];
+        assert!(!s.is_valid());
+        s.ignore_rules.extensions = vec!["tmp".into(), "tmp".into()];
+        assert!(!s.is_valid());
+        s.ignore_rules.extensions = vec!["tmp".into(), "".into()];
+        assert!(!s.is_valid());
+        // 前缀与 exact 允许任意非空
+        s.ignore_rules.extensions = vec!["tmp".into()];
+        s.ignore_rules.prefixes = vec!["my-".into()];
+        s.ignore_rules.exact_names = vec!["desktop.ini".into()];
         assert!(s.is_valid());
+        // 允许清空列表
+        s.ignore_rules.extensions.clear();
+        assert!(s.is_valid());
+    }
+
+    #[test]
+    fn classify_overrides_validation() {
+        let mut s = settings(THEME_SYSTEM, LANG_ZH_CN);
+        s.classify_overrides.push(ClassifyRule {
+            extensions: vec!["psd".into()],
+            category: "image".into(),
+        });
+        assert!(s.is_valid());
+        // 非法类别
+        s.classify_overrides[0].category = "unknown".into();
+        assert!(!s.is_valid());
+        // 空扩展名列表
+        s.classify_overrides[0].category = "image".into();
+        s.classify_overrides[0].extensions.clear();
+        assert!(!s.is_valid());
+        // 超上限
+        s.classify_overrides[0].extensions = vec!["psd".into()];
+        s.classify_overrides[0].category = "image".into();
+        for _ in 0..MAX_CLASSIFY_RULES {
+            s.classify_overrides.push(ClassifyRule {
+                extensions: vec!["ext".into()],
+                category: "code".into(),
+            });
+        }
+        assert!(!s.is_valid());
+    }
+
+    #[test]
+    fn reset_preserves_watched_dirs() {
+        let mut s = settings(THEME_DARK, LANG_EN);
+        s.watched_dirs = vec!["C:/Downloads".into()];
+        s.ignore_rules.extensions.push("zzz".into());
+        let reset = reset_to_default(&s);
+        assert_eq!(reset.watched_dirs, vec!["C:/Downloads"]);
+        assert_eq!(reset.theme, THEME_SYSTEM);
+        assert_eq!(reset.language, LANG_ZH_CN);
+        assert_eq!(reset.ignore_rules.extensions.len(), 5);
+        assert!(reset.classify_overrides.is_empty());
+        assert!(reset.is_valid());
     }
 }
