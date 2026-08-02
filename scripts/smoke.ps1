@@ -85,7 +85,9 @@ $Settings = @{
             prefixes = @("~$")
             exact_names = @("desktop.ini","thumbs.db",".ds_store",'$recycle.bin')
         }
-        classify_overrides = @()
+        classify_overrides = @(
+            @{ extensions = @("psd","ai"); category = "image" }
+        )
     }
 } | ConvertTo-Json -Depth 6
 # 无 BOM 的 UTF-8：serde_json 无法解析带 BOM 的 JSON
@@ -108,6 +110,7 @@ $LogContent = if (Test-Path $LogFile) { Get-Content $LogFile -Raw -Encoding UTF8
 Write-Result "扫描摘要含 added=5" ($LogContent -match "scan: 完成 dir=$TestDir .*added=5") "样本 5 个正式文件应全部入库"
 Write-Result "扫描摘要含 ignored=3" ($LogContent -match "scan: 完成 dir=$TestDir .*ignored=3") "crdownload、desktop.ini 与自定义 zzz 应被忽略（配置生效）"
 Write-Result "启动自愈移除重叠子目录" ($LogContent -match "watch: 启动修正 $TestDir/sub -> $TestDir") "父+子目录配置应在启动时保留父移除子"
+Write-Result "分类覆盖装配生效" ($LogContent -match "classify: 应用覆盖 2 条") "配置中的 psd/ai→image 应被分类器加载"
 
 # ---- 监听场景：新增、删除 ----
 $NewFile = Join-Path $TestRoot "new.pdf"

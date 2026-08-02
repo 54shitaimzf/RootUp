@@ -226,6 +226,9 @@ impl ExtensionClassifier {
                 }
             }
         }
+        if !map.is_empty() {
+            log::info!("classify: 应用覆盖 {} 条", map.len());
+        }
         Self { overrides: map }
     }
 
