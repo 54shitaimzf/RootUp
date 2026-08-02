@@ -4,6 +4,8 @@ import { Check } from "lucide-react";
 import { RULE_PRESETS } from "../lib/presets";
 import type { CurrentScheme } from "../lib/effectiveMap";
 import type { RuleScheme } from "../lib/tauri";
+import { Button } from "./Button";
+import { ConfirmButton } from "./ConfirmButton";
 import { Modal } from "./Modal";
 
 /**
@@ -26,12 +28,10 @@ export function SchemeApplyDialog({
 }) {
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [pendingApply, setPendingApply] = useState(false);
 
   useEffect(() => {
     if (open) {
       setSelectedId(null);
-      setPendingApply(false);
     }
   }, [open]);
 
@@ -42,7 +42,6 @@ export function SchemeApplyDialog({
 
   const select = (id: string) => {
     setSelectedId(id);
-    setPendingApply(false);
   };
 
   return (
@@ -53,35 +52,22 @@ export function SchemeApplyDialog({
       width="max-w-md"
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
+          <Button variant="ghost" size="md" onClick={onClose}>
             {t("settings.cancel")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <ConfirmButton
+            label={t("settings.applySelected")}
+            pendingLabel={t("settings.confirmApplySelected")}
+            variant="primary"
+            pendingVariant="amber"
+            size="md"
             disabled={!selectedId}
-            onClick={() => {
+            onConfirm={() => {
               if (!selectedId) return;
-              if (!pendingApply) {
-                setPendingApply(true);
-                return;
-              }
               onApply(selectedId);
               onClose();
             }}
-            className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              pendingApply
-                ? "bg-amber-500 hover:bg-amber-600"
-                : "bg-brand-700 hover:bg-brand-800"
-            }`}
-          >
-            {pendingApply
-              ? t("settings.confirmApplySelected")
-              : t("settings.applySelected")}
-          </button>
+          />
         </>
       }
     >

@@ -9,6 +9,8 @@ import {
   type IgnoreRules,
   type RuleScheme,
 } from "../lib/tauri";
+import { Button } from "./Button";
+import { ConfirmButton } from "./ConfirmButton";
 import { Modal } from "./Modal";
 
 const MAX_NAME_LEN = 40;
@@ -33,7 +35,6 @@ export function SchemeDialog({
   const [error, setError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -41,7 +42,6 @@ export function SchemeDialog({
       setMessage(null);
       setError(null);
       setRenamingId(null);
-      setPendingDeleteId(null);
     }
   }, [open]);
 
@@ -93,14 +93,9 @@ export function SchemeDialog({
     }
   };
 
-  const toggleDelete = async (id: string) => {
-    if (pendingDeleteId !== id) {
-      setPendingDeleteId(id);
-      return;
-    }
+  const handleDelete = async (id: string) => {
     try {
       await deleteScheme(id);
-      setPendingDeleteId(null);
       setError(null);
       setMessage(t("settings.schemeDeleted"));
       await onChanged();
@@ -116,13 +111,9 @@ export function SchemeDialog({
       onClose={onClose}
       width="max-w-md"
       footer={
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
+        <Button variant="ghost" size="md" onClick={onClose}>
           {t("settings.dialogClose")}
-        </button>
+        </Button>
       }
     >
       <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -139,13 +130,9 @@ export function SchemeDialog({
           placeholder={t("settings.schemeNamePlaceholder")}
           className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
         />
-        <button
-          type="button"
-          onClick={() => void save()}
-          className="shrink-0 rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-800"
-        >
+        <Button variant="primary" size="sm" onClick={() => void save()}>
           {t("settings.schemeSave")}
-        </button>
+        </Button>
       </div>
       {message && (
         <p className="mt-2 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
@@ -217,21 +204,13 @@ export function SchemeDialog({
                     >
                       <Pencil className="size-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void toggleDelete(scheme.id)}
-                      className={`rounded p-1 transition-colors ${
-                        pendingDeleteId === scheme.id
-                          ? "bg-red-50 px-2 text-[10px] font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                          : "text-slate-400 hover:text-red-500 dark:text-slate-500"
-                      }`}
-                    >
-                      {pendingDeleteId === scheme.id ? (
-                        t("settings.schemeConfirmDelete")
-                      ) : (
-                        <Trash2 className="size-3.5" />
-                      )}
-                    </button>
+                    <ConfirmButton
+                      label={<Trash2 className="size-3.5" />}
+                      pendingLabel={t("settings.schemeConfirmDelete")}
+                      onConfirm={() => void handleDelete(scheme.id)}
+                      className="rounded p-1 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
+                      pendingClassName="rounded bg-red-50 px-2 text-[10px] font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                    />
                   </div>
                 </div>
               ),

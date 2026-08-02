@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { APP_NAME, APP_VERSION } from "../lib/constants";
 
 export type PageKey = "files" | "homework" | "courses" | "tools" | "settings";
 
@@ -35,7 +36,7 @@ export function Sidebar({
           <Sprout className="size-5" />
         </div>
         <div className="min-w-0">
-          <div className="text-sm font-semibold leading-tight">RootUp</div>
+          <div className="text-sm font-semibold leading-tight">{APP_NAME}</div>
           <div className="truncate text-xs text-slate-500 dark:text-slate-400">
             {t("app.tagline")}
           </div>
@@ -64,7 +65,7 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto px-5 py-4 text-xs text-slate-500 dark:text-slate-400">
-        RootUp v0.1.0
+        {APP_NAME} v{APP_VERSION}
       </div>
     </aside>
   );

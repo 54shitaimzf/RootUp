@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { IgnoreRules } from "../lib/tauri";
+import { Button } from "./Button";
 import { ChipGroup } from "./ChipGroup";
 import { Modal } from "./Modal";
 
@@ -70,20 +71,12 @@ export function IgnoreRulesDialog({
       width="max-w-xl"
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
+          <Button variant="ghost" size="md" onClick={onClose}>
             {t("settings.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800"
-          >
+          </Button>
+          <Button variant="primary" size="md" onClick={() => void save()}>
             {t("settings.save")}
-          </button>
+          </Button>
         </>
       }
     >

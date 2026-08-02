@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { FilterBar } from "../components/FilterBar";
 import { SyntaxHelp } from "../components/SyntaxHelp";
+import { Banner } from "../components/Banner";
+import { Button } from "../components/Button";
 import type { PageKey } from "../components/Sidebar";
 import { useFiles } from "../hooks/useFiles";
 import type { ScanController } from "../hooks/useScan";
@@ -118,8 +119,8 @@ export function FilePage({
       />
 
       {scanning && (
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm dark:border-brand-500/25 dark:bg-brand-500/10">
-          <div className="min-w-0 flex-1">
+        <Banner variant="brand" className="mt-4">
+          <div>
             <div className="truncate font-medium text-brand-800 dark:text-brand-300">
               {t("files.scanning", { dir: scanDir })}
             </div>
@@ -130,41 +131,31 @@ export function FilePage({
               })}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => scan.cancel()}
-            className="shrink-0 rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-800"
-          >
+          <Button variant="primary" size="sm" onClick={() => scan.cancel()}>
             {t("files.cancelScan")}
-          </button>
-        </div>
+          </Button>
+        </Banner>
       )}
 
       {scan.lastError && (
-        <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-400">
-          <span className="min-w-0 flex-1 truncate">{scan.lastError}</span>
-          <button
-            type="button"
-            onClick={scan.clearError}
-            aria-label={t("close.cancel")}
-            className="shrink-0 rounded p-1 hover:bg-red-100 dark:hover:bg-red-500/20"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
+        <Banner variant="error" className="mt-4" onClose={scan.clearError}>
+          <span className="block truncate">{scan.lastError}</span>
+        </Banner>
       )}
 
       {stale && (
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-400">
+        <Banner
+          variant="warn"
+          padding="sm"
+          className="mt-4"
+          actions={
+            <Button variant="amber" size="sm" onClick={handleRefresh}>
+              {t("files.refresh")}
+            </Button>
+          }
+        >
           <span className="min-w-0 flex-1">{t("files.newChanges")}</span>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            className="shrink-0 rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
-          >
-            {t("files.refresh")}
-          </button>
-        </div>
+        </Banner>
       )}
 
       <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
@@ -175,13 +166,14 @@ export function FilePage({
         ) : watchedCount === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
             <p>{t("files.empty")}</p>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
+              className="mt-3"
               onClick={() => onNavigate("settings")}
-              className="mt-3 rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800"
             >
               {t("files.goSettings")}
-            </button>
+            </Button>
           </div>
         ) : items.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
@@ -248,13 +240,13 @@ export function FilePage({
                 })}
               </span>
               {items.length < total && (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setOffset((value) => value + PAGE_SIZE)}
-                  className="rounded-md bg-slate-100 px-3 py-1.5 font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                 >
                   {t("files.loadMore")}
-                </button>
+                </Button>
               )}
             </div>
           </>
