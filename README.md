@@ -15,6 +15,18 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 主题：浅色 / 深色 / 跟随系统
 - 界面语言：中文 / English，可随时切换
 - 设置持久化，重启后保留
+- 文件监听与索引：监控目录全量扫描、实时索引、快照差集与误删防护
+- 自动分类标签：文档/图片/视频/音频/压缩包/代码/安装包/数据（扩展名映射，接口可扩展）
+- 搜索语法：`type:` / `label:` / `state:` / `size:` / `before:` / `after:` + 文本组合
+
+### 搜索语法
+
+- `type:pdf` — 按扩展名筛选
+- `label:document` — 按分类标签筛选
+- `state:pending` — 按状态筛选
+- `size:>10MB` — 按大小筛选
+- `before:2026-08-01` — 按修改时间筛选
+- 可组合使用，如 `type:pdf 高数`
 
 ### 规划能力
 
@@ -67,6 +79,18 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Theme: Light / Dark / Follow system
 - UI language: 中文 / English, switchable anytime
 - Persistent settings across restarts
+- File watching & indexing: full scan of watched folders, real-time indexing, snapshot diff with accidental-deletion protection
+- Auto category labels: Documents / Images / Videos / Audio / Archives / Code / Installers / Data (extension mapping, pluggable interface)
+- Search syntax: `type:` / `label:` / `state:` / `size:` / `before:` / `after:` combined with plain text
+
+### Search Syntax
+
+- `type:pdf` — filter by extension
+- `label:document` — filter by category label
+- `state:pending` — filter by state
+- `size:>10MB` — filter by size
+- `before:2026-08-01` — filter by modified date
+- Combine conditions, e.g. `type:pdf notes`
 
 ### Planned Features
 

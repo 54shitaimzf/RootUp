@@ -89,6 +89,28 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 `core` 层为纯 Rust 数据结构，不依赖 Tauri 类型，便于后续扩展字段与单元测试。
 
+## 索引、扫描与分类模块（迭代 A.5）
+
+**新增模块与职责**：
+- `core/path.rs`：`normalize_path`（统一 `/` 分隔符、去尾斜杠）与 `is_subpath`（组件级包含判定，Windows 小写比较）；所有入库、差集、前缀匹配、目录去重统一走它。
+- `core/classify.rs`：`Category` 枚举、`Classifier` trait、`ClassifierChain`（顺序执行 + 跨分类器去重 + 每步 debug 日志）、`ExtensionClassifier`（扩展名→大类映射）；labels 逗号分隔小写 key，字符集 `[a-z0-9-]`，写入前校验。
+- `core/query.rs`：`parse_query` 解析 `type:` / `label:`（别名 `tag:`）/ `state:`（别名 `status:`）/ `size:>/<N~M`（B/KB/MB/GB）/ `before:` / `after:`（毫秒时间戳或 `YYYY-MM-DD` 本地时区）；非法值与未知前缀回落为普通文本；同维度 OR、跨维度 AND。
+- `core/scan.rs`：`ScanEvent` / `ScanSummary` / `ScanParams` / `ScanEventSink` / `diff_missing` / `record_from_scan` 纯逻辑。
+- `core/watched.rs`：`check_add`（相等/被覆盖/将覆盖三态）与 `dedupe_watched`（启动自愈）纯函数。
+- `infra/scanner.rs`：`ScanService` 串行队列后台扫描（walkdir 不跟随符号链接）、批量事务、进度节流、取消、快照差集、删除风暴保护、可用性检查、候选二次确认。
+
+**依赖注入约定**：`ScanService::new(store, classifier, matcher, params, sink)` 全注入；Tauri 侧仅提供 `TauriScanSink`（emit 前端事件）与分类链组装，业务层零 Tauri 依赖；AI/课程分类 = 新增 `Classifier` 追加进链。
+
+**事件协议**：`scan-progress`（`ScanEvent::Progress`）与 `scan-finished`（Finished/Failed/Cancelled），payload 为 `ScanEvent`（`type` 判别字段）。
+
+**类别单一来源**：`list_categories` 返回静态类别（筛选 Chips 与图标映射），`list_labels` 返回库内动态标签（标签多选），前端不硬编码类别列表。
+
+**错误消息规范**：`模块: 消息` 前缀（如 `scan: 目录不可访问 ...`），命令层透传，测试断言前缀；本轮不引入 thiserror。
+
+**文件安全基线**：扫描只读 metadata；「删除」仅为索引状态标记；快照差集 + 风暴保护 + 可用性检查 + 候选复核构成误判防护；物理归档（迭代 B）须启用事务性移动 + 撤销 + 目标存在性检查。
+
+**后续候选**：排序（`sort_by/sort_dir`）、统计概览（`get_stats`）、`scan_meta` 表、`resources/icons/filetypes/` SVG 源、游标分页、`RwLock` 读写分离、rayon 并行、thiserror、E2E 框架。
+
 ## 扩展点
 
 - **多语言**：在 `src/i18n/locales/` 新增语言文件，并在 `core/settings.rs` 的校验常量中登记语言代码。
