@@ -140,8 +140,10 @@ impl ScanService {
 
     /// 当前扫描状态快照。
     pub fn status(&self) -> ScanStatus {
+        // 锁顺序约定：先 queue 后 status（与 enqueue/remove_dir 一致，避免死锁）
+        let queued = self.shared.queue.lock().unwrap().len();
         let mut status = self.shared.status.lock().unwrap().clone();
-        status.queued = self.shared.queue.lock().unwrap().len();
+        status.queued = queued;
         status
     }
 }

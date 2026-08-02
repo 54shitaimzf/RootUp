@@ -2,12 +2,14 @@
 //!
 //! 与 Tauri 解耦：广播通过 `on_batch` 回调对外暴露，测试可直接收集结果。
 
+use crate::core::classify::Classifier;
 use crate::core::events::{
-    judge_stability, FileEventKind, FileState, NormalizedEvent, Stability, StabilityParams,
+    judge_stability, FileEventKind, NormalizedEvent, Stability, StabilityParams,
 };
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::{FileRecord, IndexStore};
 use crate::core::path::normalize_path;
+use crate::core::scan::record_from_scan;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
@@ -33,6 +35,7 @@ struct Pending {
 /// 事件处理器：纯业务逻辑（无 Tauri、无 notify 类型依赖）。
 pub struct EventProcessor {
     store: Arc<Mutex<dyn IndexStore>>,
+    classifier: Arc<dyn Classifier>,
     matcher: IgnoreMatcher,
     params: StabilityParams,
     pending: HashMap<PathBuf, Pending>,
@@ -44,12 +47,15 @@ pub struct EventProcessor {
 impl EventProcessor {
     pub fn new(
         store: Arc<Mutex<dyn IndexStore>>,
+        classifier: Arc<dyn Classifier>,
+        matcher: IgnoreMatcher,
         params: StabilityParams,
         on_batch: impl Fn(Vec<FileRecord>) + Send + Sync + 'static,
     ) -> Self {
         Self {
             store,
-            matcher: IgnoreMatcher::new(),
+            classifier,
+            matcher,
             params,
             pending: HashMap::new(),
             batch: Vec::new(),
@@ -167,11 +173,23 @@ impl EventProcessor {
             };
             for path in done {
                 let path_str = normalize_path(&path.to_string_lossy());
-                let size = std::fs::metadata(&path)
-                    .map(|m| m.len() as i64)
-                    .unwrap_or(0);
+                let metadata = std::fs::metadata(&path);
+                let size = metadata.as_ref().map(|m| m.len() as i64).unwrap_or(0);
                 let now_ms = now_millis();
-                let record = FileRecord::new(&path_str, size, now_ms, FileState::Indexed.as_str());
+                let modified_ms = metadata
+                    .as_ref()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(now_ms);
+                let record = record_from_scan(
+                    &path_str,
+                    size,
+                    modified_ms,
+                    now_ms,
+                    self.classifier.as_ref(),
+                );
                 if store.upsert(&record).is_ok() {
                     if let Ok(Some(full)) = store.get_by_path(&path_str) {
                         new_records.push(full);
@@ -213,6 +231,8 @@ impl EventProcessor {
 /// 监听服务：notify 回调线程 → 有界通道 → 处理线程。
 pub struct WatchService {
     store: Arc<Mutex<dyn IndexStore>>,
+    classifier: Arc<dyn Classifier>,
+    matcher: IgnoreMatcher,
     params: StabilityParams,
     on_batch: Arc<dyn Fn(Vec<FileRecord>) + Send + Sync>,
     watcher: Mutex<RecommendedWatcher>,
@@ -225,6 +245,8 @@ pub struct WatchService {
 impl WatchService {
     pub fn new(
         store: Arc<Mutex<dyn IndexStore>>,
+        classifier: Arc<dyn Classifier>,
+        matcher: IgnoreMatcher,
         params: StabilityParams,
         on_batch: impl Fn(Vec<FileRecord>) + Send + Sync + 'static,
     ) -> Result<Self, String> {
@@ -251,6 +273,8 @@ impl WatchService {
 
         Ok(Self {
             store,
+            classifier,
+            matcher,
             params,
             on_batch: Arc::new(on_batch),
             watcher: Mutex::new(watcher),
@@ -268,6 +292,8 @@ impl WatchService {
         }
         let processor = Arc::new(Mutex::new(EventProcessor::new(
             self.store.clone(),
+            self.classifier.clone(),
+            self.matcher.clone(),
             self.params.clone(),
             {
                 let on_batch = self.on_batch.clone();
@@ -315,16 +341,20 @@ impl WatchService {
         if !path.is_dir() {
             return Err(format!("目录不存在: {}", path.display()));
         }
-        {
-            let watched = self.watched.lock().map_err(|e| e.to_string())?;
-            if watched.iter().any(|p| p == path) {
-                return Ok(()); // 幂等：重复添加视为成功
-            }
+        let already_watched = self
+            .watched
+            .lock()
+            .map_err(|e| e.to_string())?
+            .iter()
+            .any(|p| p == path);
+        if already_watched {
+            return Ok(()); // 幂等：重复添加视为成功
         }
         let mut watcher = self.watcher.lock().map_err(|e| e.to_string())?;
         watcher
             .watch(path, RecursiveMode::Recursive)
             .map_err(|e| format!("监听失败 {}: {e}", path.display()))?;
+        drop(watcher);
         self.watched
             .lock()
             .map_err(|e| e.to_string())?
@@ -339,6 +369,7 @@ impl WatchService {
         watcher
             .unwatch(path.as_ref())
             .map_err(|e| format!("取消监听失败: {e}"))?;
+        drop(watcher);
         self.watched
             .lock()
             .map_err(|e| e.to_string())?
@@ -384,6 +415,7 @@ fn now_millis() -> i64 {
 mod tests {
     use super::*;
     use crate::core::events::next_state;
+    use crate::core::events::FileState;
     use crate::infra::index_store::SqliteIndexStore;
     use std::fs;
     use std::io::Write;
@@ -397,6 +429,10 @@ mod tests {
             force_timeout: Duration::from_secs(2),
             debounce_window: Duration::from_millis(150),
         }
+    }
+
+    fn test_classifier() -> Arc<dyn Classifier> {
+        Arc::new(crate::core::classify::ExtensionClassifier)
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
@@ -453,9 +489,13 @@ mod tests {
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let collected = Arc::new(Mutex::new(Vec::<FileRecord>::new()));
         let collected_ref = collected.clone();
-        let mut processor = EventProcessor::new(store.clone(), short_params(), move |records| {
-            collected_ref.lock().unwrap().extend(records)
-        });
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            move |records| collected_ref.lock().unwrap().extend(records),
+        );
 
         let good = dir.join("good.pdf");
         fs::write(&good, b"content").unwrap();
@@ -498,6 +538,18 @@ mod tests {
                 .state,
             "indexed"
         );
+        let good_record = store
+            .lock()
+            .unwrap()
+            .get_by_path(&normalize_path(&good.to_string_lossy()))
+            .unwrap()
+            .unwrap();
+        // 监听入库应应用分类标签与真实修改时间（与扫描行为一致）
+        assert_eq!(good_record.labels, "document");
+        assert!(
+            good_record.modified > 0 && good_record.modified <= now_millis(),
+            "modified 应为文件真实修改时间"
+        );
         assert_eq!(
             store
                 .lock()
@@ -530,7 +582,13 @@ mod tests {
         let dir = temp_dir("removed");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        );
 
         let f = dir.join("gone.txt");
         fs::write(&f, b"x").unwrap();
@@ -566,7 +624,14 @@ mod tests {
         let dir = temp_dir("e2e");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        let mut service = WatchService::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        )
+        .unwrap();
         service.add_dir(&dir).unwrap();
         service.start();
 
@@ -622,7 +687,13 @@ mod tests {
         let dir = temp_dir("rename");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        );
         let temp = dir.join("movie.mkv.crdownload");
         let final_path = dir.join("movie.mkv");
         fs::write(&temp, b"data").unwrap();
@@ -676,7 +747,13 @@ mod tests {
         let dir = temp_dir("settle");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        );
         let f = dir.join("growing.bin");
         fs::write(&f, vec![0u8; 10]).unwrap();
         processor.handle_event(&NormalizedEvent {
@@ -726,7 +803,13 @@ mod tests {
         let dir = temp_dir("force");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        );
         let f = dir.join("busy.bin");
         fs::write(&f, vec![0u8; 10]).unwrap();
         processor.handle_event(&NormalizedEvent {
@@ -755,7 +838,13 @@ mod tests {
         let dir = temp_dir("batch");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        );
         for i in 0..20 {
             let f = dir.join(format!("file{i}.txt"));
             fs::write(&f, b"x").unwrap();
@@ -784,7 +873,14 @@ mod tests {
         let dir = temp_dir("subdir");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        let mut service = WatchService::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        )
+        .unwrap();
         service.add_dir(&dir).unwrap();
         service.start();
         let sub = dir.join("sub");
@@ -816,7 +912,14 @@ mod tests {
         let dir = temp_dir("unwatch");
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let mut service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        let mut service = WatchService::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        )
+        .unwrap();
         service.add_dir(&dir).unwrap();
         service.start();
         fs::write(dir.join("a.txt"), b"x").unwrap();
@@ -845,7 +948,14 @@ mod tests {
     fn watch_service_add_dir_validation() {
         let store: Arc<Mutex<dyn IndexStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
-        let service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        let service = WatchService::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        )
+        .unwrap();
         assert!(
             service.add_dir("C:/definitely/not/exists/xyz").is_err(),
             "不存在的目录应报错"

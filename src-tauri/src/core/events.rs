@@ -47,7 +47,6 @@ impl FileState {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "pending" => Some(Self::Pending),

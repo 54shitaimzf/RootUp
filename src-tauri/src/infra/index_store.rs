@@ -1,5 +1,6 @@
 //! 文件索引的 SQLite 实现。
 
+use crate::core::events::FileState;
 use crate::core::index::{FileRecord, IndexStore};
 use crate::core::query::{FileQuery, QueryPage};
 use rusqlite::types::Value;
@@ -119,14 +120,17 @@ impl IndexStore for SqliteIndexStore {
             .prepare(
                 r#"
                 SELECT * FROM files
-                WHERE state != 'deleted'
+                WHERE state != ?1
                 ORDER BY modified DESC
-                LIMIT ?1 OFFSET ?2
+                LIMIT ?2 OFFSET ?3
                 "#,
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map(params![limit, offset], row_to_record)
+            .query_map(
+                params![FileState::Deleted.as_str(), limit, offset],
+                row_to_record,
+            )
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
@@ -141,8 +145,9 @@ impl IndexStore for SqliteIndexStore {
         };
         let offset = query.offset.max(0);
 
-        let mut conditions = vec!["state != 'deleted'".to_string()];
+        let mut conditions = vec!["state != ?1".to_string()];
         let mut params: Vec<Value> = Vec::new();
+        params.push(Value::Text(FileState::Deleted.as_str().into()));
 
         for word in &query.words {
             let pattern = format!("%{}%", escape_like(word));
@@ -271,13 +276,15 @@ impl IndexStore for SqliteIndexStore {
             .prepare(
                 r#"
                 SELECT path FROM files
-                WHERE state != 'deleted'
-                  AND (LOWER(path) = LOWER(?1) OR LOWER(path) LIKE LOWER(?2) ESCAPE '\')
+                WHERE state != ?1
+                  AND (LOWER(path) = LOWER(?2) OR LOWER(path) LIKE LOWER(?3) ESCAPE '\')
                 "#,
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map(params![dir, prefix], |row| row.get::<_, String>(0))
+            .query_map(params![FileState::Deleted.as_str(), dir, prefix], |row| {
+                row.get::<_, String>(0)
+            })
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
@@ -289,12 +296,13 @@ impl IndexStore for SqliteIndexStore {
         let mut changed = 0_i64;
         for chunk in paths.chunks(500) {
             let placeholders: Vec<String> =
-                (0..chunk.len()).map(|i| format!("?{}", i + 1)).collect();
+                (0..chunk.len()).map(|i| format!("?{}", i + 2)).collect();
             let sql = format!(
-                "UPDATE files SET state = 'deleted' WHERE path IN ({})",
+                "UPDATE files SET state = ?1 WHERE path IN ({})",
                 placeholders.join(",")
             );
-            let values: Vec<Value> = chunk.iter().map(|p| Value::Text(p.clone())).collect();
+            let mut values: Vec<Value> = vec![Value::Text(FileState::Deleted.as_str().into())];
+            values.extend(chunk.iter().map(|p| Value::Text(p.clone())));
             changed += tx
                 .execute(&sql, params_from_iter(values.iter()))
                 .map_err(|e| e.to_string())? as i64;
@@ -326,8 +334,8 @@ impl IndexStore for SqliteIndexStore {
     fn mark_deleted(&mut self, path: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
-            "UPDATE files SET state = 'deleted' WHERE path = ?1",
-            params![path],
+            "UPDATE files SET state = ?1 WHERE path = ?2",
+            params![FileState::Deleted.as_str(), path],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
@@ -336,8 +344,8 @@ impl IndexStore for SqliteIndexStore {
     fn count(&self) -> Result<i64, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
-            "SELECT COUNT(*) FROM files WHERE state != 'deleted'",
-            [],
+            "SELECT COUNT(*) FROM files WHERE state != ?1",
+            params![FileState::Deleted.as_str()],
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())

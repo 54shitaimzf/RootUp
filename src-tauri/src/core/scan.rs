@@ -1,5 +1,6 @@
 //! 初始化扫描的纯逻辑：事件模型、快照差集、删除风暴守卫与记录构造。
 use crate::core::classify::{Classifier, ClassifyInput};
+use crate::core::events::FileState;
 use crate::core::index::FileRecord;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -95,7 +96,7 @@ pub fn record_from_scan(
     now_ms: i64,
     classifier: &dyn Classifier,
 ) -> FileRecord {
-    let mut record = FileRecord::new(path, size, now_ms, "indexed");
+    let mut record = FileRecord::new(path, size, now_ms, FileState::Indexed.as_str());
     record.modified = modified_ms;
     let labels = classifier.labels(&ClassifyInput {
         name: &record.name,

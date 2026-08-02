@@ -1,4 +1,5 @@
 //! 索引搜索语法：解析 `type:` / `label:` / `state:` / `size:` / `before:` / `after:` 与普通文本。
+use crate::core::events::FileState;
 use crate::core::index::FileRecord;
 use chrono::TimeZone;
 use serde::Serialize;
@@ -32,8 +33,6 @@ pub struct QueryPage {
     pub items: Vec<FileRecord>,
     pub total: i64,
 }
-
-const VALID_STATES: [&str; 4] = ["pending", "indexed", "archived", "deleted"];
 
 /// 解析搜索字符串为结构化查询；非法值与未知前缀回落为普通文本。
 pub fn parse_query(input: &str) -> FileQuery {
@@ -78,7 +77,7 @@ fn push_non_empty(target: &mut Vec<String>, value: &str) {
 
 fn push_state(query: &mut FileQuery, value: &str) {
     let lower = value.to_ascii_lowercase();
-    if VALID_STATES.contains(&lower.as_str()) {
+    if FileState::from_str(&lower).is_some() {
         push_non_empty(&mut query.states, &lower);
     } else {
         query.words.push(format!("state:{value}"));

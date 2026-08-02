@@ -117,12 +117,21 @@ pub fn run() {
             }
 
             // 文件监听服务：事件批次广播到前端
+            let classifier = Arc::new(ClassifierChain::new(vec![
+                Box::new(ExtensionClassifier) as Box<dyn crate::core::classify::Classifier>
+            ]));
+            let ignore_matcher = IgnoreMatcher::new();
             let emit_handle = app.handle().clone();
-            let mut service =
-                WatchService::new(store.clone(), StabilityParams::default(), move |records| {
+            let mut service = WatchService::new(
+                store.clone(),
+                classifier.clone(),
+                ignore_matcher.clone(),
+                StabilityParams::default(),
+                move |records| {
                     let _ = emit_handle.emit("files-changed", records);
-                })
-                .map_err(|e| format!("监听服务创建失败: {e}"))?;
+                },
+            )
+            .map_err(|e| format!("监听服务创建失败: {e}"))?;
             for dir in &settings.watched_dirs {
                 if let Err(e) = service.add_dir(dir) {
                     log::warn!("watch: 无法监听 {dir}: {e}");
@@ -133,13 +142,10 @@ pub fn run() {
             log::info!("监听服务已启动（{} 个目录）", settings.watched_dirs.len());
 
             // 初始化扫描服务：后台全量扫描 + 快照差集 + 风暴保护
-            let classifier = Arc::new(ClassifierChain::new(vec![
-                Box::new(ExtensionClassifier) as Box<dyn crate::core::classify::Classifier>
-            ]));
             let scan_service = ScanService::new(
                 store,
                 classifier,
-                IgnoreMatcher::new(),
+                ignore_matcher,
                 ScanParams::default(),
                 Arc::new(TauriScanSink {
                     app: app.handle().clone(),
