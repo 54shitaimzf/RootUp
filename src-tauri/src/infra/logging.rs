@@ -260,4 +260,60 @@ mod tests {
         assert!(content.contains("[ERROR] sink via trait"));
         fs::remove_dir_all(&dir).unwrap();
     }
+
+    #[test]
+    fn rotation_chain_keeps_three_and_drops_oldest() {
+        let dir = temp_dir("chain");
+        let logger = FileLogger::with_max(&dir, LevelFilter::Debug, 200).unwrap();
+        // 6 轮 × 5 条（每条约 50B）→ 至少触发 5 次滚动，足以填满 .1/.2/.3
+        for round in 0..6 {
+            for _ in 0..5 {
+                logger.write_record(LogRecord::new(
+                    LogLevel::Info,
+                    "t",
+                    format!("round{round} {:40}", "x"),
+                ));
+            }
+        }
+        let current = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
+        let r1 = fs::read_to_string(dir.join("rootup.log.1")).unwrap();
+        let r2 = fs::read_to_string(dir.join("rootup.log.2")).unwrap();
+        let r3 = fs::read_to_string(dir.join("rootup.log.3")).unwrap();
+        assert!(current.contains("round5"), "最新记录应在当前文件");
+        assert!(r1.contains("round5"), ".1 应包含最近轮次");
+        assert!(!r2.is_empty());
+        assert!(!r3.is_empty());
+        assert!(
+            !dir.join("rootup.log.4").exists(),
+            "超过 3 份的旧日志应被删除"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn chinese_and_multiline_messages() {
+        let dir = temp_dir("unicode");
+        let logger = FileLogger::init(&dir, LevelFilter::Debug).unwrap();
+        logger.write_record(LogRecord::new(
+            LogLevel::Warn,
+            "测试模块",
+            "中文消息\n第二行内容",
+        ));
+        let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
+        assert!(content.contains("中文消息"));
+        assert!(content.contains("第二行内容"));
+        assert!(content.contains("[WARN] 测试模块"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn flush_via_log_trait_persists() {
+        let dir = temp_dir("flush");
+        let logger = FileLogger::init(&dir, LevelFilter::Debug).unwrap();
+        logger.write_record(LogRecord::new(LogLevel::Info, "t", "before flush"));
+        logger.flush();
+        let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
+        assert!(content.contains("before flush"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }

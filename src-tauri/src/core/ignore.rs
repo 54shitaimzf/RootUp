@@ -107,4 +107,20 @@ mod tests {
         assert!(!m.is_ignored("#incomplete"));
         assert!(!m.is_ignored("incomplete#"));
     }
+
+    #[test]
+    fn empty_and_dot_only_names() {
+        let m = IgnoreMatcher::new();
+        assert!(!m.is_ignored(""));
+        assert!(!m.is_ignored("."));
+        assert!(!m.is_ignored(".."));
+    }
+
+    #[test]
+    fn dot_only_transient_file_is_ignored() {
+        // 纯扩展名文件（如浏览器下载的 ".crdownload"）应视为临时文件
+        let m = IgnoreMatcher::new();
+        assert!(m.is_ignored(".crdownload"));
+        assert!(m.is_ignored(".tmp"));
+    }
 }

@@ -116,12 +116,13 @@ impl IndexStore for SqliteIndexStore {
 
     fn search(&self, query: &str, limit: i64) -> Result<Vec<FileRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        let pattern = format!("%{}%", query);
+        let pattern = format!("%{}%", escape_like(query));
         let mut stmt = conn
             .prepare(
                 r#"
                 SELECT * FROM files
-                WHERE state != 'deleted' AND (name LIKE ?1 OR path LIKE ?1)
+                WHERE state != 'deleted'
+                  AND (name LIKE ?1 ESCAPE '\' OR path LIKE ?1 ESCAPE '\')
                 ORDER BY modified DESC
                 LIMIT ?2
                 "#,
@@ -155,9 +156,25 @@ impl IndexStore for SqliteIndexStore {
     }
 }
 
+/// 转义 LIKE 通配符（`%`、`_` 与转义符自身），使搜索按字面匹配。
+fn escape_like(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    fn temp_db_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("rootup_db_test_{tag}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     fn store() -> SqliteIndexStore {
         SqliteIndexStore::open(":memory:").expect("内存库打开失败")
@@ -239,5 +256,59 @@ mod tests {
             s.get_by_path("C:/gone.txt").unwrap().unwrap().state,
             "deleted"
         );
+    }
+
+    #[test]
+    fn search_escapes_like_wildcards() {
+        let mut s = store();
+        s.upsert(&record("C:/report100.pdf", 1, 100)).unwrap();
+        s.upsert(&record("C:/a_b.txt", 1, 200)).unwrap();
+        s.upsert(&record("C:/axb.txt", 1, 300)).unwrap();
+        // "100%" 中的 % 是 LIKE 通配符：转义后不应匹配 report100.pdf
+        let r = s.search("100%", 10).unwrap();
+        assert!(
+            r.is_empty(),
+            "字面 '100%' 不应匹配 report100.pdf，实际: {:?}",
+            r.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
+        // "a_b" 中的 _ 是 LIKE 通配符：转义后不应匹配 axb.txt
+        let r = s.search("a_b", 10).unwrap();
+        assert_eq!(r.len(), 1, "只有 a_b.txt 应命中");
+        assert_eq!(r[0].name, "a_b.txt");
+    }
+
+    #[test]
+    fn real_file_database_round_trip() {
+        let dir = temp_db_dir("real");
+        let db = dir.join("index.db");
+        {
+            let mut s = SqliteIndexStore::open(&db).unwrap();
+            s.upsert(&record("C:/中文/文件.pdf", 1, 1)).unwrap();
+            assert_eq!(s.count().unwrap(), 1);
+        }
+        // 重复打开幂等（表已存在）
+        {
+            let s = SqliteIndexStore::open(&db).unwrap();
+            assert_eq!(s.count().unwrap(), 1);
+        }
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn unicode_path_crud() {
+        let mut s = store();
+        let path = "C:/课件/高等数学/第1章 极限.pdf";
+        s.upsert(&record(path, 100, 1)).unwrap();
+        let got = s.get_by_path(path).unwrap().unwrap();
+        assert_eq!(got.name, "第1章 极限.pdf");
+        assert_eq!(s.search("极限", 10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn escape_like_function() {
+        assert_eq!(escape_like("100%"), "100\\%");
+        assert_eq!(escape_like("a_b"), "a\\_b");
+        assert_eq!(escape_like("a\\b"), "a\\\\b");
+        assert_eq!(escape_like("plain"), "plain");
     }
 }

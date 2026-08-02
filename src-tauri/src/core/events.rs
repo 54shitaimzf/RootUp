@@ -257,6 +257,49 @@ mod tests {
     }
 
     #[test]
+    fn full_state_event_matrix() {
+        use FileEventKind::*;
+        use FileState::*;
+        let kinds = [Created, Modified, RenamedTo, RenamedFrom, Removed, Other];
+        for from in [Pending, Indexed, Archived, Deleted] {
+            for kind in kinds {
+                let expected = match (from, kind) {
+                    (Deleted, _) => None,
+                    (_, Other | RenamedFrom) => None,
+                    (Pending, Removed) => Some(Deleted),
+                    (Indexed | Archived, Removed) => Some(Deleted),
+                    (_, Created | Modified | RenamedTo) => Some(from),
+                };
+                assert_eq!(
+                    next_state(from, &ev(kind)),
+                    expected,
+                    "状态迁移决策表 ({from:?}, {kind:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn stability_boundaries() {
+        let params = StabilityParams::default();
+        // elapsed 恰等于 force_timeout → 强制稳定
+        assert_eq!(
+            judge_stability(Some(1), 2, false, params.force_timeout, &params),
+            Stability::ForceStable
+        );
+        // 大小恰好相等且可打开 → 稳定
+        assert_eq!(
+            judge_stability(Some(5), 5, true, Duration::from_secs(1), &params),
+            Stability::Stable
+        );
+        // 大小差 1 → 不稳定
+        assert_eq!(
+            judge_stability(Some(5), 6, true, Duration::from_secs(1), &params),
+            Stability::Unstable
+        );
+    }
+
+    #[test]
     fn instant_is_importable() {
         // 保证模块对外暴露的类型可被上层使用（watcher 采样时间）
         let _now = Instant::now();

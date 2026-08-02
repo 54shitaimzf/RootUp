@@ -55,3 +55,70 @@ pub trait IndexStore: Send + Sync {
     #[cfg_attr(not(test), allow(dead_code))]
     fn count(&self) -> Result<i64, String>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rec(path: &str) -> FileRecord {
+        FileRecord::new(path, 10, 1, "indexed")
+    }
+
+    #[test]
+    fn extracts_name_and_type() {
+        let r = rec("C:/Courses/math notes.pdf");
+        assert_eq!(r.name, "math notes.pdf");
+        assert_eq!(r.file_type, "pdf");
+    }
+
+    #[test]
+    fn multi_extension_uses_last() {
+        let r = rec("C:/x/archive.tar.gz");
+        assert_eq!(r.file_type, "gz");
+        assert_eq!(r.name, "archive.tar.gz");
+    }
+
+    #[test]
+    fn no_extension() {
+        let r = rec("C:/x/Makefile");
+        assert_eq!(r.file_type, "");
+        assert_eq!(r.name, "Makefile");
+    }
+
+    #[test]
+    fn hidden_file_has_no_extension() {
+        let r = rec("C:/x/.gitignore");
+        assert_eq!(r.file_type, "");
+        assert_eq!(r.name, ".gitignore");
+    }
+
+    #[test]
+    fn uppercase_extension_lowercased() {
+        let r = rec("C:/x/IMG.PNG");
+        assert_eq!(r.file_type, "png");
+    }
+
+    #[test]
+    fn unicode_path() {
+        let r = rec("C:/课件/高等数学.pdf");
+        assert_eq!(r.name, "高等数学.pdf");
+        assert_eq!(r.file_type, "pdf");
+    }
+
+    #[test]
+    fn trailing_slash_uses_dir_name() {
+        let r = rec("C:/x/");
+        assert_eq!(r.name, "x");
+        assert_eq!(r.file_type, "");
+    }
+
+    #[test]
+    fn empty_path_yields_empty_fields() {
+        let r = rec("");
+        assert_eq!(r.name, "");
+        assert_eq!(r.file_type, "");
+    }
+
+    // 已知限制：FileRecord::new 以 &str 接收路径，非 UTF-8 路径暂不支持
+    // （若未来需要，改为接收 &Path 并保留 OsStr 原始字节）
+}

@@ -214,6 +214,7 @@ pub struct WatchService {
     params: StabilityParams,
     on_batch: Arc<dyn Fn(Vec<FileRecord>) + Send + Sync>,
     watcher: Mutex<RecommendedWatcher>,
+    watched: Mutex<Vec<PathBuf>>,
     running: Arc<AtomicBool>,
     rx: Option<Receiver<NormalizedEvent>>,
     handle: Option<JoinHandle<()>>,
@@ -251,6 +252,7 @@ impl WatchService {
             params,
             on_batch: Arc::new(on_batch),
             watcher: Mutex::new(watcher),
+            watched: Mutex::new(Vec::new()),
             running: Arc::new(AtomicBool::new(false)),
             rx: Some(rx),
             handle: None,
@@ -311,10 +313,20 @@ impl WatchService {
         if !path.is_dir() {
             return Err(format!("目录不存在: {}", path.display()));
         }
+        {
+            let watched = self.watched.lock().map_err(|e| e.to_string())?;
+            if watched.iter().any(|p| p == path) {
+                return Ok(()); // 幂等：重复添加视为成功
+            }
+        }
         let mut watcher = self.watcher.lock().map_err(|e| e.to_string())?;
         watcher
             .watch(path, RecursiveMode::Recursive)
             .map_err(|e| format!("监听失败 {}: {e}", path.display()))?;
+        self.watched
+            .lock()
+            .map_err(|e| e.to_string())?
+            .push(path.to_path_buf());
         log::info!("watch: 开始监听 {}", path.display());
         Ok(())
     }
@@ -325,6 +337,10 @@ impl WatchService {
         watcher
             .unwatch(path.as_ref())
             .map_err(|e| format!("取消监听失败: {e}"))?;
+        self.watched
+            .lock()
+            .map_err(|e| e.to_string())?
+            .retain(|p| p != path.as_ref());
         log::info!("watch: 停止监听 {}", path.as_ref().display());
         Ok(())
     }
@@ -368,6 +384,7 @@ mod tests {
     use crate::core::events::next_state;
     use crate::infra::index_store::SqliteIndexStore;
     use std::fs;
+    use std::io::Write;
     use std::sync::mpsc::channel;
     use std::time::Duration;
 
@@ -388,7 +405,12 @@ mod tests {
         dir
     }
 
-    fn wait_until<F: FnMut() -> bool>(timeout: Duration, mut cond: F) -> bool {
+    /// 轮询等待；超时失败时输出诊断信息，便于定位是监听未触发还是稳定确认未过。
+    fn wait_until_with_diag<F: FnMut() -> bool>(
+        timeout: Duration,
+        mut cond: F,
+        diag: impl Fn() -> String,
+    ) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             if cond() {
@@ -396,7 +418,11 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        cond()
+        let ok = cond();
+        if !ok {
+            eprintln!("[wait 超时诊断] {}", diag());
+        }
+        ok
     }
 
     #[test]
@@ -445,10 +471,21 @@ mod tests {
             is_dir: false,
         });
 
-        assert!(wait_until(Duration::from_secs(3), || {
-            processor.tick();
-            store.lock().unwrap().count().unwrap() == 1
-        }));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(3),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 1
+                },
+                || format!(
+                    "索引数={}，已收集批次={}",
+                    store.lock().unwrap().count().unwrap(),
+                    collected.lock().unwrap().len()
+                )
+            ),
+            "等待文件入库超时"
+        );
         assert_eq!(
             store
                 .lock()
@@ -468,10 +505,21 @@ mod tests {
             None
         );
         // 批次最终被冲刷
-        assert!(wait_until(Duration::from_secs(2), || {
-            processor.tick();
-            !collected.lock().unwrap().is_empty()
-        }));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(2),
+                || {
+                    processor.tick();
+                    !collected.lock().unwrap().is_empty()
+                },
+                || format!(
+                    "索引数={}，已收集批次={}",
+                    store.lock().unwrap().count().unwrap(),
+                    collected.lock().unwrap().len()
+                )
+            ),
+            "等待批次冲刷超时"
+        );
         fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -489,10 +537,17 @@ mod tests {
             kind: FileEventKind::Created,
             is_dir: false,
         });
-        assert!(wait_until(Duration::from_secs(3), || {
-            processor.tick();
-            store.lock().unwrap().count().unwrap() == 1
-        }));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(3),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 1
+                },
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "等待文件入库超时"
+        );
         fs::remove_file(&f).unwrap();
         processor.handle_event(&NormalizedEvent {
             path: f.clone(),
@@ -514,12 +569,14 @@ mod tests {
         service.start();
 
         fs::write(dir.join("hello.txt"), b"hi").unwrap();
-        assert!(wait_until(Duration::from_secs(15), || store
-            .lock()
-            .unwrap()
-            .count()
-            .unwrap()
-            == 1));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(15),
+                || store.lock().unwrap().count().unwrap() == 1,
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "等待端到端入库超时"
+        );
 
         fs::write(dir.join("temp.crdownload"), b"partial").unwrap();
         std::thread::sleep(Duration::from_millis(800));
@@ -530,12 +587,14 @@ mod tests {
         );
 
         fs::remove_file(dir.join("hello.txt")).unwrap();
-        assert!(wait_until(Duration::from_secs(10), || store
-            .lock()
-            .unwrap()
-            .count()
-            .unwrap()
-            == 0));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(10),
+                || store.lock().unwrap().count().unwrap() == 0,
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "等待删除跟随超时"
+        );
 
         service.stop();
         fs::remove_dir_all(&dir).unwrap();
@@ -554,5 +613,244 @@ mod tests {
             Some(FileState::Deleted)
         );
         let _ = channel::<()>();
+    }
+
+    #[test]
+    fn processor_rename_transient_to_final() {
+        let dir = temp_dir("rename");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let temp = dir.join("movie.mkv.crdownload");
+        let final_path = dir.join("movie.mkv");
+        fs::write(&temp, b"data").unwrap();
+        // 临时文件事件：应被忽略
+        processor.handle_event(&NormalizedEvent {
+            path: temp.clone(),
+            kind: FileEventKind::Created,
+            is_dir: false,
+        });
+        // 下载完成重命名
+        fs::rename(&temp, &final_path).unwrap();
+        processor.handle_event(&NormalizedEvent {
+            path: final_path.clone(),
+            kind: FileEventKind::RenamedTo,
+            is_dir: false,
+        });
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(3),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 1
+                },
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "重命名后的正式文件应入库"
+        );
+        assert!(
+            store
+                .lock()
+                .unwrap()
+                .get_by_path(final_path.to_str().unwrap())
+                .unwrap()
+                .is_some(),
+            "正式路径应有记录"
+        );
+        assert_eq!(
+            store
+                .lock()
+                .unwrap()
+                .get_by_path(temp.to_str().unwrap())
+                .unwrap(),
+            None,
+            "临时路径不应有记录"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn processor_waits_for_write_to_settle() {
+        let dir = temp_dir("settle");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let f = dir.join("growing.bin");
+        fs::write(&f, vec![0u8; 10]).unwrap();
+        processor.handle_event(&NormalizedEvent {
+            path: f.clone(),
+            kind: FileEventKind::Created,
+            is_dir: false,
+        });
+        // 超过首次采样延迟后采样
+        std::thread::sleep(Duration::from_millis(250));
+        processor.tick();
+        // 文件继续增长 → 应判为不稳定
+        let mut file = fs::OpenOptions::new().append(true).open(&f).unwrap();
+        file.write_all(&[0u8; 50]).unwrap();
+        file.flush().unwrap();
+        drop(file);
+        processor.tick();
+        assert_eq!(
+            store.lock().unwrap().count().unwrap(),
+            0,
+            "仍在写入的文件不应入库"
+        );
+        // 停止写入后第二次采样一致 → 入库
+        std::thread::sleep(Duration::from_millis(120));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(3),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 1
+                },
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "写入停止后应稳定入库"
+        );
+        let rec = store
+            .lock()
+            .unwrap()
+            .get_by_path(f.to_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(rec.size, 60);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn processor_force_stable_after_timeout() {
+        let dir = temp_dir("force");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        let f = dir.join("busy.bin");
+        fs::write(&f, vec![0u8; 10]).unwrap();
+        processor.handle_event(&NormalizedEvent {
+            path: f.clone(),
+            kind: FileEventKind::Created,
+            is_dir: false,
+        });
+        // 持续增长超过 force_timeout（2 秒），期间一直不稳定
+        for _ in 0..25 {
+            std::thread::sleep(Duration::from_millis(120));
+            let mut file = fs::OpenOptions::new().append(true).open(&f).unwrap();
+            file.write_all(&[0u8; 10]).unwrap();
+            drop(file);
+            processor.tick();
+        }
+        assert_eq!(
+            store.lock().unwrap().count().unwrap(),
+            1,
+            "超时兜底应强制入库"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn processor_batch_of_twenty() {
+        let dir = temp_dir("batch");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut processor = EventProcessor::new(store.clone(), short_params(), |_| {});
+        for i in 0..20 {
+            let f = dir.join(format!("file{i}.txt"));
+            fs::write(&f, b"x").unwrap();
+            processor.handle_event(&NormalizedEvent {
+                path: f,
+                kind: FileEventKind::Created,
+                is_dir: false,
+            });
+        }
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(5),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 20
+                },
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "批量文件应全部入库"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn watch_service_tracks_subdirectory_files() {
+        let dir = temp_dir("subdir");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        service.add_dir(&dir).unwrap();
+        service.start();
+        let sub = dir.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("inner.txt"), b"x").unwrap();
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(15),
+                || store.lock().unwrap().count().unwrap() == 1,
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "子目录内的文件应被递归监听入库"
+        );
+        assert_eq!(
+            store
+                .lock()
+                .unwrap()
+                .get_by_path(sub.to_str().unwrap())
+                .unwrap(),
+            None,
+            "目录本身不应入库"
+        );
+        service.stop();
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn watch_service_stops_after_remove_dir() {
+        let dir = temp_dir("unwatch");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        service.add_dir(&dir).unwrap();
+        service.start();
+        fs::write(dir.join("a.txt"), b"x").unwrap();
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(15),
+                || store.lock().unwrap().count().unwrap() == 1,
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "首个文件应入库"
+        );
+        service.remove_dir(&dir).unwrap();
+        // 取消监听后的新文件不应再入库
+        fs::write(dir.join("b.txt"), b"y").unwrap();
+        std::thread::sleep(Duration::from_millis(1000));
+        assert_eq!(
+            store.lock().unwrap().count().unwrap(),
+            1,
+            "取消监听后新文件不应入库"
+        );
+        service.stop();
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn watch_service_add_dir_validation() {
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let service = WatchService::new(store.clone(), short_params(), |_| {}).unwrap();
+        assert!(
+            service.add_dir("C:/definitely/not/exists/xyz").is_err(),
+            "不存在的目录应报错"
+        );
+        let dir = temp_dir("dup");
+        service.add_dir(&dir).unwrap();
+        assert!(service.add_dir(&dir).is_ok(), "重复添加应幂等成功");
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
