@@ -29,7 +29,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { IgnoreRulesDialog } from "../components/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../components/ClassifyMappingDialog";
 import { SchemeDialog } from "../components/SchemeDialog";
-import { SchemeApplyMenu } from "../components/SchemeApplyMenu";
+import { SchemeApplyDialog } from "../components/SchemeApplyDialog";
 
 const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.themeSystem" },
@@ -121,10 +121,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [schemes, setSchemes] = useState<RuleScheme[]>([]);
   const [applyMenuOpen, setApplyMenuOpen] = useState(false);
-  const [applyMenuAnchor, setApplyMenuAnchor] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
   const [ignoreOpen, setIgnoreOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [schemeOpen, setSchemeOpen] = useState(false);
@@ -367,17 +363,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
-                onClick={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  setApplyMenuAnchor({
-                    top:
-                      rect.bottom + 4 > window.innerHeight - 420
-                        ? Math.max(8, rect.top - 424)
-                        : rect.bottom + 4,
-                    left: Math.min(rect.left, window.innerWidth - 304),
-                  });
-                  setApplyMenuOpen(true);
-                }}
+                onClick={() => setApplyMenuOpen(true)}
                 className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
               >
                 {t("settings.applyScheme")}
@@ -523,9 +509,8 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         onChanged={refreshSchemes}
         onClose={() => setSchemeOpen(false)}
       />
-      <SchemeApplyMenu
+      <SchemeApplyDialog
         open={applyMenuOpen}
-        anchor={applyMenuAnchor}
         schemes={schemes}
         current={currentScheme}
         onApply={(id) => void handleApplyScheme(id)}
