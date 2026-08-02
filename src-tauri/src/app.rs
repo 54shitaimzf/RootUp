@@ -1,4 +1,5 @@
 use crate::commands::files as files_commands;
+use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
 use crate::commands::window as window_commands;
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
@@ -57,6 +58,10 @@ pub fn run() {
             settings_commands::get_settings,
             settings_commands::set_settings,
             settings_commands::reset_settings,
+            schemes_commands::list_schemes,
+            schemes_commands::save_scheme,
+            schemes_commands::rename_scheme,
+            schemes_commands::delete_scheme,
             files_commands::add_watched_dir,
             files_commands::remove_watched_dir,
             files_commands::list_watched_dirs,

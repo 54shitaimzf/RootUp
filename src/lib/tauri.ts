@@ -26,6 +26,14 @@ export interface Settings {
   classify_overrides: ClassifyRule[];
 }
 
+/** 与 Rust 侧 core::schemes::RuleScheme 对应 */
+export interface RuleScheme {
+  id: string;
+  name: string;
+  ignore_rules: IgnoreRules;
+  classify_overrides: ClassifyRule[];
+}
+
 export const defaultSettings: Settings = {
   version: 1,
   theme: "system",
@@ -117,6 +125,26 @@ export function saveSettings(settings: Settings): Promise<void> {
 /** 恢复默认设置（保留监控目录），返回新设置 */
 export function resetSettings(): Promise<Settings> {
   return invoke<Settings>("reset_settings");
+}
+
+export function listSchemes(): Promise<RuleScheme[]> {
+  return invoke<RuleScheme[]>("list_schemes");
+}
+
+export function saveScheme(
+  name: string,
+  ignoreRules: IgnoreRules,
+  classifyOverrides: ClassifyRule[],
+): Promise<RuleScheme> {
+  return invoke<RuleScheme>("save_scheme", { name, ignoreRules, classifyOverrides });
+}
+
+export function renameScheme(id: string, name: string): Promise<void> {
+  return invoke<void>("rename_scheme", { id, name });
+}
+
+export function deleteScheme(id: string): Promise<void> {
+  return invoke<void>("delete_scheme", { id });
 }
 
 export function addWatchedDir(dir: string): Promise<AddDirOutcome> {

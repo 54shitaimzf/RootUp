@@ -6,5 +6,6 @@ pub mod log;
 pub mod path;
 pub mod query;
 pub mod scan;
+pub mod schemes;
 pub mod settings;
 pub mod watched;

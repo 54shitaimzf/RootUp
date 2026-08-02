@@ -1,6 +1,7 @@
 pub mod index_store;
 pub mod logging;
 pub mod scanner;
+pub mod scheme_store;
 pub mod storage;
 pub mod tray;
 pub mod watcher;
