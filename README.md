@@ -18,6 +18,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 文件监听与索引：监控目录全量扫描、实时索引、快照差集与误删防护
 - 自动分类标签：文档/图片/视频/音频/压缩包/代码/安装包/数据（扩展名映射，接口可扩展）
 - 搜索语法：`type:` / `label:` / `state:` / `size:` / `before:` / `after:` + 文本组合
+- 可配置规则：忽略规则与分类映射可自定义，附默认/编程开发/素材创作三套模板（重启生效）
 
 ### 搜索语法
 
@@ -82,6 +83,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - File watching & indexing: full scan of watched folders, real-time indexing, snapshot diff with accidental-deletion protection
 - Auto category labels: Documents / Images / Videos / Audio / Archives / Code / Installers / Data (extension mapping, pluggable interface)
 - Search syntax: `type:` / `label:` / `state:` / `size:` / `before:` / `after:` combined with plain text
+- Configurable rules: ignore rules and classification mapping with three presets (default / developer / creative); takes effect after restart
 
 ### Search Syntax
 

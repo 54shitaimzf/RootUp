@@ -77,15 +77,25 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - 二次启动不重复开窗，且能唤起已销毁的窗口
 - 设置修改后重启应用仍然保留
 
-## 设置数据流
+## 设置数据流与配置模型
 
-`Settings { theme: system|light|dark, language: zh-CN|en }`
+`Settings { version, theme, language, watched_dirs, ignore_rules{extensions,prefixes,exact_names}, classify_overrides[] }`
 
 ```
 前端 lib/tauri.ts → invoke → commands/settings.rs（校验）
                     → infra/storage.rs（tauri-plugin-store，settings.json）
                     → core/settings.rs（模型与默认值）
 ```
+
+**版本化与向前兼容**：`CURRENT_VERSION` 为配置版本（当前 1）；新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`；结构性升级在 `Settings::migrate()` 中按版本号逐级迁移。旧版本配置文件永远可被新版本读取（未知字段容忍 + 缺省字段取默认）。
+
+**损坏容错**：`infra/storage.rs` 的 `backup_corrupt_settings` 在加载前校验 JSON，损坏文件改名为 `settings.corrupt-<时间戳>.bak` 并回退默认。
+
+**规则装配**：`app.rs` 启动时由 `Settings` 构建 `IgnoreMatcher::from_rules(...)` 与 `ExtensionClassifier::with_overrides(...)`，监听与扫描共用；规则变更保存后重启生效（不做热更新）。
+
+**模板**：三套可预选模板（默认/编程开发/素材创作）为前端概念（`src/lib/presets.ts`），套用即替换规则类配置，后端只存最终规则。
+
+**配置蓝图（迭代 B）**：归档目标结构、扫描选项（递归/隐藏文件/最大大小）、AI 分类开关、皮肤等字段待功能落地时按版本化约定新增，不提前预留空字段。
 
 `core` 层为纯 Rust 数据结构，不依赖 Tauri 类型，便于后续扩展字段与单元测试。
 
