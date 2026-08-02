@@ -66,6 +66,9 @@ export default {
     builtinPresets: "内置模板",
     customSchemes: "自定义方案",
     schemeApplied: "方案已应用，重启后生效",
+    applySchemeMenuTitle: "应用规则方案",
+    selectSchemeHint: "先选择要应用的方案",
+    currentSchemeTag: "当前",
     ignoreRow: "忽略规则",
     ignoreRowSummary:
       "忽略 {{total}} 项（扩展名 {{extensions}} · 前缀 {{prefixes}} · 文件名 {{names}}）",

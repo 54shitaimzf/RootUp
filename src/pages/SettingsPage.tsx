@@ -29,6 +29,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { IgnoreRulesDialog } from "../components/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../components/ClassifyMappingDialog";
 import { SchemeDialog } from "../components/SchemeDialog";
+import { SchemeApplyMenu } from "../components/SchemeApplyMenu";
 
 const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.themeSystem" },
@@ -119,8 +120,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [defaults, setDefaults] = useState<ClassifyDefaultEntry[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [schemes, setSchemes] = useState<RuleScheme[]>([]);
-  const [selectedSchemeId, setSelectedSchemeId] = useState("default");
-  const [pendingApply, setPendingApply] = useState(false);
+  const [applyMenuOpen, setApplyMenuOpen] = useState(false);
+  const [applyMenuAnchor, setApplyMenuAnchor] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const [ignoreOpen, setIgnoreOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [schemeOpen, setSchemeOpen] = useState(false);
@@ -189,10 +193,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     }
   };
 
-  const handleApplyScheme = async () => {
+  const handleApplyScheme = async (id: string) => {
     if (!settings) return;
-    const preset = RULE_PRESETS.find((p) => p.id === selectedSchemeId);
-    const scheme = schemes.find((s) => s.id === selectedSchemeId);
+    const preset = RULE_PRESETS.find((p) => p.id === id);
+    const scheme = schemes.find((s) => s.id === id);
     if (!preset && !scheme) return;
     let next: Settings;
     if (preset) {
@@ -210,7 +214,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       setNotice(null);
       setDirError(String(err));
     }
-    setPendingApply(false);
   };
 
   const handleReset = async () => {
@@ -346,13 +349,15 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                {t("settings.schemeRow")}
-                <span className="ml-2 text-xs font-normal text-brand-600 dark:text-brand-300">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {t("settings.schemeRow")}
+                </span>
+                <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
                   {schemeLabel}
                 </span>
               </div>
-              <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+              <div className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
                 {t("settings.schemeSummary", {
                   ignore: ignoreSummary.total,
                   override: settings.classify_overrides.length,
@@ -360,55 +365,27 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <select
-                value={selectedSchemeId}
-                onChange={(event) => {
-                  setSelectedSchemeId(event.target.value);
-                  setPendingApply(false);
-                }}
-                className="max-w-32 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none dark:border-slate-700 dark:bg-slate-800"
-              >
-                <optgroup label={t("settings.builtinPresets")}>
-                  {RULE_PRESETS.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {t(preset.nameKey)}
-                    </option>
-                  ))}
-                </optgroup>
-                {schemes.length > 0 && (
-                  <optgroup label={t("settings.customSchemes")}>
-                    {schemes.map((scheme) => (
-                      <option key={scheme.id} value={scheme.id}>
-                        {scheme.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
               <button
                 type="button"
-                onClick={() => {
-                  if (!pendingApply) {
-                    setPendingApply(true);
-                    return;
-                  }
-                  void handleApplyScheme();
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setApplyMenuAnchor({
+                    top:
+                      rect.bottom + 4 > window.innerHeight - 420
+                        ? Math.max(8, rect.top - 424)
+                        : rect.bottom + 4,
+                    left: Math.min(rect.left, window.innerWidth - 304),
+                  });
+                  setApplyMenuOpen(true);
                 }}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  pendingApply
-                    ? "bg-amber-500 text-white hover:bg-amber-600"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
-                }`}
+                className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
               >
-                {pendingApply
-                  ? t("settings.confirmApply")
-                  : t("settings.applyScheme")}
+                {t("settings.applyScheme")}
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setSchemeOpen(true);
-                  setPendingApply(false);
                 }}
                 className="rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-800"
               >
@@ -545,6 +522,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         current={cloneRules(settings)}
         onChanged={refreshSchemes}
         onClose={() => setSchemeOpen(false)}
+      />
+      <SchemeApplyMenu
+        open={applyMenuOpen}
+        anchor={applyMenuAnchor}
+        schemes={schemes}
+        current={currentScheme}
+        onApply={(id) => void handleApplyScheme(id)}
+        onClose={() => setApplyMenuOpen(false)}
       />
     </div>
   );

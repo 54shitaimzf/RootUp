@@ -70,6 +70,9 @@ export default {
     builtinPresets: "Built-in presets",
     customSchemes: "Custom schemes",
     schemeApplied: "Scheme applied. Restart to take effect.",
+    applySchemeMenuTitle: "Apply rule scheme",
+    selectSchemeHint: "Select a scheme to apply",
+    currentSchemeTag: "Current",
     ignoreRow: "Ignore rules",
     ignoreRowSummary:
       "{{total}} rules ({{extensions}} extensions · {{prefixes}} prefixes · {{names}} names)",
