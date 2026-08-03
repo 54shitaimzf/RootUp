@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { sortFilterItems, type FilterHabits } from "../lib/filterHabits";
 import { logEvent } from "../lib/tauri";
+import { Chip } from "./Chip";
 import { FilterIcon } from "./FilterIcon";
 
 export interface FilterBarProps {
@@ -34,12 +35,6 @@ interface ChipItem {
 interface OrderSnapshot {
   category: ChipItem[];
   label: ChipItem[];
-}
-
-function chipClass(active: boolean): string {
-  return active
-    ? "bg-brand-700 text-white"
-    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700";
 }
 
 /** 分组行：左侧固定标题，右侧 chips 单行横向滚动（隐藏滚动条 + 滚轮映射 + 双向渐隐 + 悬浮箭头）。 */
@@ -189,7 +184,7 @@ export function FilterBar({
     }
   }
 
-  const chipRefs = useRef(new Map<string, HTMLButtonElement>());
+  const chipRefs = useRef(new Map<string, HTMLElement>());
   const scrollToChip = (key: string) => {
     requestAnimationFrame(() => {
       chipRefs.current
@@ -234,7 +229,7 @@ export function FilterBar({
   const renderChip = (item: ChipItem) => {
     const active = isActive(item);
     return (
-      <button
+      <Chip
         key={item.key}
         ref={(element) => {
           if (element) {
@@ -243,27 +238,27 @@ export function FilterBar({
             chipRefs.current.delete(item.key);
           }
         }}
-        type="button"
+        size="md"
+        variant={active ? "active" : "neutral"}
+        icon={<FilterIcon kind={item.kind} value={item.value} />}
         onClick={() => toggle(item)}
-        className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(active)}`}
       >
-        <FilterIcon kind={item.kind} value={item.value} />
-        <span>{displayName(item)}</span>
-      </button>
+        {displayName(item)}
+      </Chip>
     );
   };
 
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
       <GroupRow label={t("filter.types")}>
-        <button
-          type="button"
+        <Chip
+          size="md"
+          variant={selectedTypes.length === 0 ? "active" : "neutral"}
+          icon={<FilterIcon kind="all" />}
           onClick={() => onTypesChange([])}
-          className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(selectedTypes.length === 0)}`}
         >
-          <FilterIcon kind="all" />
-          <span>{t("filter.all")}</span>
-        </button>
+          {t("filter.all")}
+        </Chip>
         {snapshot.category.map(renderChip)}
       </GroupRow>
       {snapshot.label.length > 0 && (

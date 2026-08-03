@@ -4,6 +4,7 @@ import type { IgnoreRules } from "../../lib/tauri";
 import { Button } from "../../components/Button";
 import { ChipGroup } from "../../components/ChipGroup";
 import { Modal } from "../../components/Modal";
+import { SectionLabel } from "../../components/SectionLabel";
 
 export function IgnoreRulesDialog({
   open,
@@ -87,9 +88,9 @@ export function IgnoreRulesDialog({
           </p>
         )}
         <div>
-          <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          <SectionLabel>
             {t("settings.ignoreExtensions")}
-          </div>
+          </SectionLabel>
           <div className="mt-1.5">
             <ChipGroup
               items={draft.extensions}
@@ -106,9 +107,9 @@ export function IgnoreRulesDialog({
           </div>
         </div>
         <div>
-          <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          <SectionLabel>
             {t("settings.ignorePrefixes")}
-          </div>
+          </SectionLabel>
           <div className="mt-1.5">
             <ChipGroup
               items={draft.prefixes}
@@ -125,9 +126,9 @@ export function IgnoreRulesDialog({
           </div>
         </div>
         <div>
-          <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          <SectionLabel>
             {t("settings.ignoreExactNames")}
-          </div>
+          </SectionLabel>
           <div className="mt-1.5">
             <ChipGroup
               items={draft.exact_names}
@@ -143,7 +144,7 @@ export function IgnoreRulesDialog({
             />
           </div>
         </div>
-        <p className="border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+        <p className="border-t border-slate-100 pt-3 text-xs text-muted dark:border-slate-800">
           {t("settings.restartHint")}
         </p>
       </div>

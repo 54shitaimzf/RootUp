@@ -11,7 +11,9 @@ import {
 } from "../../lib/tauri";
 import { Button } from "../../components/Button";
 import { ConfirmButton } from "../../components/ConfirmButton";
+import { IconButton } from "../../components/IconButton";
 import { Modal } from "../../components/Modal";
+import { SectionLabel } from "../../components/SectionLabel";
 
 const MAX_NAME_LEN = 40;
 
@@ -116,7 +118,7 @@ export function SchemeDialog({
         </Button>
       }
     >
-      <div className="text-xs text-slate-500 dark:text-slate-400">
+      <div className="text-xs text-muted">
         {t("settings.schemeSaveHint")}
       </div>
       <div className="mt-2 flex gap-2">
@@ -146,9 +148,9 @@ export function SchemeDialog({
       )}
 
       <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-        <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
+        <SectionLabel>
           {t("settings.customSchemes")}
-        </div>
+        </SectionLabel>
         <div className="mt-2 space-y-1">
           {schemes.length === 0 ? (
             <span className="text-xs text-slate-400 dark:text-slate-500">
@@ -170,22 +172,20 @@ export function SchemeDialog({
                     }}
                     className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
                   />
-                  <button
-                    type="button"
+                  <IconButton
+                    label={t("settings.schemeRename")}
+                    icon={Check}
+                    tone="brand"
+                    size="sm"
                     onClick={() => void commitRename()}
-                    aria-label={t("settings.schemeRename")}
-                    className="rounded p-1 text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
-                  >
-                    <Check className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
+                  />
+                  <IconButton
+                    label={t("settings.cancel")}
+                    icon={X}
+                    tone="neutral"
+                    size="sm"
                     onClick={() => setRenamingId(null)}
-                    aria-label={t("settings.cancel")}
-                    className="rounded p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    <X className="size-3.5" />
-                  </button>
+                  />
                 </div>
               ) : (
                 <div
@@ -196,19 +196,18 @@ export function SchemeDialog({
                     {scheme.name}
                   </span>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
+                    <IconButton
+                      label={t("settings.schemeRename")}
+                      icon={Pencil}
+                      tone="brand"
+                      size="sm"
                       onClick={() => startRename(scheme)}
-                      aria-label={t("settings.schemeRename")}
-                      className="rounded p-1 text-slate-400 transition-colors hover:text-brand-600 dark:hover:text-brand-300"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    />
                     <ConfirmButton
                       label={<Trash2 className="size-3.5" />}
                       pendingLabel={t("settings.schemeConfirmDelete")}
                       onConfirm={() => void handleDelete(scheme.id)}
-                      className="rounded p-1 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
+                      className="rounded p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-500/15"
                       pendingClassName="rounded bg-red-50 px-2 text-[10px] font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400"
                     />
                   </div>

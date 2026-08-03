@@ -21,7 +21,9 @@ import {
 import { fileStateMeta } from "../lib/fileUtils";
 import type { FilterHabits } from "../lib/filterHabits";
 import type { FileRecord } from "../lib/tauri";
+import { Chip } from "./Chip";
 import { FilterIcon } from "./FilterIcon";
+import { IconButton } from "./IconButton";
 import { SyntaxHelp } from "./SyntaxHelp";
 
 /**
@@ -173,22 +175,16 @@ export function SearchAutocomplete({
       >
         <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-9 text-sm shadow-card transition-colors focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900">
           {tags.map((tag) => (
-            <span
+            <Chip
               key={`${tag.kind}:${tag.value}`}
-              className="inline-flex h-6 items-center gap-1 rounded-md bg-brand-50 pr-1 pl-2 text-xs font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+              size="sm"
+              variant="brand"
+              icon={<FilterIcon kind={tag.kind} value={tag.value} />}
+              onRemove={() => handleTagRemove(tag)}
+              removeLabel={t("files.removeFilter")}
             >
-              <FilterIcon kind={tag.kind} value={tag.value} />
-              <span>{tagDisplay(tag)}</span>
-              <button
-                type="button"
-                aria-label={t("files.removeFilter")}
-                title={t("files.removeFilter")}
-                onClick={() => handleTagRemove(tag)}
-                className="rounded p-0.5 text-current opacity-70 transition-colors hover:bg-red-50 hover:text-red-500 hover:opacity-100 dark:hover:bg-red-500/15"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
+              {tagDisplay(tag)}
+            </Chip>
           ))}
           <input
             ref={inputRef}
@@ -211,14 +207,14 @@ export function SearchAutocomplete({
           />
         </div>
         {(text !== "" || tags.length > 0) && (
-          <button
-            type="button"
-            aria-label={t("files.clearSearch")}
+          <IconButton
+            label={t("files.clearSearch")}
+            icon={X}
+            tone="neutral"
+            size="md"
             onClick={handleClear}
-            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-          >
-            <X className="size-4" />
-          </button>
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2"
+          />
         )}
         {focused && suggestions.length > 0 && (
           <div className="floating-panel pop-in absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto py-1">

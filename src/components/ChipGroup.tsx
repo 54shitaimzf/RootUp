@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { Chip } from "./Chip";
 
 /** 通用 chip 编辑组：展示 + 删除 + 添加输入框。 */
 export function ChipGroup({
@@ -26,25 +26,20 @@ export function ChipGroup({
   };
   return (
     <div>
-      <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {items.length === 0 ? (
-          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+          <span className="text-xs text-muted">—</span>
         ) : (
           items.map((item) => (
-            <span
+            <Chip
               key={item}
-              className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              size="md"
+              variant="neutral"
+              onRemove={() => onRemove(item)}
+              removeLabel={t("settings.remove")}
             >
               {item}
-              <button
-                type="button"
-                onClick={() => onRemove(item)}
-                aria-label={t("settings.remove")}
-                className="rounded p-0.5 text-slate-400 hover:text-red-500 dark:text-slate-500"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
+            </Chip>
           ))
         )}
       </div>

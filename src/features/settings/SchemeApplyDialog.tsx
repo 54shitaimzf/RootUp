@@ -7,6 +7,7 @@ import type { RuleScheme } from "../../lib/tauri";
 import { Button } from "../../components/Button";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import { Modal } from "../../components/Modal";
+import { SectionLabel } from "../../components/SectionLabel";
 
 /**
  * 应用方案弹窗：与其它编辑弹窗统一为居中模态 + 吸底按钮。
@@ -71,13 +72,13 @@ export function SchemeApplyDialog({
         </>
       }
     >
-      <p className="text-xs text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-muted">
         {t("settings.applySchemeHint")}
       </p>
       <div className="mt-3">
-        <div className="px-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+        <SectionLabel size="xs" className="px-1 pb-1 uppercase tracking-wide">
           {t("settings.builtinPresets")}
-        </div>
+        </SectionLabel>
         <div className="space-y-1">
           {RULE_PRESETS.map((preset) => {
             const isSelected = selectedId === preset.id;
@@ -106,9 +107,12 @@ export function SchemeApplyDialog({
         </div>
         {schemes.length > 0 && (
           <>
-            <div className="px-1 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <SectionLabel
+              size="xs"
+              className="px-1 pb-1 pt-3 uppercase tracking-wide"
+            >
               {t("settings.customSchemes")}
-            </div>
+            </SectionLabel>
             <div className="space-y-1">
               {schemes.map((scheme) => {
                 const isSelected = selectedId === scheme.id;

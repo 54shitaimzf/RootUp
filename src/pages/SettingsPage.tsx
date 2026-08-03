@@ -33,6 +33,7 @@ import { SchemeApplyDialog } from "../features/settings/SchemeApplyDialog";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { IconButton } from "../components/IconButton";
 
 const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.themeSystem" },
@@ -86,10 +87,10 @@ function Row({
       className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 transition-colors hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/70"
     >
       <div className="min-w-0">
-        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+        <div className="text-sm font-semibold text-secondary">
           {title}
         </div>
-        <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-0.5 truncate text-xs text-muted">
           {summary}
         </div>
       </div>
@@ -242,8 +243,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   if (!settings) {
     return (
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-2xl font-semibold">{t("pages.settings.title")}</h1>
-        <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+        <h1 className="text-2xl font-semibold text-strong">
+          {t("pages.settings.title")}
+        </h1>
+        <p className="mt-4 text-sm text-muted">
           {t("files.loading")}
         </p>
       </div>
@@ -261,8 +264,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-semibold">{t("pages.settings.title")}</h1>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      <h1 className="text-2xl font-semibold text-strong">
+        {t("pages.settings.title")}
+      </h1>
+      <p className="mt-1 text-sm text-muted">
         {t("pages.settings.description")}
       </p>
 
@@ -289,7 +294,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
 
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">{t("settings.watchedDirs")}</h2>
+          <h2 className="text-sm font-semibold text-secondary">
+            {t("settings.watchedDirs")}
+          </h2>
           <Button
             variant="secondary"
             size="sm"
@@ -299,7 +306,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             {t("settings.rescanAll")}
           </Button>
         </div>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-muted">
           {t("settings.watchedDirsDesc")}
         </p>
         <div className="mt-3 flex gap-2">
@@ -343,19 +350,21 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       </section>
 
       <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-medium">{t("settings.rulesSection")}</h2>
+        <h2 className="text-sm font-semibold text-secondary">
+          {t("settings.rulesSection")}
+        </h2>
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                <span className="text-sm font-semibold text-secondary">
                   {t("settings.schemeRow")}
                 </span>
                 <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
                   {schemeLabel}
                 </span>
               </div>
-              <div className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
+              <div className="mt-1 truncate text-xs text-muted">
                 {t("settings.schemeSummary", {
                   ignore: ignoreSummary.total,
                   override: settings.classify_overrides.length,
@@ -404,7 +413,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       </section>
 
       <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-medium">{t("settings.theme")}</h2>
+        <h2 className="text-sm font-semibold text-secondary">
+          {t("settings.theme")}
+        </h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {THEME_OPTIONS.map(({ value, labelKey }) => (
             <button
@@ -424,7 +435,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       </section>
 
       <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-medium">{t("settings.language")}</h2>
+        <h2 className="text-sm font-semibold text-secondary">
+          {t("settings.language")}
+        </h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
             <button
@@ -444,8 +457,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       </section>
 
       <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-medium">{t("settings.logDir")}</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <h2 className="text-sm font-semibold text-secondary">
+          {t("settings.logDir")}
+        </h2>
+        <p className="mt-1 text-xs text-muted">
           {t("settings.logDirHint")}
         </p>
         {logDir && (
@@ -453,18 +468,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-600 dark:text-slate-300">
               {logDir}
             </span>
-            <button
-              type="button"
+            <IconButton
+              label={t("settings.copyPath")}
+              icon={copied ? Check : Copy}
+              tone="brand"
+              size="md"
               onClick={() => void handleCopyLogDir()}
-              aria-label={t("settings.copyPath")}
-              className="shrink-0 rounded p-1.5 text-slate-400 transition-colors hover:text-brand-600 dark:hover:text-brand-400"
-            >
-              {copied ? (
-                <Check className="size-4 text-brand-600" />
-              ) : (
-                <Copy className="size-4" />
-              )}
-            </button>
+              className={copied ? "text-brand-600" : ""}
+            />
           </div>
         )}
       </section>
@@ -472,10 +483,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       <section className="mt-4 rounded-xl border border-red-200 bg-white p-5 shadow-card dark:border-red-500/25 dark:bg-slate-900">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-medium text-red-600 dark:text-red-400">
+            <h2 className="text-sm font-semibold text-red-600 dark:text-red-400">
               {t("settings.resetSettings")}
             </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs text-muted">
               {t("settings.resetHint")}
             </p>
           </div>

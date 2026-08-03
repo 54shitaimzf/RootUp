@@ -24,6 +24,9 @@
   --scrollbar-thumb-hover: #94a3b8;
   --state-pending: #fbbf24;
   --state-indexed: #10b981;
+  --text-strong: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
   --shadow-float:
     0 2px 8px rgb(15 23 42 / 0.08), 0 12px 40px rgb(15 23 42 / 0.18);
 }
@@ -31,7 +34,23 @@
 .dark {
   --scrollbar-thumb: #334155;
   --scrollbar-thumb-hover: #475569;
+  --text-strong: #f1f5f9;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
   --shadow-float: 0 2px 10px rgb(0 0 0 / 0.35), 0 16px 48px rgb(0 0 0 / 0.5);
+}
+
+/* 文本三级语义：弹窗/页面标题、区块标题、说明与计数；皮肤可整体覆盖 */
+.text-strong {
+  color: var(--text-strong);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
 }
 
 * {
