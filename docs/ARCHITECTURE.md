@@ -132,7 +132,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **查询去重**：搜索文本与 chips/自动补全统一汇入 `buildQuery`，按原文 Set 去重后再发送后端。
 - **日志约定**：`filter: 切换 kind=... key=... active=...`、`autocomplete: 插入 kind=... key=... token=...`、`filter: 习惯数据损坏已回退`，供冒烟与排查。
 - **转义候选**：Windows 文件名不允许冒号，真实文件名不会与 `type:`/`label:` 等语法 token 冲突；未来如需搜索含冒号字符串，在 `parse_query` 增加 `\` 转义（如 `\label:高数` 视为纯文本），本次不实现。
-- **弹层样式约定**：锚定/悬浮层（搜索帮助、自动补全下拉、分类映射编辑浮层等）统一使用 `floating-panel pop-in`——无硬边框，细 ring + `--shadow-float` 双层投影 + 背景模糊 + 120ms 淡入上移动画，深浅主题由 `.dark .floating-panel` 适配；`--shadow-float` 为普通 CSS 变量，皮肤可运行时覆盖。新增浮窗一律复用该约定，禁止手写边框/投影变体；居中 Modal 继续使用遮罩 + 面板边框体系，不并入浮窗类。
+- **弹层样式约定**：锚定/悬浮层（搜索帮助、自动补全下拉、分类映射编辑浮层等）与居中 Modal（设置弹窗、确认弹窗、关闭确认弹窗）统一使用 `floating-panel`——无硬边框，细 ring + `--shadow-float` 双层投影 + 背景模糊 + 半透明底，深浅主题由 `.dark .floating-panel` 适配；`--shadow-float` 为普通 CSS 变量，皮肤可运行时覆盖。锚定/悬浮层追加 `pop-in` 淡入上移动画（约 120ms），居中 Modal 保留遮罩与标题/底部分隔线以维持长内容可读性。新增弹层一律复用该约定，禁止手写边框/投影变体。
 
 ## 扩展点
 

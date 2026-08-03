@@ -40,7 +40,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-[85vh] w-full ${width} flex-col rounded-xl border border-slate-200 bg-white shadow-pop dark:border-slate-700 dark:bg-slate-900`}
+        className={`floating-panel flex max-h-[85vh] w-full ${width} flex-col`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
