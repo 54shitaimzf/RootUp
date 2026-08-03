@@ -24,11 +24,14 @@
   --scrollbar-thumb-hover: #94a3b8;
   --state-pending: #fbbf24;
   --state-indexed: #10b981;
+  --shadow-float:
+    0 2px 8px rgb(15 23 42 / 0.08), 0 12px 40px rgb(15 23 42 / 0.18);
 }
 
 .dark {
   --scrollbar-thumb: #334155;
   --scrollbar-thumb-hover: #475569;
+  --shadow-float: 0 2px 10px rgb(0 0 0 / 0.35), 0 16px 48px rgb(0 0 0 / 0.5);
 }
 
 * {
@@ -83,6 +86,19 @@
 
 .pop-in {
   animation: pop-in 120ms ease-out;
+}
+
+/* 浮窗统一面板：无硬边框，细 ring + 双层投影 + 背景模糊建立层次感 */
+.floating-panel {
+  border-radius: 1rem;
+  background-color: rgb(255 255 255 / 0.95);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.05), var(--shadow-float);
+}
+
+.dark .floating-panel {
+  background-color: rgb(15 23 42 / 0.95);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), var(--shadow-float);
 }
 
 /* 隐藏搜索框原生清除按钮，改用自定义样式（SearchAutocomplete） */

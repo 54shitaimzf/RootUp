@@ -49,7 +49,7 @@ export function SyntaxHelp() {
         <HelpCircle className="size-4" />
       </button>
       {open && (
-        <div className="pop-in absolute right-0 top-11 z-30 w-80 rounded-2xl bg-white/95 p-4 text-xs shadow-pop backdrop-blur dark:bg-slate-900/95">
+        <div className="floating-panel pop-in absolute right-0 top-11 z-30 w-80 p-4 text-xs">
           <div className="font-medium text-slate-700 dark:text-slate-200">
             {t("files.syntaxHelpTitle")}
           </div>

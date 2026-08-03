@@ -225,7 +225,7 @@ export function ClassifyMappingDialog({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setEditing(null)} />
           <div
-            className="fixed z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-pop dark:border-slate-700 dark:bg-slate-900"
+            className="floating-panel pop-in fixed z-50 w-72 p-4"
             style={{ top: editing.anchor.top, left: editing.anchor.left }}
           >
             <div className="text-xs font-medium text-slate-600 dark:text-slate-300">

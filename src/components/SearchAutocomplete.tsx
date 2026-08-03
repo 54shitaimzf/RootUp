@@ -221,7 +221,7 @@ export function SearchAutocomplete({
           </button>
         )}
         {focused && suggestions.length > 0 && (
-          <div className="pop-in absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl bg-white/95 py-1 shadow-pop backdrop-blur dark:bg-slate-900/95">
+          <div className="floating-panel pop-in absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto py-1">
             {suggestions.map((suggestion, index) => (
               <button
                 key={suggestion.key}
