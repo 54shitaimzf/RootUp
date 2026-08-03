@@ -1,17 +1,44 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HelpCircle } from "lucide-react";
+
+interface SyntaxLine {
+  key: string;
+  desc: string;
+}
 
 /** 搜索语法帮助弹层：低学习成本，进阶用户可直达完整语法。 */
 export function SyntaxHelp() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const lines: string[] = t("files.syntaxHelpList", {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const lines = t("files.syntaxHelpList", {
     returnObjects: true,
-  }) as string[];
+  }) as SyntaxLine[];
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <button
         type="button"
         aria-label={t("files.syntaxHelpTitle")}
@@ -22,28 +49,31 @@ export function SyntaxHelp() {
         <HelpCircle className="size-4" />
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-10 w-72 rounded-xl border border-slate-200 bg-white p-4 text-xs shadow-pop dark:border-slate-700 dark:bg-slate-900">
+        <div className="absolute right-0 top-9 z-30 w-80 rounded-xl border border-slate-200 bg-white p-4 text-xs shadow-pop dark:border-slate-700 dark:bg-slate-900">
           <div className="font-medium text-slate-700 dark:text-slate-200">
             {t("files.syntaxHelpTitle")}
           </div>
           <p className="mt-2 text-slate-500 dark:text-slate-400">
             {t("files.syntaxHelpIntro")}
           </p>
-          <ul className="mt-2 space-y-1.5 text-slate-500 dark:text-slate-400">
+          <div className="mt-3 space-y-1.5">
             {lines.map((line) => (
-              <li key={line}>{line}</li>
+              <div
+                key={line.key}
+                className="flex items-baseline gap-2 rounded-md bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800"
+              >
+                <code className="shrink-0 font-mono text-[11px] font-semibold text-brand-700 dark:text-brand-300">
+                  {line.key}
+                </code>
+                <span className="text-slate-500 dark:text-slate-400">
+                  {line.desc}
+                </span>
+              </div>
             ))}
-          </ul>
-          <p className="mt-2 border-t border-slate-100 pt-2 text-slate-400 dark:border-slate-800 dark:text-slate-500">
+          </div>
+          <p className="mt-3 border-t border-slate-100 pt-2 text-slate-400 dark:border-slate-800 dark:text-slate-500">
             {t("files.syntaxHelpNote")}
           </p>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="mt-3 rounded-md bg-slate-100 px-3 py-1 font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-          >
-            {t("close.cancel")}
-          </button>
         </div>
       )}
     </div>

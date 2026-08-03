@@ -138,11 +138,11 @@ export default {
     syntaxHelpTitle: "Search syntax",
     syntaxHelpIntro: "The search box supports two ways, usable together:",
     syntaxHelpList: [
-      "type: filter by file type, e.g. type:pdf",
-      "label: filter by label, e.g. label:project",
-      "state: filter by state, e.g. state:pending or state:indexed",
-      "size: filter by size, e.g. size:>10MB or size:5MB~20MB",
-      "before / after: filter by modified time, e.g. before:2026-08-01",
+      { key: "type", desc: "filter by file type, e.g. type:pdf" },
+      { key: "label", desc: "filter by label, e.g. label:project" },
+      { key: "state", desc: "filter by state, e.g. state:pending or state:indexed" },
+      { key: "size", desc: "filter by size, e.g. size:>10MB or size:5MB~20MB" },
+      { key: "before / after", desc: "filter by modified time, e.g. before:2026-08-01" },
     ],
     syntaxHelpNote:
       "Combine conditions with spaces; all conditions must match. You can also use the filters below or autocomplete while typing.",

@@ -132,11 +132,11 @@ export default {
     syntaxHelpTitle: "搜索语法",
     syntaxHelpIntro: "搜索框支持两种方式，可同时使用：",
     syntaxHelpList: [
-      "type: 按文件类型筛选，如 type:pdf",
-      "label: 按标签筛选，如 label:高数",
-      "state: 按状态筛选，如 state:pending（确认中）、state:indexed（已索引）",
-      "size: 按大小筛选，如 size:>10MB、size:5MB~20MB",
-      "before / after: 按修改时间筛选，如 before:2026-08-01",
+      { key: "type", desc: "按文件类型筛选，如 type:pdf" },
+      { key: "label", desc: "按标签筛选，如 label:高数" },
+      { key: "state", desc: "按状态筛选，如 state:pending（确认中）、state:indexed（已索引）" },
+      { key: "size", desc: "按大小筛选，如 size:>10MB、size:5MB~20MB" },
+      { key: "before / after", desc: "按修改时间筛选，如 before:2026-08-01" },
     ],
     syntaxHelpNote:
       "多个条件用空格组合，全部条件需同时满足；也可以直接使用下方筛选或输入时的自动补全。",
