@@ -59,6 +59,7 @@ export function FilePage({
   const [watchedCount, setWatchedCount] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showLoadingBar, setShowLoadingBar] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -124,6 +125,16 @@ export function FilePage({
     offset,
     refreshKey,
   );
+
+  // 刷新指示延迟出现：150ms 内完成的查询不显示，避免正常操作时可见
+  useEffect(() => {
+    if (!loading) {
+      setShowLoadingBar(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowLoadingBar(true), 150);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
 
   const scanning = scan.status?.active ?? false;
   const scanDir = scan.status?.dir ?? "";
@@ -238,8 +249,8 @@ export function FilePage({
       )}
 
       <div className="mt-4 min-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
-        {loading && items.length > 0 && (
-          <div className="h-0.5 animate-pulse bg-brand-500/70" />
+        {showLoadingBar && items.length > 0 && (
+          <div className="h-px bg-brand-500/20" />
         )}
         {loading && items.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
