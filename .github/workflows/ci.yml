@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: windows-latest
@@ -33,7 +37,20 @@ jobs:
         run: npm ci
 
       - name: Frontend tests
-        run: npm test
+        run: |
+          npm test 2>&1 | Tee-Object -FilePath frontend-test.log
+          exit $LASTEXITCODE
+
+      - name: Upload frontend test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-output
+          path: frontend-test.log
+          if-no-files-found: ignore
+
+      - name: Architecture check
+        run: npm run check:arch
 
       - name: Frontend build
         run: npm run build
@@ -60,6 +77,49 @@ jobs:
           path: src-tauri/test-output.log
           if-no-files-found: ignore
 
-      - name: Release build
-        working-directory: src-tauri
-        run: cargo build --release
+      - name: Release build (complete app)
+        run: npm run tauri build -- --no-bundle
+
+      - name: Upload app artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootup-build
+          path: |
+            src-tauri/target/release/rootup.exe
+            dist
+          if-no-files-found: error
+
+  smoke:
+    needs: ci
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rootup-build
+          path: build-artifacts
+
+      - name: Place build artifacts
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path "src-tauri\target\release" -Force | Out-Null
+          Copy-Item "build-artifacts\rootup.exe" "src-tauri\target\release\rootup.exe" -Force
+          if (Test-Path "build-artifacts\dist") {
+            if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
+            Copy-Item "build-artifacts\dist" "dist" -Recurse
+          }
+
+      - name: Run smoke test
+        shell: powershell
+        run: scripts/smoke.ps1
+
+      - name: Upload smoke summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-summary
+          path: scripts/smoke-summary.log
+          if-no-files-found: ignore
