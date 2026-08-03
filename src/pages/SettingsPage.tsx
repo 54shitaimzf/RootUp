@@ -159,7 +159,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     if (!dir) return;
     try {
       const outcome = await addWatchedDir(dir);
-      setWatchedDirs((prev) => [...new Set([...prev, dir])]);
+      setWatchedDirs((prev) => [...new Set([...prev, outcome.dir])]);
       setNewDir("");
       setDirError(null);
       setNotice(outcome.message ?? t("settings.dirAdded"));

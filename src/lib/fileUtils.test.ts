@@ -129,6 +129,16 @@ describe("mergeFiles", () => {
     expect(result[0].modified).toBe(249);
     expect(result[199].modified).toBe(50);
   });
+
+  it("cap 大于 limit 时保留已加载的更多页（调用方按 prev.length 传 cap）", () => {
+    const loaded = Array.from({ length: 100 }, (_, i) =>
+      rec(`C:/f${i}.txt`, i),
+    );
+    const result = mergeFiles(loaded, [rec("C:/new.txt", 200)], 100);
+    expect(result).toHaveLength(100);
+    expect(result[0].path).toBe("C:/new.txt");
+    expect(result.some((f) => f.path === "C:/f0.txt")).toBe(false);
+  });
 });
 
 describe("loadMoreMerge", () => {

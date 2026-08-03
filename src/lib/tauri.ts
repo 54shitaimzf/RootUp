@@ -84,6 +84,7 @@ export interface QueryPage {
 /** 添加监控目录的结果（message 为可选提示，如“升级覆盖”） */
 export interface AddDirOutcome {
   message: string | null;
+  dir: string;
 }
 
 export interface ScanProgress {

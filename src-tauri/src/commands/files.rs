@@ -20,6 +20,7 @@ const DEFAULT_LIST_LIMIT: i64 = 50;
 #[serde(rename_all = "camelCase")]
 pub struct AddDirOutcome {
     pub message: Option<String>,
+    pub dir: String,
 }
 
 /// 内置扩展名 → 类别映射条目（设置页只读展示用，单一来源在后端）。
@@ -46,6 +47,7 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
         AddCheck::Duplicate => {
             return Ok(AddDirOutcome {
                 message: Some("目录已在监控中".into()),
+                dir: dir.clone(),
             });
         }
         AddCheck::CoveredBy(parent) => {
@@ -86,7 +88,7 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
         .map_err(|e| e.to_string())?
         .enqueue(dir.clone());
     log::info!("watch: 添加 {dir}");
-    Ok(AddDirOutcome { message })
+    Ok(AddDirOutcome { message, dir })
 }
 
 /// 移除监控目录：先更新设置，再取消监听与扫描队列。

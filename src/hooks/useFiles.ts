@@ -49,7 +49,9 @@ export function useFiles(
     listen<FileRecord[]>("files-changed", (event) => {
       const hasFilter = query.trim() !== "";
       if (!hasFilter && offset === 0) {
-        setItems((prev) => mergeFiles(prev, event.payload, limit));
+        setItems((prev) =>
+          mergeFiles(prev, event.payload, Math.max(prev.length, limit)),
+        );
       } else {
         setStale(true);
       }
