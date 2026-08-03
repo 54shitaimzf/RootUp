@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Tag } from "lucide-react";
 import {
@@ -37,6 +37,18 @@ function chipClass(active: boolean): string {
     : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700";
 }
 
+/** “全部”徽章：空心圆环 + ALL 字标，颜色跟随 currentColor，纯装饰。 */
+function AllMedallion() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-4 shrink-0 items-center justify-center rounded-full border text-[7px] font-bold leading-none tracking-widest"
+    >
+      ALL
+    </span>
+  );
+}
+
 function ChipIcon({ item }: { item: ChipItem }) {
   if (item.kind === "category") {
     const Icon = CATEGORY_ICON[item.value] ?? CATEGORY_ICON.other;
@@ -49,10 +61,34 @@ function ChipIcon({ item }: { item: ChipItem }) {
   return <Tag className="size-3.5 shrink-0" />;
 }
 
+/** 分组行：左侧固定标题，右侧 chips 单行横向滚动（不换行）。 */
+function GroupRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-t border-slate-100 px-3 py-2.5 first:border-t-0 dark:border-slate-800">
+      <span className="w-14 shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
+        {label}
+      </span>
+      <div
+        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto"
+        role="group"
+        aria-label={label}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /**
- * 筛选条：一条横向滚动列表。
- * 排序：全部固定最前 → 已选其次 → count 降序 → lastUsed 降序 → 原始顺序；
- * 点击切换选中并计入使用习惯，同时写入日志。
+ * 筛选条：分类 / 状态 / 标签各自成行，行内横向滚动。
+ * 每组按使用习惯排序（已选置前 → count → lastUsed → 原始顺序）；
+ * 分类行行首为“全部”徽章，状态行行首为“全部状态”。
  */
 export function FilterBar({
   categories,
@@ -68,45 +104,54 @@ export function FilterBar({
 }: FilterBarProps) {
   const { t } = useTranslation();
 
-  const items = useMemo<ChipItem[]>(
-    () => [
-      ...categories.map((category) => ({
+  const byKind = useMemo(
+    () => ({
+      category: categories.map((category) => ({
         key: `category:${category}`,
         kind: "category" as const,
         value: category,
       })),
-      ...FILTER_STATE_OPTIONS.map((state) => ({
+      state: FILTER_STATE_OPTIONS.map((state) => ({
         key: `state:${state}`,
         kind: "state" as const,
         value: state,
       })),
-      ...labels.map((label) => ({
+      label: labels.map((label) => ({
         key: `label:${label}`,
         kind: "label" as const,
         value: label,
       })),
-    ],
+    }),
     [categories, labels],
   );
 
-  const selectedKeys = useMemo(
-    () => [
-      ...selectedTypes.map((value) => `category:${value}`),
-      ...selectedStates.map((value) => `state:${value}`),
-      ...selectedLabels.map((value) => `label:${value}`),
-    ],
-    [selectedTypes, selectedStates, selectedLabels],
+  const orderedCategories = useMemo(
+    () =>
+      sortFilterItems(
+        byKind.category,
+        habits,
+        selectedTypes.map((value) => `category:${value}`),
+      ),
+    [byKind.category, habits, selectedTypes],
   );
-
-  const ordered = useMemo(
-    () => sortFilterItems(items, habits, selectedKeys),
-    [items, habits, selectedKeys],
+  const orderedStates = useMemo(
+    () =>
+      sortFilterItems(
+        byKind.state,
+        habits,
+        selectedStates.map((value) => `state:${value}`),
+      ),
+    [byKind.state, habits, selectedStates],
   );
-
-  const allActive =
-    selectedTypes.length === 0 &&
-    selectedStates.length === 0 &&
-    selectedLabels.length === 0;
+  const orderedLabels = useMemo(
+    () =>
+      sortFilterItems(
+        byKind.label,
+        habits,
+        selectedLabels.map((value) => `label:${value}`),
+      ),
+    [byKind.label, habits, selectedLabels],
+  );
 
   const isActive = (item: ChipItem) =>
     item.kind === "category"
@@ -153,36 +198,50 @@ export function FilterBar({
     }
   };
 
+  const renderChip = (item: ChipItem) => {
+    const active = isActive(item);
+    return (
+      <button
+        key={item.key}
+        type="button"
+        onClick={() => toggle(item)}
+        className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(active)}`}
+      >
+        <ChipIcon item={item} />
+        <span>{displayName(item)}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-2.5">
+      <GroupRow label={t("filter.types")}>
         <button
           type="button"
-          onClick={() => {
-            onTypesChange([]);
-            onStatesChange([]);
-            onLabelsChange([]);
-          }}
-          className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(allActive)}`}
+          onClick={() => onTypesChange([])}
+          className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(selectedTypes.length === 0)}`}
+        >
+          <AllMedallion />
+          <span>{t("filter.all")}</span>
+        </button>
+        {orderedCategories.map(renderChip)}
+      </GroupRow>
+      <GroupRow label={t("filter.states")}>
+        <button
+          type="button"
+          onClick={() => onStatesChange([])}
+          className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(selectedStates.length === 0)}`}
         >
           <span className="size-3.5 shrink-0" aria-hidden="true" />
-          {t("filter.all")}
+          <span>{t("filter.stateAll")}</span>
         </button>
-        {ordered.map((item) => {
-          const active = isActive(item);
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => toggle(item)}
-              className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(active)}`}
-            >
-              <ChipIcon item={item} />
-              <span>{displayName(item)}</span>
-            </button>
-          );
-        })}
-      </div>
+        {orderedStates.map(renderChip)}
+      </GroupRow>
+      {labels.length > 0 && (
+        <GroupRow label={t("filter.labels")}>
+          {orderedLabels.map(renderChip)}
+        </GroupRow>
+      )}
     </div>
   );
 }
