@@ -6,7 +6,7 @@
 
 RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
 
-### 当前能力（v0.1.0）
+### 当前能力（v0.2.0）
 
 - Tauri v2 + React 桌面应用框架
 - 系统托盘驻留（打开 / 退出）
@@ -17,10 +17,12 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 设置持久化，重启后保留
 - 文件监听与索引：监控目录全量扫描、实时索引、快照差集与误删防护
 - 自动分类标签：文档/图片/视频/音频/压缩包/代码/安装包/数据（扩展名映射，接口可扩展）
-- 搜索语法：`type:` / `label:` / `state:` / `size:` / `before:` / `after:` + 文本组合
+- 搜索为核心：输入自动补全类别/状态/标签，问号内提供完整语法说明；筛选 chips 按使用频率排序
 - 可配置规则：忽略规则与分类映射各自独立弹窗编辑，附默认/编程开发/素材创作三套模板，支持保存为自定义方案随时套用（重启生效）
 
 ### 搜索语法
+
+搜索框是文件页的核心入口：输入文字按文件名/路径查找，输入特殊语法按条件筛选；输入时自动补全，也可直接点击下方筛选 chips（按使用频率排序）。完整语法说明见搜索框右侧的问号。
 
 - `type:pdf` — 按扩展名筛选
 - `label:document` — 按分类标签筛选
@@ -72,7 +74,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 RootUp is a smart file-organizing desktop app built for students. It auto-sorts downloads, archives files with one click, and turns scattered cleanup habits into reusable rules.
 
-### Current Features (v0.1.0)
+### Current Features (v0.2.0)
 
 - Tauri v2 + React desktop app framework
 - System tray with Open / Quit actions

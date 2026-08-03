@@ -53,6 +53,22 @@ describe("filterFiles", () => {
 });
 
 describe("buildQuery", () => {
+  it("重复 token 去重（自动补全与 chips 重叠）", () => {
+    expect(
+      buildQuery({
+        text: "label:高数",
+        labels: ["高数"],
+        types: ["document", "document"],
+      }),
+    ).toBe("label:高数 type:document");
+  });
+
+  it("保留首次出现的顺序", () => {
+    expect(
+      buildQuery({ text: "笔记", types: ["image", "document"], states: ["indexed"] }),
+    ).toBe("笔记 type:image type:document state:indexed");
+  });
+
   it("组合文本、类型、状态与标签", () => {
     expect(
       buildQuery({

@@ -2,20 +2,28 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { FilterBar } from "../components/FilterBar";
-import { SyntaxHelp } from "../components/SyntaxHelp";
+import { SearchAutocomplete } from "../components/SearchAutocomplete";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
+import { useFilterHabits } from "../hooks/useFilterHabits";
 import type { ScanController } from "../hooks/useScan";
 import {
   fileStateMeta,
   buildQuery,
+  FILTER_STATE_OPTIONS,
   formatFileSize,
   formatTimestamp,
   parseLabels,
 } from "../lib/fileUtils";
-import { listCategories, listLabels, listWatchedDirs } from "../lib/tauri";
+import type { Suggestion } from "../lib/autocomplete";
+import {
+  listCategories,
+  listLabels,
+  listWatchedDirs,
+  logEvent,
+} from "../lib/tauri";
 
 const PAGE_SIZE = 50;
 
@@ -27,6 +35,7 @@ export function FilePage({
   scan: ScanController;
 }) {
   const { t } = useTranslation();
+  const { habits, touch } = useFilterHabits();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
@@ -60,6 +69,34 @@ export function FilePage({
     [debouncedQuery, types, states, labels],
   );
 
+  const autocompleteCandidates = useMemo<Suggestion[]>(() => {
+    const stateLabel = (state: string) =>
+      t(`filter.state${state[0].toUpperCase()}${state.slice(1)}`);
+    return [
+      ...categories.map((category) => ({
+        kind: "category" as const,
+        key: `category:${category}`,
+        raw: category,
+        token: `type:${category}`,
+        display: t(`filter.${category}`),
+      })),
+      ...FILTER_STATE_OPTIONS.map((state) => ({
+        kind: "state" as const,
+        key: `state:${state}`,
+        raw: state,
+        token: `state:${state}`,
+        display: stateLabel(state),
+      })),
+      ...availableLabels.map((label) => ({
+        kind: "label" as const,
+        key: `label:${label}`,
+        raw: label,
+        token: `label:${label}`,
+        display: label,
+      })),
+    ];
+  }, [categories, availableLabels, t]);
+
   const { items, total, loading, stale } = useFiles(
     queryString,
     PAGE_SIZE,
@@ -84,21 +121,25 @@ export function FilePage({
         {t("pages.files.description")}
       </p>
 
-      <div className="mt-6 flex items-center gap-1">
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setOffset(0);
-          }}
-          placeholder={t("files.searchPlaceholder")}
-          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-card outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
-        />
-        <SyntaxHelp />
-      </div>
+      <SearchAutocomplete
+        query={query}
+        candidates={autocompleteCandidates}
+        habits={habits}
+        onChange={(value) => {
+          setQuery(value);
+          setOffset(0);
+        }}
+        onInsert={(suggestion) =>
+          void logEvent(
+            "info",
+            `autocomplete: 插入 kind=${suggestion.kind} key=${suggestion.key} token=${suggestion.token}`,
+          )
+        }
+      />
 
       <FilterBar
+        habits={habits}
+        onHabitUsed={touch}
         categories={categories}
         labels={availableLabels}
         selectedTypes={types}

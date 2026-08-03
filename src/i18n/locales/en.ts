@@ -123,7 +123,7 @@ export default {
     resetDone: "Reset to defaults (watched folders kept)",
   },
   files: {
-    searchPlaceholder: "Search… try type:pdf label:document size:>10MB",
+    searchPlaceholder: "Search files…",
     empty: "No files yet. Add a watched folder first.",
     loading: "Loading…",
     goSettings: "Add a watched folder in Settings",
@@ -136,8 +136,16 @@ export default {
     scanProgress: "{{processed}} processed / {{discovered}} discovered",
     cancelScan: "Cancel scan",
     syntaxHelpTitle: "Search syntax",
-    syntaxHelpHint:
-      "The search box supports special syntax to filter by type, label, state, size or modified time, combinable with plain text; the filters below work the same way.",
+    syntaxHelpIntro: "The search box supports two ways, usable together:",
+    syntaxHelpList: [
+      "type: filter by file type, e.g. type:pdf",
+      "label: filter by label, e.g. label:project",
+      "state: filter by state, e.g. state:pending or state:indexed",
+      "size: filter by size, e.g. size:>10MB or size:5MB~20MB",
+      "before / after: filter by modified time, e.g. before:2026-08-01",
+    ],
+    syntaxHelpNote:
+      "Combine conditions with spaces; all conditions must match. You can also use the filters below or autocomplete while typing.",
     statePending: "Checking",
     stateIndexed: "Indexed",
     stateArchived: "Archived",

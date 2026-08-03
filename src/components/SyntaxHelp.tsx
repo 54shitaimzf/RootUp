@@ -6,6 +6,9 @@ import { HelpCircle } from "lucide-react";
 export function SyntaxHelp() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const lines: string[] = t("files.syntaxHelpList", {
+    returnObjects: true,
+  }) as string[];
 
   return (
     <div className="relative">
@@ -24,7 +27,15 @@ export function SyntaxHelp() {
             {t("files.syntaxHelpTitle")}
           </div>
           <p className="mt-2 text-slate-500 dark:text-slate-400">
-            {t("files.syntaxHelpHint")}
+            {t("files.syntaxHelpIntro")}
+          </p>
+          <ul className="mt-2 space-y-1.5 text-slate-500 dark:text-slate-400">
+            {lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className="mt-2 border-t border-slate-100 pt-2 text-slate-400 dark:border-slate-800 dark:text-slate-500">
+            {t("files.syntaxHelpNote")}
           </p>
           <button
             type="button"

@@ -8,6 +8,9 @@ export interface QueryParts {
   labels?: string[];
 }
 
+/** 状态筛选固定选项（与后端 state 查询一致）。 */
+export const FILTER_STATE_OPTIONS = ["pending", "indexed"] as const;
+
 /** 将筛选器状态组合为搜索语法字符串（后端 query_files 解析） */
 export function buildQuery(parts: QueryParts): string {
   const tokens: string[] = [];
@@ -16,7 +19,8 @@ export function buildQuery(parts: QueryParts): string {
   for (const type of parts.types ?? []) tokens.push(`type:${type}`);
   for (const state of parts.states ?? []) tokens.push(`state:${state}`);
   for (const label of parts.labels ?? []) tokens.push(`label:${label}`);
-  return tokens.join(" ");
+  // 自动补全插入的 token 与 chips 点选可能重复，按原文去重。
+  return [...new Set(tokens)].join(" ");
 }
 
 /** 解析逗号分隔的标签字段为数组 */
