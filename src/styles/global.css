@@ -22,6 +22,8 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: #cbd5e1;
   --scrollbar-thumb-hover: #94a3b8;
+  --state-pending: #fbbf24;
+  --state-indexed: #10b981;
 }
 
 .dark {
@@ -35,8 +37,8 @@
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -56,4 +58,13 @@
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* 芯片行等横向滚动容器：隐藏滚动条，配合滚轮横向映射与渐隐提示 */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

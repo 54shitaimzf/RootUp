@@ -1,14 +1,16 @@
-import { useMemo, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
-import { Tag } from "lucide-react";
 import {
-  FILTER_STATE_OPTIONS,
-  fileStateMeta,
-} from "../lib/fileUtils";
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type WheelEvent,
+} from "react";
+import { useTranslation } from "react-i18next";
+import { FILTER_STATE_OPTIONS } from "../lib/fileUtils";
 import { sortFilterItems, type FilterHabits } from "../lib/filterHabits";
-import type { FileRecord } from "../lib/tauri";
 import { logEvent } from "../lib/tauri";
-import { CATEGORY_ICON } from "./FileTypeIcon";
+import { FilterIcon } from "./FilterIcon";
 
 export interface FilterBarProps {
   categories: string[];
@@ -31,37 +33,19 @@ interface ChipItem {
   value: string;
 }
 
+interface OrderSnapshot {
+  category: ChipItem[];
+  state: ChipItem[];
+  label: ChipItem[];
+}
+
 function chipClass(active: boolean): string {
   return active
     ? "bg-brand-700 text-white"
     : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700";
 }
 
-/** “全部”徽章：空心圆环 + ALL 字标，颜色跟随 currentColor，纯装饰。 */
-function AllMedallion() {
-  return (
-    <span
-      aria-hidden="true"
-      className="flex size-4 shrink-0 items-center justify-center rounded-full border text-[7px] font-bold leading-none tracking-widest"
-    >
-      ALL
-    </span>
-  );
-}
-
-function ChipIcon({ item }: { item: ChipItem }) {
-  if (item.kind === "category") {
-    const Icon = CATEGORY_ICON[item.value] ?? CATEGORY_ICON.other;
-    return <Icon className="size-3.5 shrink-0" />;
-  }
-  if (item.kind === "state") {
-    const meta = fileStateMeta(item.value as FileRecord["state"]);
-    return <span className={`size-2 shrink-0 rounded-full ${meta.dotClass}`} />;
-  }
-  return <Tag className="size-3.5 shrink-0" />;
-}
-
-/** 分组行：左侧固定标题，右侧 chips 单行横向滚动（不换行）。 */
+/** 分组行：左侧固定标题，右侧 chips 单行横向滚动（隐藏滚动条 + 滚轮映射 + 右侧渐隐）。 */
 function GroupRow({
   label,
   children,
@@ -69,26 +53,53 @@ function GroupRow({
   label: string;
   children: ReactNode;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const update = () =>
+      setOverflow(element.scrollWidth > element.clientWidth + 1);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [children]);
+
+  const onWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      event.currentTarget.scrollLeft += event.deltaY;
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 border-t border-slate-100 px-3 py-2.5 first:border-t-0 dark:border-slate-800">
       <span className="w-14 shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </span>
-      <div
-        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto"
-        role="group"
-        aria-label={label}
-      >
-        {children}
+      <div className="relative min-w-0 flex-1">
+        <div
+          ref={scrollRef}
+          onWheel={onWheel}
+          role="group"
+          aria-label={label}
+          className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
+        >
+          {children}
+        </div>
+        {overflow && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * 筛选条：分类 / 状态 / 标签各自成行，行内横向滚动。
- * 每组按使用习惯排序（已选置前 → count → lastUsed → 原始顺序）；
- * 分类行行首为“全部”徽章，状态行行首为“全部状态”。
+ * 筛选条：分类 / 状态 / 标签各自成行。
+ * 排序在进入页面时按使用习惯快照一次，会话内稳定；
+ * 点击只更新习惯与选中态（选中自动滚入视野），不实时重排。
  */
 export function FilterBar({
   categories,
@@ -104,7 +115,7 @@ export function FilterBar({
 }: FilterBarProps) {
   const { t } = useTranslation();
 
-  const byKind = useMemo(
+  const byKind = useMemo<Record<ChipKind, ChipItem[]>>(
     () => ({
       category: categories.map((category) => ({
         key: `category:${category}`,
@@ -125,33 +136,33 @@ export function FilterBar({
     [categories, labels],
   );
 
-  const orderedCategories = useMemo(
-    () =>
-      sortFilterItems(
-        byKind.category,
-        habits,
-        selectedTypes.map((value) => `category:${value}`),
-      ),
-    [byKind.category, habits, selectedTypes],
-  );
-  const orderedStates = useMemo(
-    () =>
-      sortFilterItems(
-        byKind.state,
-        habits,
-        selectedStates.map((value) => `state:${value}`),
-      ),
-    [byKind.state, habits, selectedStates],
-  );
-  const orderedLabels = useMemo(
-    () =>
-      sortFilterItems(
-        byKind.label,
-        habits,
-        selectedLabels.map((value) => `label:${value}`),
-      ),
-    [byKind.label, habits, selectedLabels],
-  );
+  // 首次拿到数据时按习惯排序一次，之后只追加新出现的条目，不再重排。
+  const snapshotRef = useRef<OrderSnapshot | null>(null);
+  if (!snapshotRef.current) {
+    snapshotRef.current = { category: [], state: [], label: [] };
+  }
+  const snapshot = snapshotRef.current;
+  for (const kind of ["category", "state", "label"] as const) {
+    const current = byKind[kind];
+    if (snapshot[kind].length === 0 && current.length > 0) {
+      snapshot[kind] = sortFilterItems(current, habits, []);
+    } else if (current.length > 0) {
+      const existing = new Set(snapshot[kind].map((item) => item.key));
+      const fresh = current.filter((item) => !existing.has(item.key));
+      if (fresh.length > 0) {
+        snapshot[kind] = [...snapshot[kind], ...fresh];
+      }
+    }
+  }
+
+  const chipRefs = useRef(new Map<string, HTMLButtonElement>());
+  const scrollToChip = (key: string) => {
+    requestAnimationFrame(() => {
+      chipRefs.current
+        .get(key)
+        ?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    });
+  };
 
   const isActive = (item: ChipItem) =>
     item.kind === "category"
@@ -196,6 +207,7 @@ export function FilterBar({
         `filter: 切换 kind=label key=${item.value} active=${!active}`,
       );
     }
+    scrollToChip(item.key);
   };
 
   const renderChip = (item: ChipItem) => {
@@ -203,11 +215,18 @@ export function FilterBar({
     return (
       <button
         key={item.key}
+        ref={(element) => {
+          if (element) {
+            chipRefs.current.set(item.key, element);
+          } else {
+            chipRefs.current.delete(item.key);
+          }
+        }}
         type="button"
         onClick={() => toggle(item)}
         className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(active)}`}
       >
-        <ChipIcon item={item} />
+        <FilterIcon kind={item.kind} value={item.value} />
         <span>{displayName(item)}</span>
       </button>
     );
@@ -221,10 +240,10 @@ export function FilterBar({
           onClick={() => onTypesChange([])}
           className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(selectedTypes.length === 0)}`}
         >
-          <AllMedallion />
+          <FilterIcon kind="all" />
           <span>{t("filter.all")}</span>
         </button>
-        {orderedCategories.map(renderChip)}
+        {snapshot.category.map(renderChip)}
       </GroupRow>
       <GroupRow label={t("filter.states")}>
         <button
@@ -232,14 +251,14 @@ export function FilterBar({
           onClick={() => onStatesChange([])}
           className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${chipClass(selectedStates.length === 0)}`}
         >
-          <span className="size-3.5 shrink-0" aria-hidden="true" />
+          <FilterIcon kind="allStates" />
           <span>{t("filter.stateAll")}</span>
         </button>
-        {orderedStates.map(renderChip)}
+        {snapshot.state.map(renderChip)}
       </GroupRow>
-      {labels.length > 0 && (
+      {snapshot.label.length > 0 && (
         <GroupRow label={t("filter.labels")}>
-          {orderedLabels.map(renderChip)}
+          {snapshot.label.map(renderChip)}
         </GroupRow>
       )}
     </div>

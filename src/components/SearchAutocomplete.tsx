@@ -6,16 +6,13 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Tag } from "lucide-react";
 import {
   applySuggestion,
   getSuggestions,
   type Suggestion,
 } from "../lib/autocomplete";
-import { fileStateMeta } from "../lib/fileUtils";
 import type { FilterHabits } from "../lib/filterHabits";
-import type { FileRecord } from "../lib/tauri";
-import { CATEGORY_ICON } from "./FileTypeIcon";
+import { FilterIcon } from "./FilterIcon";
 import { SyntaxHelp } from "./SyntaxHelp";
 
 /**
@@ -125,13 +122,5 @@ export function SearchAutocomplete({
 }
 
 function SuggestionIcon({ suggestion }: { suggestion: Suggestion }) {
-  if (suggestion.kind === "category") {
-    const Icon = CATEGORY_ICON[suggestion.raw] ?? CATEGORY_ICON.other;
-    return <Icon className="size-3.5 shrink-0 text-slate-400" />;
-  }
-  if (suggestion.kind === "state") {
-    const meta = fileStateMeta(suggestion.raw as FileRecord["state"]);
-    return <span className={`size-2 shrink-0 rounded-full ${meta.dotClass}`} />;
-  }
-  return <Tag className="size-3.5 shrink-0 text-slate-400" />;
+  return <FilterIcon kind={suggestion.kind} value={suggestion.raw} />;
 }
