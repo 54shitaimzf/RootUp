@@ -236,8 +236,11 @@ export function FilePage({
         </Banner>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
-        {loading ? (
+      <div className="mt-4 min-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        {loading && items.length > 0 && (
+          <div className="h-0.5 animate-pulse bg-brand-500/70" />
+        )}
+        {loading && items.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
             {t("files.loading")}
           </div>

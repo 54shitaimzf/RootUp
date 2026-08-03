@@ -120,6 +120,15 @@ export function SearchAutocomplete({
       handleBackspace();
       return;
     }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (suggestions.length > 0) {
+        apply(suggestions[highlight]);
+      } else {
+        setFocused(false);
+      }
+      return;
+    }
     if (suggestions.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -132,9 +141,6 @@ export function SearchAutocomplete({
     } else if (event.key === "Tab") {
       event.preventDefault();
       apply(suggestions[highlight]);
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      setFocused(false);
     } else if (event.key === "Escape") {
       setFocused(false);
       inputRef.current?.blur();
@@ -157,7 +163,10 @@ export function SearchAutocomplete({
 
   return (
     <div className="mt-6 flex items-center gap-1">
-      <div className="relative min-w-0 flex-1">
+      <div
+        className="relative min-w-0 flex-1"
+        onClick={() => inputRef.current?.focus()}
+      >
         <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-9 text-sm shadow-card transition-colors focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900">
           {tags.map((tag) => (
             <span
@@ -169,8 +178,9 @@ export function SearchAutocomplete({
               <button
                 type="button"
                 aria-label={t("files.removeFilter")}
+                title={t("files.removeFilter")}
                 onClick={() => handleTagRemove(tag)}
-                className="rounded p-0.5 opacity-70 transition-opacity hover:opacity-100"
+                className="rounded p-0.5 text-current opacity-70 transition-colors hover:bg-red-50 hover:text-red-500 hover:opacity-100 dark:hover:bg-red-500/15"
               >
                 <X className="size-3" />
               </button>
@@ -181,7 +191,7 @@ export function SearchAutocomplete({
             type="search"
             value={text}
             onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 120)}
+            onBlur={() => setTimeout(() => setFocused(false), 150)}
             onChange={(event) => {
               onTextChange(event.target.value);
               setCaret(event.target.selectionStart ?? event.target.value.length);
