@@ -1,4 +1,5 @@
 use crate::commands::files as files_commands;
+use crate::commands::habits as habits_commands;
 use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
 use crate::commands::window as window_commands;
@@ -62,6 +63,8 @@ pub fn run() {
             schemes_commands::save_scheme,
             schemes_commands::rename_scheme,
             schemes_commands::delete_scheme,
+            habits_commands::get_habits,
+            habits_commands::save_habits,
             files_commands::add_watched_dir,
             files_commands::remove_watched_dir,
             files_commands::list_watched_dirs,

@@ -34,6 +34,15 @@ export interface RuleScheme {
   classify_overrides: ClassifyRule[];
 }
 
+/** 与 Rust 侧 core::habits::Habit 对应 */
+export interface Habit {
+  count: number;
+  lastUsed: number;
+}
+
+/** 筛选使用习惯表（键 → 使用记录），由应用数据目录 habits.json 管理。 */
+export type HabitsMap = Record<string, Habit>;
+
 export const defaultSettings: Settings = {
   version: 1,
   theme: "system",
@@ -145,6 +154,14 @@ export function renameScheme(id: string, name: string): Promise<void> {
 
 export function deleteScheme(id: string): Promise<void> {
   return invoke<void>("delete_scheme", { id });
+}
+
+export function getHabits(): Promise<HabitsMap> {
+  return invoke<HabitsMap>("get_habits");
+}
+
+export function saveHabits(habits: HabitsMap): Promise<void> {
+  return invoke<void>("save_habits", { habits });
 }
 
 export function addWatchedDir(dir: string): Promise<AddDirOutcome> {

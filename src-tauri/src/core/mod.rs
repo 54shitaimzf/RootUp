@@ -1,5 +1,6 @@
 pub mod classify;
 pub mod events;
+pub mod habits;
 pub mod ignore;
 pub mod index;
 pub mod log;

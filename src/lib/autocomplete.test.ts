@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addTag,
   getSuggestions,
+  habitKeyForTag,
   removeLastTag,
   removeTag,
   resolveInsertion,
@@ -216,5 +217,15 @@ describe("标签操作", () => {
     const third = removeLastTag(second.tags);
     expect(third.removed).toEqual({ kind: "category", value: "document" });
     expect(removeLastTag(third.tags).removed).toBeNull();
+  });
+
+  it("habitKeyForTag 生成与筛选行一致的习惯键", () => {
+    expect(habitKeyForTag({ kind: "category", value: "document" })).toBe(
+      "category:document",
+    );
+    expect(habitKeyForTag({ kind: "state", value: "pending" })).toBe(
+      "state:pending",
+    );
+    expect(habitKeyForTag({ kind: "label", value: "高数" })).toBe("label:高数");
   });
 });

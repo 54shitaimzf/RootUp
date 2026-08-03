@@ -127,10 +127,12 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 ## 文件页搜索与筛选
 
 - **搜索为核心**：`components/SearchAutocomplete.tsx` 为搜索框 + 自动补全（combobox），候选来自 `list_categories` / `list_labels` / 固定状态集（状态仅存在于搜索语法与补全，不在界面筛选行），经 `lib/autocomplete.ts` 纯函数匹配与插入（维度前缀补全、子串匹配、替换/追加）。
-- **筛选 chips 频率排序**：`FilterBar` 为分类 / 标签两行横向滚动列表（状态筛选不在界面，`state:` 保留给搜索语法），进入页面时按习惯快照排序一次、会话内稳定（已选置前仅体现在高亮与自动滚入视野，不实时重排）；习惯数据存 localStorage（键 `rootup.filter-habits.v1`），仅本机、不跨设备，由 `hooks/useFilterHabits.ts` 读写，损坏自动回退。
+- **筛选 chips 频率排序**：`FilterBar` 为分类 / 标签两行横向滚动列表（状态筛选不在界面，`state:` 保留给搜索语法），进入页面时按习惯快照排序一次、会话内稳定（已选置前仅体现在高亮与自动滚入视野，不实时重排）；习惯数据由 `hooks/useFilterHabits.ts` 读写（存储见下条）。
+- **习惯数据管理**：筛选/补全使用习惯存应用数据目录 `habits.json`（Rust 侧 `core/habits.rs` 校验 + `infra/habit_store.rs` 原子写入与损坏备份 + `commands/habits.rs` 读写），与 settings 完全分离；前端 `useFilterHabits` 800ms 防抖合并写盘，启动时一次性迁移旧 localStorage 数据（成功即删除旧键）；恢复默认设置不清空习惯。日志行：`habits: 保存/迁移/损坏回退`。自动补全关键词（`type:` 等）固定顺序，不参与习惯统计；筛选行点击与补全添加标签共用同一习惯键。
 - **查询去重**：搜索文本与 chips/自动补全统一汇入 `buildQuery`，按原文 Set 去重后再发送后端。
 - **日志约定**：`filter: 切换 kind=... key=... active=...`、`autocomplete: 插入 kind=... key=... token=...`、`filter: 习惯数据损坏已回退`，供冒烟与排查。
 - **转义候选**：Windows 文件名不允许冒号，真实文件名不会与 `type:`/`label:` 等语法 token 冲突；未来如需搜索含冒号字符串，在 `parse_query` 增加 `\` 转义（如 `\label:高数` 视为纯文本），本次不实现。
+- **弹层样式约定**：搜索帮助与自动补全弹层统一无边框浮窗风格——`rounded-2xl bg-white/95 backdrop-blur shadow-pop pop-in`（120ms 淡入上移动画），深浅主题由 dark 变体适配；新增弹层优先复用该约定。
 
 ## 扩展点
 

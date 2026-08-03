@@ -10,6 +10,7 @@ import { Terminal, X } from "lucide-react";
 import {
   addTag,
   getSuggestions,
+  habitKeyForTag,
   removeLastTag,
   removeTag,
   resolveInsertion,
@@ -39,6 +40,7 @@ export function SearchAutocomplete({
   onTextChange,
   onTagsChange,
   onInsert,
+  onHabitUsed,
   onTagAdd,
   onTagRemove,
   limit = 8,
@@ -52,6 +54,7 @@ export function SearchAutocomplete({
   onTextChange: (value: string) => void;
   onTagsChange: (tags: FilterTags) => void;
   onInsert?: (suggestion: Suggestion) => void;
+  onHabitUsed?: (key: string) => void;
   onTagAdd?: (tag: TagValue) => void;
   onTagRemove?: (tag: TagValue) => void;
   limit?: number;
@@ -88,6 +91,7 @@ export function SearchAutocomplete({
       if (added) {
         onTagsChange(next);
         onTagAdd?.(result.tag);
+        onHabitUsed?.(habitKeyForTag(result.tag));
       }
     }
     inputRef.current?.focus();
@@ -217,7 +221,7 @@ export function SearchAutocomplete({
           </button>
         )}
         {focused && suggestions.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-pop dark:border-slate-700 dark:bg-slate-900">
+          <div className="pop-in absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl bg-white/95 py-1 shadow-pop backdrop-blur dark:bg-slate-900/95">
             {suggestions.map((suggestion, index) => (
               <button
                 key={suggestion.key}

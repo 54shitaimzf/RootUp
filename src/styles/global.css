@@ -69,6 +69,22 @@
   display: none;
 }
 
+/* 浮窗轻盈化：淡入 + 上移 + 轻微缩放，帮助与补全弹层共用 */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.pop-in {
+  animation: pop-in 120ms ease-out;
+}
+
 /* 隐藏搜索框原生清除按钮，改用自定义样式（SearchAutocomplete） */
 input[type="search"]::-webkit-search-cancel-button {
   -webkit-appearance: none;

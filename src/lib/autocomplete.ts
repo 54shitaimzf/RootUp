@@ -36,6 +36,13 @@ export interface FilterTags {
   labels: string[];
 }
 
+/** 标签对应的习惯键（与筛选 chips 共用频率统计）。 */
+export function habitKeyForTag(tag: TagValue): string {
+  if (tag.kind === "category") return `category:${tag.value}`;
+  if (tag.kind === "state") return `state:${tag.value}`;
+  return `label:${tag.value}`;
+}
+
 /** 语法关键词顺序（type → label → state → size → before → after）。 */
 export const KEYWORD_PREFIXES = [
   "type:",

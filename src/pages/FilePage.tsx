@@ -149,6 +149,7 @@ export function FilePage({
         labels={labels}
         candidates={autocompleteCandidates}
         habits={habits}
+        onHabitUsed={touch}
         onTextChange={(value) => {
           setQuery(value);
           setOffset(0);
