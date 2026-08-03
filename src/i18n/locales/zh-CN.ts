@@ -147,6 +147,8 @@ export default {
   },
   filter: {
     all: "全部",
+    scrollLeft: "向左滚动",
+    scrollRight: "向右滚动",
     types: "分类筛选",
     states: "状态筛选",
     labels: "标签",

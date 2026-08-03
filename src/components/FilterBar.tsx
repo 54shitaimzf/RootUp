@@ -7,6 +7,7 @@ import {
   type WheelEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { FILTER_STATE_OPTIONS } from "../lib/fileUtils";
 import { sortFilterItems, type FilterHabits } from "../lib/filterHabits";
 import { logEvent } from "../lib/tauri";
@@ -53,6 +54,7 @@ function GroupRow({
   label: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
 
@@ -73,23 +75,52 @@ function GroupRow({
     }
   };
 
+  const scrollByStep = (direction: -1 | 1) => {
+    scrollRef.current?.scrollBy({
+      left: direction * 240,
+      behavior: "smooth",
+    });
+  };
+
   return (
     <div className="flex items-center gap-3 border-t border-slate-100 px-3 py-2.5 first:border-t-0 dark:border-slate-800">
       <span className="w-14 shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </span>
-      <div className="relative min-w-0 flex-1">
-        <div
-          ref={scrollRef}
-          onWheel={onWheel}
-          role="group"
-          aria-label={label}
-          className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
-        >
-          {children}
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        {overflow && (
+          <button
+            type="button"
+            aria-label={t("filter.scrollLeft")}
+            onClick={() => scrollByStep(-1)}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+        )}
+        <div className="relative min-w-0 flex-1">
+          <div
+            ref={scrollRef}
+            onWheel={onWheel}
+            role="group"
+            aria-label={label}
+            className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
+          >
+            {children}
+          </div>
+          {overflow && (
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
+          )}
         </div>
         {overflow && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
+          <button
+            type="button"
+            aria-label={t("filter.scrollRight")}
+            onClick={() => scrollByStep(1)}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          >
+            <ChevronRight className="size-4" />
+          </button>
         )}
       </div>
     </div>

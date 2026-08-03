@@ -153,6 +153,8 @@ export default {
   },
   filter: {
     all: "All",
+    scrollLeft: "Scroll left",
+    scrollRight: "Scroll right",
     types: "Category filters",
     states: "State filters",
     labels: "Labels",
