@@ -137,6 +137,8 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **测试策略与设施**：纯逻辑（lib/、core/、infra/）用 vitest / cargo test 覆盖；组件与 hooks 用 `@testing-library/react` + jsdom 覆盖交互边界（键盘协议、弹窗开关、分页合并、事件状态机），mock 约定为 `vi.mock("../lib/tauri")` 与 `vi.mock("@tauri-apps/api/event")`，测试设施全部位于 devDependencies，不进入生产产物。新增组件测试照此扩展，禁止跳过关键交互边界。
 - **日志与校验约定**：前端行为日志统一 `ui: ` 前缀（如 `ui: 刷新`、`ui: 加载更多 offset=N`、`ui: 清空搜索`、`ui: 取消扫描`），后端子系统沿用各自前缀；`settings: 加载` 由 `get_settings` 输出，冒烟脚本据此断言。`scripts/check-arch.ps1` 校验 `pages → features → components/hooks → lib` 单向依赖（同层仅允许 features/components/hooks/lib 互引），以 `npm run check:arch` 运行并在 CI 强制。
 - **AddDirOutcome 契约**：`add_watched_dir` 返回 `{ message, dir }`，其中 `dir` 为规范化后的路径；前端必须用返回值同步列表，不得回显用户输入原文（避免大小写/斜杠不一致）。
+- **项目识别与智能打开**：`core/project.rs` 提供 `ProjectKind`/`ProjectInfo`/`ProjectDetector` trait（AI 后续 = 新实现插入）、`FeatureDetector` 特征表（Unity→Rust→Go→Java→C#→Node→Python）、`find_project_root`（文件向上找项目根，最多 5 层）与 `discover_projects`（watched 子目录 + 手动目录，跳过噪音目录）。`core/tools.rs` 是“打开意图”单一来源：项目类型 → IDE 候选、扩展名 → 工具候选（md/ipynb/matlab/origin/mathematica/multisim/proteus/cad/solidworks/ps/ai/tex），Office/PDF 与未映射类型走系统默认。`infra/app_finder.rs` 应用查找顺序：自定义命令（`tool` 匹配优先，空 = 通用兜底）→ PATH 命令名（含 `.exe`）→ Windows App Paths 注册表（winreg）→ 内置常见路径（支持单段 `*` glob）→ 系统默认打开；`CommandRunner` trait 隔离进程启动。`infra/shortcut.rs` 生成 `rootup.exe --open-project <path>` 的 `.lnk`（重名递增、内嵌图标缓存）。启动参数 `--open-project` 在首次启动（setup）与单实例回调中解析并 emit `project-open`。
+- **日志前缀**：`project: 添加/移除/发现/启动参数打开`、`ide: 打开/回退`、`open: 文件/定位/默认`、`shortcut: 创建`、`tools: 意图`（预留）；前端行为统一 `ui: `（打开项目/文件/定位/创建快捷方式/添加移除项目）。
 
 ## 扩展点
 
