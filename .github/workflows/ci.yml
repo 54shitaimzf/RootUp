@@ -80,13 +80,18 @@ jobs:
       - name: Release build (complete app)
         run: npm run tauri build -- --no-bundle
 
+      - name: Stage artifacts
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path "release-artifacts" -Force | Out-Null
+          Copy-Item "src-tauri\target\release\rootup.exe" "release-artifacts\rootup.exe" -Force
+          Copy-Item "dist" "release-artifacts\dist" -Recurse -Force
+
       - name: Upload app artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rootup-build
-          path: |
-            src-tauri/target/release/rootup.exe
-            dist
+          path: release-artifacts
           if-no-files-found: error
 
   smoke:
