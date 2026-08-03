@@ -4,7 +4,14 @@ use tauri::AppHandle;
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Settings {
-    storage::load_settings(&app)
+    let settings = storage::load_settings(&app);
+    log::info!(
+        "settings: 加载 theme={} language={} watched={}",
+        settings.theme,
+        settings.language,
+        settings.watched_dirs.len()
+    );
+    settings
 }
 
 #[tauri::command]

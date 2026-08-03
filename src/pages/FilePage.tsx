@@ -144,6 +144,7 @@ export function FilePage({
   const handleRefresh = () => {
     setOffset(0);
     setRefreshKey((key) => key + 1);
+    void logEvent("info", "ui: 刷新");
   };
 
   return (
@@ -336,7 +337,11 @@ export function FilePage({
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setOffset((value) => value + PAGE_SIZE)}
+                  onClick={() => {
+                    const next = offset + PAGE_SIZE;
+                    setOffset(next);
+                    void logEvent("info", `ui: 加载更多 offset=${next}`);
+                  }}
                 >
                   {t("files.loadMore")}
                 </Button>

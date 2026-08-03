@@ -20,7 +20,7 @@ import {
 } from "../lib/autocomplete";
 import { fileStateMeta } from "../lib/fileUtils";
 import type { FilterHabits } from "../lib/filterHabits";
-import type { FileRecord } from "../lib/tauri";
+import { logEvent, type FileRecord } from "../lib/tauri";
 import { Chip } from "./Chip";
 import { FilterIcon } from "./FilterIcon";
 import { IconButton } from "./IconButton";
@@ -118,6 +118,7 @@ export function SearchAutocomplete({
   const handleClear = () => {
     onTextChange("");
     onTagsChange({ types: [], states: [], labels: [] });
+    void logEvent("info", "ui: 清空搜索");
     inputRef.current?.focus();
   };
 

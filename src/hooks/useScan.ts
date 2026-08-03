@@ -90,6 +90,7 @@ export function useScan() {
   };
 
   const cancel = () => {
+    void logEvent("info", "ui: 取消扫描");
     cancelScan().catch((err) => {
       void logEvent("warn", `取消扫描失败: ${String(err)}`);
     });

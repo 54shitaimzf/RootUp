@@ -171,10 +171,14 @@ export function FilterBar({
     snapshotRef.current = { category: [], label: [] };
   }
   const snapshot = snapshotRef.current;
+  const selectedKeys = [
+    ...selectedTypes.map((value) => `category:${value}`),
+    ...selectedLabels.map((value) => `label:${value}`),
+  ];
   for (const kind of ["category", "label"] as const) {
     const current = byKind[kind];
     if (snapshot[kind].length === 0 && current.length > 0) {
-      snapshot[kind] = sortFilterItems(current, habits, []);
+      snapshot[kind] = sortFilterItems(current, habits, selectedKeys);
     } else if (current.length > 0) {
       const existing = new Set(snapshot[kind].map((item) => item.key));
       const fresh = current.filter((item) => !existing.has(item.key));
