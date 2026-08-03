@@ -126,8 +126,8 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 ## 文件页搜索与筛选
 
-- **搜索为核心**：`components/SearchAutocomplete.tsx` 为搜索框 + 自动补全（combobox），候选来自 `list_categories` / `list_labels` / 固定状态集，经 `lib/autocomplete.ts` 纯函数匹配与插入（维度前缀补全、子串匹配、替换/追加）。
-- **筛选 chips 频率排序**：`FilterBar` 为一条横向滚动列表，排序规则固定为「全部 → 已选 → count 降序 → lastUsed 降序 → 原始顺序」；习惯数据存 localStorage（键 `rootup.filter-habits.v1`），仅本机、不跨设备，由 `hooks/useFilterHabits.ts` 读写，损坏自动回退。
+- **搜索为核心**：`components/SearchAutocomplete.tsx` 为搜索框 + 自动补全（combobox），候选来自 `list_categories` / `list_labels` / 固定状态集（状态仅存在于搜索语法与补全，不在界面筛选行），经 `lib/autocomplete.ts` 纯函数匹配与插入（维度前缀补全、子串匹配、替换/追加）。
+- **筛选 chips 频率排序**：`FilterBar` 为分类 / 标签两行横向滚动列表（状态筛选不在界面，`state:` 保留给搜索语法），进入页面时按习惯快照排序一次、会话内稳定（已选置前仅体现在高亮与自动滚入视野，不实时重排）；习惯数据存 localStorage（键 `rootup.filter-habits.v1`），仅本机、不跨设备，由 `hooks/useFilterHabits.ts` 读写，损坏自动回退。
 - **查询去重**：搜索文本与 chips/自动补全统一汇入 `buildQuery`，按原文 Set 去重后再发送后端。
 - **日志约定**：`filter: 切换 kind=... key=... active=...`、`autocomplete: 插入 kind=... key=... token=...`、`filter: 习惯数据损坏已回退`，供冒烟与排查。
 

@@ -39,7 +39,6 @@ export function FilePage({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
-  const [states, setStates] = useState<string[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
@@ -65,8 +64,8 @@ export function FilePage({
   }, []);
 
   const queryString = useMemo(
-    () => buildQuery({ text: debouncedQuery, types, states, labels }),
-    [debouncedQuery, types, states, labels],
+    () => buildQuery({ text: debouncedQuery, types, labels }),
+    [debouncedQuery, types, labels],
   );
 
   const autocompleteCandidates = useMemo<Suggestion[]>(() => {
@@ -143,14 +142,9 @@ export function FilePage({
         categories={categories}
         labels={availableLabels}
         selectedTypes={types}
-        selectedStates={states}
         selectedLabels={labels}
         onTypesChange={(value) => {
           setTypes(value);
-          setOffset(0);
-        }}
-        onStatesChange={(value) => {
-          setStates(value);
           setOffset(0);
         }}
         onLabelsChange={(value) => {
