@@ -1,8 +1,10 @@
+pub mod app_finder;
 pub mod habit_store;
 pub mod index_store;
 pub mod logging;
 pub mod scanner;
 pub mod scheme_store;
+pub mod shortcut;
 pub mod storage;
 pub mod tray;
 pub mod watcher;

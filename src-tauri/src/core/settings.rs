@@ -10,6 +10,28 @@ pub const THEME_DARK: &str = "dark";
 pub const LANG_ZH_CN: &str = "zh-CN";
 pub const LANG_EN: &str = "en";
 
+pub const PREFERRED_IDE_AUTO: &str = "auto";
+pub const PREFERRED_IDE_VSCODE: &str = "vscode";
+pub const PREFERRED_IDE_CURSOR: &str = "cursor";
+pub const PREFERRED_IDE_IDEA: &str = "idea";
+pub const PREFERRED_IDE_PYCHARM: &str = "pycharm";
+pub const PREFERRED_IDE_RUSTROVER: &str = "rustrover";
+pub const PREFERRED_IDE_GOLAND: &str = "goland";
+pub const PREFERRED_IDE_NONE: &str = "none";
+pub const PREFERRED_IDE_VALUES: &[&str] = &[
+    PREFERRED_IDE_AUTO,
+    PREFERRED_IDE_VSCODE,
+    PREFERRED_IDE_CURSOR,
+    PREFERRED_IDE_IDEA,
+    PREFERRED_IDE_PYCHARM,
+    PREFERRED_IDE_RUSTROVER,
+    PREFERRED_IDE_GOLAND,
+    PREFERRED_IDE_NONE,
+];
+
+/// 用户自定义打开命令上限。
+pub const MAX_CUSTOM_OPEN_COMMANDS: usize = 10;
+
 /// 当前配置版本（首个正式版本为 1）。
 ///
 /// 向前兼容约定：
@@ -42,6 +64,16 @@ pub struct ClassifyRule {
     pub category: String,
 }
 
+/// 用户自定义打开命令（最高优先；command 为可执行文件路径或命令名）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomOpenCommand {
+    pub name: String,
+    pub command: String,
+    /// 关联工具 key（空 = 通用最后兜底）
+    pub tool: String,
+}
+
 /// 应用设置模型。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -57,6 +89,12 @@ pub struct Settings {
     pub ignore_rules: IgnoreRules,
     /// 用户分类覆盖（内置映射之上追加/改类）
     pub classify_overrides: Vec<ClassifyRule>,
+    /// 手动添加的项目目录（独立于监控目录，仅用于打开/快捷方式）
+    pub project_dirs: Vec<String>,
+    /// 首选 IDE（auto 自动探测 / none 一律资源管理器回退）
+    pub preferred_ide: String,
+    /// 用户自定义打开命令（最高优先）
+    pub custom_open_commands: Vec<CustomOpenCommand>,
 }
 
 impl Default for Settings {
@@ -76,6 +114,9 @@ impl Default for Settings {
                     .to_vec(),
             },
             classify_overrides: Vec::new(),
+            project_dirs: Vec::new(),
+            preferred_ide: PREFERRED_IDE_AUTO.to_string(),
+            custom_open_commands: Vec::new(),
         }
     }
 }
@@ -96,6 +137,23 @@ impl Settings {
             && self.ignore_rules.is_valid()
             && self.classify_overrides.len() <= MAX_CLASSIFY_RULES
             && self.classify_overrides.iter().all(ClassifyRule::is_valid)
+            && PREFERRED_IDE_VALUES.contains(&self.preferred_ide.as_str())
+            && self.custom_open_commands.len() <= MAX_CUSTOM_OPEN_COMMANDS
+            && self
+                .custom_open_commands
+                .iter()
+                .all(CustomOpenCommand::is_valid)
+            && valid_non_empty(&self.project_dirs)
+    }
+}
+
+impl CustomOpenCommand {
+    pub fn is_valid(&self) -> bool {
+        let name = self.name.trim();
+        let command = self.command.trim();
+        (1..=40).contains(&name.chars().count())
+            && (1..=260).contains(&command.chars().count())
+            && self.tool.chars().count() <= 40
     }
 }
 
@@ -138,6 +196,7 @@ fn valid_non_empty(items: &[String]) -> bool {
 pub fn reset_to_default(current: &Settings) -> Settings {
     Settings {
         watched_dirs: current.watched_dirs.clone(),
+        project_dirs: current.project_dirs.clone(),
         ..Default::default()
     }
 }
@@ -286,13 +345,70 @@ mod tests {
     fn reset_preserves_watched_dirs() {
         let mut s = settings(THEME_DARK, LANG_EN);
         s.watched_dirs = vec!["C:/Downloads".into()];
+        s.project_dirs = vec!["E:/proj".into()];
         s.ignore_rules.extensions.push("zzz".into());
         let reset = reset_to_default(&s);
         assert_eq!(reset.watched_dirs, vec!["C:/Downloads"]);
+        assert_eq!(reset.project_dirs, vec!["E:/proj"]);
         assert_eq!(reset.theme, THEME_SYSTEM);
         assert_eq!(reset.language, LANG_ZH_CN);
         assert_eq!(reset.ignore_rules.extensions.len(), 5);
         assert!(reset.classify_overrides.is_empty());
         assert!(reset.is_valid());
+    }
+
+    #[test]
+    fn new_project_fields_default_and_valid() {
+        let s = Settings::default();
+        assert!(s.project_dirs.is_empty());
+        assert_eq!(s.preferred_ide, PREFERRED_IDE_AUTO);
+        assert!(s.custom_open_commands.is_empty());
+        assert!(s.is_valid());
+    }
+
+    #[test]
+    fn preferred_ide_whitelist() {
+        for value in PREFERRED_IDE_VALUES {
+            let s = Settings {
+                preferred_ide: (*value).to_string(),
+                ..Default::default()
+            };
+            assert!(s.is_valid(), "value={value}");
+        }
+        let s = Settings {
+            preferred_ide: "vim".into(),
+            ..Default::default()
+        };
+        assert!(!s.is_valid());
+    }
+
+    #[test]
+    fn custom_open_command_validation_matrix() {
+        let mut s = Settings {
+            custom_open_commands: vec![CustomOpenCommand {
+                name: "Typora".into(),
+                command: "C:/Program Files/Typora/Typora.exe".into(),
+                tool: "typora".into(),
+            }],
+            ..Default::default()
+        };
+        assert!(s.is_valid());
+
+        s.custom_open_commands[0].name = "   ".into();
+        assert!(!s.is_valid());
+        s.custom_open_commands[0].name = "x".repeat(41);
+        assert!(!s.is_valid());
+        s.custom_open_commands[0].name = "OK".into();
+        s.custom_open_commands[0].command = String::new();
+        assert!(!s.is_valid());
+
+        s.custom_open_commands = (0..11)
+            .map(|i| CustomOpenCommand {
+                name: format!("n{i}"),
+                command: format!("c{i}"),
+                tool: String::new(),
+            })
+            .collect();
+        assert!(!s.is_valid());
     }
 }

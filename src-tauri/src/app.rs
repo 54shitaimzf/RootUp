@@ -1,5 +1,6 @@
 use crate::commands::files as files_commands;
 use crate::commands::habits as habits_commands;
+use crate::commands::projects as projects_commands;
 use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
 use crate::commands::window as window_commands;
@@ -29,6 +30,25 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 /// 仅当用户明确选择退出（托盘菜单 / 确认弹窗）并先置位此标志时才放行。
 pub struct QuitFlag(pub Arc<AtomicBool>);
 
+/// 解析 `--open-project <path>` 启动参数并执行打开（单实例与首次启动共用）。
+fn open_project_from_args(app: &AppHandle, args: &[String]) {
+    if let Some(pos) = args.iter().position(|a| a == "--open-project") {
+        if let Some(path) = args.get(pos + 1) {
+            match projects_commands::open_project(app.clone(), path.clone()) {
+                Ok(outcome) => {
+                    log::info!(
+                        "project: 启动参数打开 {} opened_with={}",
+                        path,
+                        outcome.opened_with
+                    );
+                    let _ = app.emit("project-open", path.clone());
+                }
+                Err(e) => log::warn!("project: 启动参数打开失败 {e}"),
+            }
+        }
+    }
+}
+
 /// 扫描事件 → Tauri 前端事件（Progress → scan-progress，其余 → scan-finished）。
 struct TauriScanSink {
     app: AppHandle,
@@ -49,10 +69,13 @@ impl ScanEventSink for TauriScanSink {
 
 pub fn run() {
     tauri::Builder::default()
-        // 单实例：重复启动时唤起已有窗口
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        // 单实例：重复启动时唤起已有窗口并处理 --open-project 参数
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             let _ = window_lifecycle::ensure_main_window(app);
+            open_project_from_args(app, &args);
         }))
+        // 文件/目录默认程序打开与资源管理器定位（ShellExecuteW）
+        .plugin(tauri_plugin_opener::init())
         // 设置持久化存储
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
@@ -79,6 +102,14 @@ pub fn run() {
             files_commands::cancel_scan,
             files_commands::get_log_dir,
             files_commands::log_event,
+            projects_commands::list_projects,
+            projects_commands::add_project_dir,
+            projects_commands::remove_project_dir,
+            projects_commands::open_project,
+            projects_commands::open_project_from_file,
+            projects_commands::open_file,
+            projects_commands::reveal_in_explorer,
+            projects_commands::create_project_shortcut,
             window_commands::hide_to_tray,
             window_commands::quit_app,
         ])
@@ -200,6 +231,12 @@ pub fn run() {
             log::info!("扫描服务已启动");
 
             tray::init(app)?;
+
+            // 首次启动携带 --open-project 时，在服务就绪后执行打开
+            let args: Vec<String> = std::env::args().collect();
+            if args.iter().any(|a| a == "--open-project") {
+                open_project_from_args(app.handle(), &args);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
