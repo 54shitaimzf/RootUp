@@ -57,16 +57,27 @@ function GroupRow({
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
 
   useLayoutEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
-    const update = () =>
+    const update = () => {
       setOverflow(element.scrollWidth > element.clientWidth + 1);
+      setCanLeft(element.scrollLeft > 1);
+      setCanRight(
+        element.scrollLeft + element.clientWidth < element.scrollWidth - 1,
+      );
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    return () => observer.disconnect();
+    element.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", update);
+    };
   }, [children]);
 
   const onWheel = (event: WheelEvent<HTMLDivElement>) => {
@@ -108,7 +119,10 @@ function GroupRow({
           >
             {children}
           </div>
-          {overflow && (
+          {overflow && canLeft && (
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-slate-900" />
+          )}
+          {overflow && canRight && (
             <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
           )}
         </div>
