@@ -119,6 +119,13 @@ export default {
   files: {
     searchPlaceholder: "搜索文件…",
     clearSearch: "清空搜索",
+    removeFilter: "移除该筛选",
+    acKeywordType: "按类型筛选",
+    acKeywordLabel: "按标签筛选",
+    acKeywordState: "按状态筛选",
+    acKeywordSize: "按大小筛选",
+    acKeywordBefore: "修改时间之前",
+    acKeywordAfter: "修改时间之后",
     empty: "还没有文件，先添加监控目录。",
     loading: "加载中…",
     goSettings: "前往设置添加监控目录",
@@ -140,7 +147,7 @@ export default {
       { key: "before / after", desc: "按修改时间筛选，如 before:2026-08-01" },
     ],
     syntaxHelpNote:
-      "多个条件用空格组合，全部条件需同时满足；也可以直接使用下方筛选或输入时的自动补全。",
+      "多个条件用空格组合，全部条件需同时满足；按 Tab 补全、Enter 确认、↑/↓ 选择，也可以点击下方筛选或补全建议。",
     statePending: "确认中",
     stateIndexed: "已索引",
     stateArchived: "已归档",

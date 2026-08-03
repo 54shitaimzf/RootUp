@@ -6,56 +6,120 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { Terminal, X } from "lucide-react";
 import {
-  applySuggestion,
+  addTag,
   getSuggestions,
+  removeLastTag,
+  removeTag,
+  resolveInsertion,
+  type FilterTags,
   type Suggestion,
+  type TagValue,
 } from "../lib/autocomplete";
+import { fileStateMeta } from "../lib/fileUtils";
 import type { FilterHabits } from "../lib/filterHabits";
+import type { FileRecord } from "../lib/tauri";
 import { FilterIcon } from "./FilterIcon";
 import { SyntaxHelp } from "./SyntaxHelp";
 
 /**
- * 搜索框 + 自动补全（combobox）：
- * 空输入按使用习惯给出建议；↑/↓ 选择、Enter 插入、Esc 关闭、点击插入。
+ * 搜索框（简化版 token 输入）：
+ * 已选离散条件显示为带 × 的标签，与筛选行同源；
+ * 自动补全：Tab 补全、Enter 提交、↑/↓ 选择、Esc 关闭、点击应用；
+ * 关键词→值两段式，size/before/after 保留文本语法。
  */
 export function SearchAutocomplete({
-  query,
-  onChange,
+  text,
+  types,
+  states,
+  labels,
   candidates,
   habits,
+  onTextChange,
+  onTagsChange,
   onInsert,
+  onTagAdd,
+  onTagRemove,
   limit = 8,
 }: {
-  query: string;
-  onChange: (value: string) => void;
+  text: string;
+  types: string[];
+  states: string[];
+  labels: string[];
   candidates: Suggestion[];
   habits: FilterHabits;
+  onTextChange: (value: string) => void;
+  onTagsChange: (tags: FilterTags) => void;
   onInsert?: (suggestion: Suggestion) => void;
+  onTagAdd?: (tag: TagValue) => void;
+  onTagRemove?: (tag: TagValue) => void;
   limit?: number;
 }) {
   const { t } = useTranslation();
   const [focused, setFocused] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [caret, setCaret] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const suggestions = useMemo(
-    () => getSuggestions(query, candidates, habits, limit),
-    [query, candidates, habits, limit],
+    () => getSuggestions(text, candidates, habits, limit),
+    [text, candidates, habits, limit],
   );
 
   useEffect(() => {
     setHighlight(0);
-  }, [query, suggestions.length]);
+  }, [text, suggestions.length]);
+
+  const syncCaret = () => {
+    setCaret(inputRef.current?.selectionStart ?? text.length);
+  };
 
   const apply = (suggestion: Suggestion) => {
-    onChange(applySuggestion(query, suggestion));
+    const result = resolveInsertion(text, caret, suggestion);
+    onTextChange(result.text);
+    setCaret(result.caret);
     onInsert?.(suggestion);
+    if (result.tag) {
+      const { tags: next, added } = addTag(
+        { types, states, labels },
+        result.tag,
+      );
+      if (added) {
+        onTagsChange(next);
+        onTagAdd?.(result.tag);
+      }
+    }
+    inputRef.current?.focus();
+  };
+
+  const handleTagRemove = (tag: TagValue) => {
+    onTagsChange(removeTag({ types, states, labels }, tag));
+    onTagRemove?.(tag);
+  };
+
+  const handleBackspace = () => {
+    if (text !== "" || (types.length === 0 && states.length === 0 && labels.length === 0)) {
+      return;
+    }
+    const { tags: next, removed } = removeLastTag({ types, states, labels });
+    if (removed) {
+      onTagsChange(next);
+      onTagRemove?.(removed);
+    }
+  };
+
+  const handleClear = () => {
+    onTextChange("");
+    onTagsChange({ types: [], states: [], labels: [] });
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace") {
+      handleBackspace();
+      return;
+    }
     if (suggestions.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -65,39 +129,78 @@ export function SearchAutocomplete({
       setHighlight(
         (index) => (index - 1 + suggestions.length) % suggestions.length,
       );
-    } else if (event.key === "Enter") {
+    } else if (event.key === "Tab") {
       event.preventDefault();
       apply(suggestions[highlight]);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      setFocused(false);
     } else if (event.key === "Escape") {
       setFocused(false);
       inputRef.current?.blur();
     }
   };
 
+  const tags: TagValue[] = [
+    ...types.map((value) => ({ kind: "category" as const, value })),
+    ...states.map((value) => ({ kind: "state" as const, value })),
+    ...labels.map((value) => ({ kind: "label" as const, value })),
+  ];
+
+  const tagDisplay = (tag: TagValue) => {
+    if (tag.kind === "category") return t(`filter.${tag.value}`);
+    if (tag.kind === "state") {
+      return t(fileStateMeta(tag.value as FileRecord["state"]).labelKey);
+    }
+    return tag.value;
+  };
+
   return (
     <div className="mt-6 flex items-center gap-1">
       <div className="relative min-w-0 flex-1">
-        <input
-          ref={inputRef}
-          type="search"
-          value={query}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 120)}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t("files.searchPlaceholder")}
-          aria-autocomplete="list"
-          aria-expanded={focused && suggestions.length > 0}
-          className="w-full rounded-md border border-slate-200 bg-white py-2 pl-3 pr-9 text-sm shadow-card outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
-        />
-        {query && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-9 text-sm shadow-card transition-colors focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900">
+          {tags.map((tag) => (
+            <span
+              key={`${tag.kind}:${tag.value}`}
+              className="inline-flex h-6 items-center gap-1 rounded-md bg-brand-50 pr-1 pl-2 text-xs font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+            >
+              <FilterIcon kind={tag.kind} value={tag.value} />
+              <span>{tagDisplay(tag)}</span>
+              <button
+                type="button"
+                aria-label={t("files.removeFilter")}
+                onClick={() => handleTagRemove(tag)}
+                className="rounded p-0.5 opacity-70 transition-opacity hover:opacity-100"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            ref={inputRef}
+            type="search"
+            value={text}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 120)}
+            onChange={(event) => {
+              onTextChange(event.target.value);
+              setCaret(event.target.selectionStart ?? event.target.value.length);
+            }}
+            onClick={syncCaret}
+            onSelect={syncCaret}
+            onKeyUp={syncCaret}
+            onKeyDown={handleKeyDown}
+            placeholder={t("files.searchPlaceholder")}
+            aria-autocomplete="list"
+            aria-expanded={focused && suggestions.length > 0}
+            className="min-w-24 flex-1 border-none bg-transparent px-1 py-0.5 text-sm outline-none"
+          />
+        </div>
+        {(text !== "" || tags.length > 0) && (
           <button
             type="button"
             aria-label={t("files.clearSearch")}
-            onClick={() => {
-              onChange("");
-              inputRef.current?.focus();
-            }}
+            onClick={handleClear}
             className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
           >
             <X className="size-4" />
@@ -107,7 +210,7 @@ export function SearchAutocomplete({
           <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-pop dark:border-slate-700 dark:bg-slate-900">
             {suggestions.map((suggestion, index) => (
               <button
-                key={`${suggestion.kind}:${suggestion.raw}`}
+                key={suggestion.key}
                 type="button"
                 onMouseDown={(event) => {
                   event.preventDefault();
@@ -120,8 +223,17 @@ export function SearchAutocomplete({
                     : ""
                 }`}
               >
-                <SuggestionIcon suggestion={suggestion} />
-                <span className="min-w-0 flex-1 truncate">{suggestion.display}</span>
+                {suggestion.kind === "keyword" ? (
+                  <Terminal className="size-3.5 shrink-0 text-slate-400" />
+                ) : (
+                  <FilterIcon
+                    kind={suggestion.kind}
+                    value={suggestion.raw}
+                  />
+                )}
+                <span className="min-w-0 flex-1 truncate">
+                  {suggestion.display}
+                </span>
                 <span className="shrink-0 font-mono text-[10px] text-slate-400">
                   {suggestion.token}
                 </span>
@@ -133,8 +245,4 @@ export function SearchAutocomplete({
       <SyntaxHelp />
     </div>
   );
-}
-
-function SuggestionIcon({ suggestion }: { suggestion: Suggestion }) {
-  return <FilterIcon kind={suggestion.kind} value={suggestion.raw} />;
 }

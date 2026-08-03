@@ -125,6 +125,13 @@ export default {
   files: {
     searchPlaceholder: "Search files…",
     clearSearch: "Clear search",
+    removeFilter: "Remove filter",
+    acKeywordType: "Filter by type",
+    acKeywordLabel: "Filter by label",
+    acKeywordState: "Filter by state",
+    acKeywordSize: "Filter by size",
+    acKeywordBefore: "Modified before",
+    acKeywordAfter: "Modified after",
     empty: "No files yet. Add a watched folder first.",
     loading: "Loading…",
     goSettings: "Add a watched folder in Settings",
@@ -146,7 +153,7 @@ export default {
       { key: "before / after", desc: "filter by modified time, e.g. before:2026-08-01" },
     ],
     syntaxHelpNote:
-      "Combine conditions with spaces; all conditions must match. You can also use the filters below or autocomplete while typing.",
+      "Combine conditions with spaces; all conditions must match. Use Tab to complete, Enter to confirm, ↑/↓ to navigate, or click the filters/suggestions.",
     statePending: "Checking",
     stateIndexed: "Indexed",
     stateArchived: "Archived",

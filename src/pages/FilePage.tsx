@@ -17,7 +17,11 @@ import {
   formatTimestamp,
   parseLabels,
 } from "../lib/fileUtils";
-import type { Suggestion } from "../lib/autocomplete";
+import {
+  KEYWORD_PREFIXES,
+  type Suggestion,
+  type TagValue,
+} from "../lib/autocomplete";
 import {
   listCategories,
   listLabels,
@@ -26,6 +30,15 @@ import {
 } from "../lib/tauri";
 
 const PAGE_SIZE = 50;
+
+const KEYWORD_DISPLAY_KEY: Record<string, string> = {
+  "type:": "files.acKeywordType",
+  "label:": "files.acKeywordLabel",
+  "state:": "files.acKeywordState",
+  "size:": "files.acKeywordSize",
+  "before:": "files.acKeywordBefore",
+  "after:": "files.acKeywordAfter",
+};
 
 export function FilePage({
   onNavigate,
@@ -39,6 +52,7 @@ export function FilePage({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
@@ -64,14 +78,22 @@ export function FilePage({
   }, []);
 
   const queryString = useMemo(
-    () => buildQuery({ text: debouncedQuery, types, labels }),
-    [debouncedQuery, types, labels],
+    () => buildQuery({ text: debouncedQuery, types, states, labels }),
+    [debouncedQuery, types, states, labels],
   );
 
   const autocompleteCandidates = useMemo<Suggestion[]>(() => {
     const stateLabel = (state: string) =>
       t(`filter.state${state[0].toUpperCase()}${state.slice(1)}`);
+    const keywords = KEYWORD_PREFIXES.map((prefix) => ({
+      kind: "keyword" as const,
+      key: `keyword:${prefix}`,
+      raw: prefix,
+      token: prefix,
+      display: t(KEYWORD_DISPLAY_KEY[prefix]),
+    }));
     return [
+      ...keywords,
       ...categories.map((category) => ({
         kind: "category" as const,
         key: `category:${category}`,
@@ -121,17 +143,38 @@ export function FilePage({
       </p>
 
       <SearchAutocomplete
-        query={query}
+        text={query}
+        types={types}
+        states={states}
+        labels={labels}
         candidates={autocompleteCandidates}
         habits={habits}
-        onChange={(value) => {
+        onTextChange={(value) => {
           setQuery(value);
+          setOffset(0);
+        }}
+        onTagsChange={(tags) => {
+          setTypes(tags.types);
+          setStates(tags.states);
+          setLabels(tags.labels);
           setOffset(0);
         }}
         onInsert={(suggestion) =>
           void logEvent(
             "info",
             `autocomplete: 插入 kind=${suggestion.kind} key=${suggestion.key} token=${suggestion.token}`,
+          )
+        }
+        onTagAdd={(tag: TagValue) =>
+          void logEvent(
+            "info",
+            `autocomplete: 标签 添加 kind=${tag.kind} key=${tag.value}`,
+          )
+        }
+        onTagRemove={(tag: TagValue) =>
+          void logEvent(
+            "info",
+            `autocomplete: 标签 删除 kind=${tag.kind} key=${tag.value}`,
           )
         }
       />
