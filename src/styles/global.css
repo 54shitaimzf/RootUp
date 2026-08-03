@@ -68,3 +68,9 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* 隐藏搜索框原生清除按钮，改用自定义样式（SearchAutocomplete） */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}

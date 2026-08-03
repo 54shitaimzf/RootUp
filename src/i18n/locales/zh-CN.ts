@@ -118,6 +118,7 @@ export default {
   },
   files: {
     searchPlaceholder: "搜索文件…",
+    clearSearch: "清空搜索",
     empty: "还没有文件，先添加监控目录。",
     loading: "加载中…",
     goSettings: "前往设置添加监控目录",

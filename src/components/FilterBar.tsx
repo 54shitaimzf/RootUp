@@ -94,42 +94,44 @@ function GroupRow({
       <span className="w-14 shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </span>
-      <div className="relative min-w-0 flex-1">
-        <div
-          ref={scrollRef}
-          onWheel={onWheel}
-          role="group"
-          aria-label={label}
-          className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-6"
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <button
+          type="button"
+          aria-label={t("filter.scrollLeft")}
+          onClick={() => scrollByStep(-1)}
+          className={`flex size-6 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 ${
+            overflow && canLeft ? "" : "invisible"
+          }`}
         >
-          {children}
+          <ChevronLeft className="size-3.5" />
+        </button>
+        <div className="relative min-w-0 flex-1">
+          <div
+            ref={scrollRef}
+            onWheel={onWheel}
+            role="group"
+            aria-label={label}
+            className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
+          >
+            {children}
+          </div>
+          {overflow && canLeft && (
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-slate-900" />
+          )}
+          {overflow && canRight && (
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
+          )}
         </div>
-        {overflow && canLeft && (
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-slate-900" />
-        )}
-        {overflow && canRight && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
-        )}
-        {overflow && canLeft && (
-          <button
-            type="button"
-            aria-label={t("filter.scrollLeft")}
-            onClick={() => scrollByStep(-1)}
-            className="absolute left-0 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-          >
-            <ChevronLeft className="size-3.5" />
-          </button>
-        )}
-        {overflow && canRight && (
-          <button
-            type="button"
-            aria-label={t("filter.scrollRight")}
-            onClick={() => scrollByStep(1)}
-            className="absolute right-0 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-          >
-            <ChevronRight className="size-3.5" />
-          </button>
-        )}
+        <button
+          type="button"
+          aria-label={t("filter.scrollRight")}
+          onClick={() => scrollByStep(1)}
+          className={`flex size-6 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 ${
+            overflow && canRight ? "" : "invisible"
+          }`}
+        >
+          <ChevronRight className="size-3.5" />
+        </button>
       </div>
     </div>
   );

@@ -124,6 +124,7 @@ export default {
   },
   files: {
     searchPlaceholder: "Search files…",
+    clearSearch: "Clear search",
     empty: "No files yet. Add a watched folder first.",
     loading: "Loading…",
     goSettings: "Add a watched folder in Settings",

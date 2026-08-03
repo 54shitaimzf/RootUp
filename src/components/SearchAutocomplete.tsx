@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
 import {
   applySuggestion,
   getSuggestions,
@@ -87,8 +88,21 @@ export function SearchAutocomplete({
           placeholder={t("files.searchPlaceholder")}
           aria-autocomplete="list"
           aria-expanded={focused && suggestions.length > 0}
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-card outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-md border border-slate-200 bg-white py-2 pl-3 pr-9 text-sm shadow-card outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
         />
+        {query && (
+          <button
+            type="button"
+            aria-label={t("files.clearSearch")}
+            onClick={() => {
+              onChange("");
+              inputRef.current?.focus();
+            }}
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          >
+            <X className="size-4" />
+          </button>
+        )}
         {focused && suggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-pop dark:border-slate-700 dark:bg-slate-900">
             {suggestions.map((suggestion, index) => (
