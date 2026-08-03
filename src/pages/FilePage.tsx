@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Code2, ExternalLink, LocateFixed } from "lucide-react";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { FilterBar } from "../components/FilterBar";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
+import { IconButton } from "../components/IconButton";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
 import { useFilterHabits } from "../hooks/useFilterHabits";
@@ -27,6 +29,9 @@ import {
   listLabels,
   listWatchedDirs,
   logEvent,
+  openFile,
+  openProjectFromFile,
+  revealInExplorer,
 } from "../lib/tauri";
 
 const PAGE_SIZE = 50;
@@ -60,6 +65,7 @@ export function FilePage({
   const [offset, setOffset] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showLoadingBar, setShowLoadingBar] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -145,6 +151,37 @@ export function FilePage({
     setOffset(0);
     setRefreshKey((key) => key + 1);
     void logEvent("info", "ui: 刷新");
+  };
+
+  const handleOpenFile = async (path: string) => {
+    try {
+      await openFile(path);
+      setActionError(null);
+      void logEvent("info", `ui: 打开文件 path=${path}`);
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const handleRevealFile = async (path: string) => {
+    try {
+      await revealInExplorer(path);
+      setActionError(null);
+      void logEvent("info", `ui: 定位文件 path=${path}`);
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const handleIdeOpenFile = async (path: string) => {
+    try {
+      const outcome = await openProjectFromFile(path);
+      setActionError(null);
+      void logEvent("info", `ui: 用 IDE 打开文件 path=${path}`);
+      if (outcome.message) setActionError(outcome.message);
+    } catch (err) {
+      setActionError(String(err));
+    }
   };
 
   return (
@@ -249,6 +286,12 @@ export function FilePage({
         </Banner>
       )}
 
+      {actionError && (
+        <Banner variant="warn" className="mt-4">
+          <span className="min-w-0 flex-1">{actionError}</span>
+        </Banner>
+      )}
+
       <div className="mt-4 min-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
         {showLoadingBar && items.length > 0 && (
           <div className="h-px bg-brand-500/20" />
@@ -282,7 +325,7 @@ export function FilePage({
                 return (
                   <li
                     key={file.path}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm"
+                    className="group flex items-center gap-3 px-4 py-2.5 text-sm"
                     title={file.path}
                   >
                     <FileTypeIcon
@@ -317,6 +360,29 @@ export function FilePage({
                     </span>
                     <span className="hidden w-28 shrink-0 text-right text-xs text-slate-400 dark:text-slate-500 md:block">
                       {formatTimestamp(file.modified)}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <IconButton
+                        label={t("projects.open")}
+                        icon={ExternalLink}
+                        tone="neutral"
+                        size="sm"
+                        onClick={() => void handleOpenFile(file.path)}
+                      />
+                      <IconButton
+                        label={t("projects.reveal")}
+                        icon={LocateFixed}
+                        tone="neutral"
+                        size="sm"
+                        onClick={() => void handleRevealFile(file.path)}
+                      />
+                      <IconButton
+                        label={t("projects.openIde")}
+                        icon={Code2}
+                        tone="brand"
+                        size="sm"
+                        onClick={() => void handleIdeOpenFile(file.path)}
+                      />
                     </span>
                     <span className="flex w-20 shrink-0 items-center justify-end gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                       <span className={`size-1.5 rounded-full ${meta.dotClass}`} />

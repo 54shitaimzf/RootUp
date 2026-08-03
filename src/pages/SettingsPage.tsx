@@ -25,11 +25,16 @@ import {
   resolveCurrentScheme,
   summarizeIgnoreRules,
 } from "../lib/effectiveMap";
+import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
 import { IgnoreRulesDialog } from "../features/settings/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../features/settings/ClassifyMappingDialog";
 import { SchemeDialog } from "../features/settings/SchemeDialog";
 import { SchemeApplyDialog } from "../features/settings/SchemeApplyDialog";
+import {
+  ProjectOpenDialog,
+  type OpenConfig,
+} from "../features/settings/ProjectOpenDialog";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -130,6 +135,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [ignoreOpen, setIgnoreOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [schemeOpen, setSchemeOpen] = useState(false);
+  const [projectOpenOpen, setProjectOpenOpen] = useState(false);
 
   useEffect(() => {
     listWatchedDirs()
@@ -240,6 +246,16 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     setNotice(t("settings.rulesSavedRestart"));
   };
 
+  const saveOpenConfig = async (draft: OpenConfig) => {
+    if (!settings) return;
+    await replace({
+      ...settings,
+      preferred_ide: draft.preferredIde,
+      custom_open_commands: draft.customOpenCommands,
+    });
+    setNotice(t("settings.openToolsSaved"));
+  };
+
   if (!settings) {
     return (
       <div className="mx-auto max-w-2xl">
@@ -261,6 +277,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       : currentScheme.kind === "custom"
         ? currentScheme.name
         : t("settings.schemeUnsaved");
+  const preferredIdeLabel = t(
+    PREFERRED_IDE_OPTIONS.find((o) => o.value === settings.preferred_ide)
+      ?.labelKey ?? "settings.preferredIdeAuto",
+  );
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -409,6 +429,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             })}
             onClick={() => setMappingOpen(true)}
           />
+          <Row
+            title={t("settings.projectOpenRow")}
+            summary={t("settings.projectOpenSummary", {
+              ide: preferredIdeLabel,
+              custom: settings.custom_open_commands.length,
+            })}
+            onClick={() => setProjectOpenOpen(true)}
+          />
         </div>
       </section>
 
@@ -540,6 +568,15 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
           void handleReset();
         }}
         onCancel={() => setResetOpen(false)}
+      />
+      <ProjectOpenDialog
+        open={projectOpenOpen}
+        initial={{
+          preferredIde: settings.preferred_ide,
+          customOpenCommands: settings.custom_open_commands,
+        }}
+        onSave={saveOpenConfig}
+        onClose={() => setProjectOpenOpen(false)}
       />
     </div>
   );

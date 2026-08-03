@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  FolderKanban,
   FolderOpen,
   GraduationCap,
   Settings,
@@ -13,6 +14,7 @@ import type { PageKey } from "../lib/nav";
 
 const NAV_ITEMS: { key: PageKey; icon: LucideIcon; labelKey: string }[] = [
   { key: "files", icon: FolderOpen, labelKey: "nav.files" },
+  { key: "projects", icon: FolderKanban, labelKey: "nav.projects" },
   { key: "homework", icon: GraduationCap, labelKey: "nav.homework" },
   { key: "courses", icon: CalendarDays, labelKey: "nav.courses" },
   { key: "tools", icon: Wrench, labelKey: "nav.tools" },

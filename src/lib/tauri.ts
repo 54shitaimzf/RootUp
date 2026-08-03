@@ -24,6 +24,48 @@ export interface Settings {
   watched_dirs: string[];
   ignore_rules: IgnoreRules;
   classify_overrides: ClassifyRule[];
+  project_dirs: string[];
+  preferred_ide: string;
+  custom_open_commands: CustomOpenCommand[];
+}
+
+/** 用户自定义打开命令（tool 为空 = 通用最后兜底） */
+export interface CustomOpenCommand {
+  name: string;
+  command: string;
+  tool: string;
+}
+
+/** 项目类型（与 Rust 侧 ProjectKind 对应） */
+export type ProjectKind =
+  | "rust"
+  | "node"
+  | "python"
+  | "java"
+  | "csharp"
+  | "go"
+  | "unity"
+  | "generic";
+
+/** 项目信息 */
+export interface ProjectInfo {
+  path: string;
+  name: string;
+  kind: ProjectKind;
+}
+
+/** 打开结果 */
+export interface OpenOutcome {
+  openedWith: "ide" | "tool" | "explorer" | "default";
+  tool: string | null;
+  message: string | null;
+}
+
+/** 快捷方式创建结果 */
+export interface ShortcutOutcome {
+  path: string;
+  name: string;
+  kind: string;
 }
 
 /** 与 Rust 侧 core::schemes::RuleScheme 对应 */
@@ -54,6 +96,9 @@ export const defaultSettings: Settings = {
     exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
   },
   classify_overrides: [],
+  project_dirs: [],
+  preferred_ide: "auto",
+  custom_open_commands: [],
 };
 
 /** 内置扩展名 → 类别映射条目（设置页只读展示） */
@@ -246,4 +291,36 @@ export function hideToTray(): Promise<void> {
 /** 关闭确认弹窗中选择“退出程序” */
 export function quitApp(): Promise<void> {
   return invoke<void>("quit_app");
+}
+
+export function listProjects(): Promise<ProjectInfo[]> {
+  return invoke<ProjectInfo[]>("list_projects");
+}
+
+export function addProjectDir(dir: string): Promise<void> {
+  return invoke<void>("add_project_dir", { dir });
+}
+
+export function removeProjectDir(dir: string): Promise<void> {
+  return invoke<void>("remove_project_dir", { dir });
+}
+
+export function openProject(path: string): Promise<OpenOutcome> {
+  return invoke<OpenOutcome>("open_project", { path });
+}
+
+export function openProjectFromFile(filePath: string): Promise<OpenOutcome> {
+  return invoke<OpenOutcome>("open_project_from_file", { filePath });
+}
+
+export function openFile(path: string): Promise<OpenOutcome> {
+  return invoke<OpenOutcome>("open_file", { path });
+}
+
+export function revealInExplorer(path: string): Promise<void> {
+  return invoke<void>("reveal_in_explorer", { path });
+}
+
+export function createProjectShortcut(path: string): Promise<ShortcutOutcome> {
+  return invoke<ShortcutOutcome>("create_project_shortcut", { path });
 }

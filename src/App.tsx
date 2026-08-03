@@ -8,6 +8,7 @@ import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";
 import { SettingsPage } from "./pages/SettingsPage";
 import { FilePage } from "./pages/FilePage";
+import { ProjectsPage } from "./pages/ProjectsPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
 
 function renderPage(
@@ -25,6 +26,8 @@ function renderPage(
       return <SettingsPage scan={scan} />;
     case "files":
       return <FilePage onNavigate={onNavigate} scan={scan} />;
+    case "projects":
+      return <ProjectsPage onNavigate={onNavigate} />;
     case "homework":
       return (
         <PagePlaceholder

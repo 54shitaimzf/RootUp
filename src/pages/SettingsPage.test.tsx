@@ -14,6 +14,9 @@ vi.mock("../lib/tauri", () => ({
     watched_dirs: [],
     ignore_rules: { extensions: [], prefixes: [], exact_names: [] },
     classify_overrides: [],
+    project_dirs: [],
+    preferred_ide: "auto",
+    custom_open_commands: [],
   },
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
@@ -47,6 +50,9 @@ const SETTINGS: Settings = {
   watched_dirs: [],
   ignore_rules: { extensions: [], prefixes: [], exact_names: [] },
   classify_overrides: [],
+  project_dirs: [],
+  preferred_ide: "auto",
+  custom_open_commands: [],
 };
 
 function scan(): ScanController {

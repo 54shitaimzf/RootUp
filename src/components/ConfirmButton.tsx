@@ -20,6 +20,7 @@ export function ConfirmButton({
   pendingClassName = "",
   icon,
   disabled = false,
+  ariaLabel,
 }: {
   label: ReactNode;
   pendingLabel: ReactNode;
@@ -31,6 +32,7 @@ export function ConfirmButton({
   pendingClassName?: string;
   icon?: LucideIcon;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   const [pending, setPending] = useState(false);
 
@@ -48,6 +50,7 @@ export function ConfirmButton({
     return (
       <button
         type="button"
+        aria-label={ariaLabel}
         disabled={disabled}
         onClick={click}
         onBlur={() => setPending(false)}
@@ -65,6 +68,7 @@ export function ConfirmButton({
       className={className}
       icon={icon}
       disabled={disabled}
+      aria-label={ariaLabel}
       onClick={click}
       onBlur={() => setPending(false)}
     >
