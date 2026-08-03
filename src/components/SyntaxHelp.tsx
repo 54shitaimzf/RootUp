@@ -60,14 +60,14 @@ export function SyntaxHelp() {
             {lines.map((line) => (
               <div
                 key={line.key}
-                className="flex items-baseline gap-2 rounded-md bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800"
+                className="rounded-md bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800"
               >
-                <code className="shrink-0 font-mono text-[11px] font-semibold text-brand-700 dark:text-brand-300">
+                <div className="font-mono text-[11px] font-semibold text-brand-700 dark:text-brand-300">
                   {line.key}
-                </code>
-                <span className="text-slate-500 dark:text-slate-400">
+                </div>
+                <div className="mt-0.5 leading-relaxed text-slate-500 dark:text-slate-400">
                   {line.desc}
-                </span>
+                </div>
               </div>
             ))}
           </div>

@@ -104,7 +104,7 @@ function GroupRow({
           onWheel={onWheel}
           role="group"
           aria-label={label}
-          className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
+          className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-6"
         >
           {children}
         </div>
