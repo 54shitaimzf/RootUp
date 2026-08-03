@@ -98,40 +98,38 @@ function GroupRow({
       <span className="w-14 shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </span>
-      <div className="flex min-w-0 flex-1 items-center gap-1">
-        {overflow && (
+      <div className="relative min-w-0 flex-1">
+        <div
+          ref={scrollRef}
+          onWheel={onWheel}
+          role="group"
+          aria-label={label}
+          className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
+        >
+          {children}
+        </div>
+        {overflow && canLeft && (
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-slate-900" />
+        )}
+        {overflow && canRight && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
+        )}
+        {overflow && canLeft && (
           <button
             type="button"
             aria-label={t("filter.scrollLeft")}
             onClick={() => scrollByStep(-1)}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            className="absolute left-0 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <ChevronLeft className="size-4" />
           </button>
         )}
-        <div className="relative min-w-0 flex-1">
-          <div
-            ref={scrollRef}
-            onWheel={onWheel}
-            role="group"
-            aria-label={label}
-            className="no-scrollbar flex items-center gap-1.5 overflow-x-auto"
-          >
-            {children}
-          </div>
-          {overflow && canLeft && (
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-slate-900" />
-          )}
-          {overflow && canRight && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-slate-900" />
-          )}
-        </div>
-        {overflow && (
+        {overflow && canRight && (
           <button
             type="button"
             aria-label={t("filter.scrollRight")}
             onClick={() => scrollByStep(1)}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            className="absolute right-0 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <ChevronRight className="size-4" />
           </button>
