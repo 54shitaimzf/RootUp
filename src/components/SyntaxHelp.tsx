@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HelpCircle } from "lucide-react";
+import { IconButton } from "./IconButton";
 
 interface SyntaxLine {
   key: string;
   desc: string;
 }
 
-/** 搜索语法帮助弹层：低学习成本，进阶用户可直达完整语法。 */
-export function SyntaxHelp() {
+/**
+ * 搜索语法帮助弹层：低学习成本，进阶用户可直达完整语法。
+ * 触发按钮默认内嵌于搜索栏（调用方传定位类包裹进输入框）；
+ * 浮窗从按钮下方展开，z-40 高于补全下拉。
+ */
+export function SyntaxHelp({ className = "" }: { className?: string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -38,18 +43,20 @@ export function SyntaxHelp() {
   }, [open]);
 
   return (
-    <div className="relative" ref={wrapperRef}>
-      <button
-        type="button"
-        aria-label={t("files.syntaxHelpTitle")}
+    <div ref={wrapperRef} className={className || "relative"}>
+      <IconButton
+        label={t("files.syntaxHelpTitle")}
+        icon={HelpCircle}
+        tone="neutral"
+        size="md"
         aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-      >
-        <HelpCircle className="size-4" />
-      </button>
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((prev) => !prev);
+        }}
+      />
       {open && (
-        <div className="floating-panel pop-in absolute right-0 top-11 z-30 w-80 p-4 text-xs">
+        <div className="floating-panel pop-in absolute right-0 top-full z-40 mt-2 w-80 p-4 text-xs">
           <div className="font-medium text-slate-700 dark:text-slate-200">
             {t("files.syntaxHelpTitle")}
           </div>
