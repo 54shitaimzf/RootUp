@@ -53,7 +53,10 @@ $exeExists = Test-Path $exe
 Write-Result "Installed exe exists" $exeExists $exe
 if ($exeExists) {
     $version = (Get-Item $exe).VersionInfo.ProductVersion
-    Write-Result "Version contains 0.6.0" ($version -like "*0.6.0*") "version=$version"
+    $config = (Get-Content (Join-Path $Repo "src-tauri\tauri.conf.json") -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $expectedVersion = [string]$config.version
+    $expectedBase = ($expectedVersion -split "-")[0]
+    Write-Result "Installed version matches $expectedVersion" ($version -like "*$expectedBase*") "version=$version expected=$expectedVersion"
 }
 
 # 3. Smoke with the installed exe (full log-driven smoke)

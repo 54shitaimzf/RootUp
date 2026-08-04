@@ -36,6 +36,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Version consistency check
+        run: npm run check:version
+
       - name: Frontend tests
         run: |
           npm test 2>&1 | Tee-Object -FilePath frontend-test.log

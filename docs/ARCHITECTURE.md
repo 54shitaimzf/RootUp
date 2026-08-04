@@ -67,6 +67,36 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **生命周期契约必做项**：桌面壳改动必须对照"后台生命周期"一节核对
   `CloseRequested`、`ExitRequested`、单实例三件事，避免破坏后台常驻行为。
 
+## 版本号规则与发布纪律
+
+采用语义化版本（SemVer），1.0 前与 1.0 后两套规则：
+
+| 阶段 | 格式 | 规则 |
+|---|---|---|
+| 1.0 前 | `0.Y.Z` | Y = 功能迭代或破坏性变更；Z = bug 修复/内部改动；MAJOR 恒为 0 |
+| 1.0 后 | `X.Y.Z` | X = 破坏性变更；Y = 向后兼容新功能；Z = bug 修复 |
+| 预发布 | `0.Y.Z-rc.N` 等 | 正式发布前验证用；tag 需带 prerelease，release 流水线按 prerelease 处理 |
+
+发布纪律：
+
+- **五处同步**：`package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、
+  `src-tauri/tauri.conf.json`、`src/lib/constants.ts` 版本必须完全一致；
+  `npm run check:version` 强制校验，CI 与 release 流水线均执行。
+- **CHANGELOG**：每个发布版本一个 `## [X.Y.Z] - 日期` 段落（Keep a Changelog
+  风格）；开发期在 `## [Unreleased]` 累积变更，发布时转正。
+- **tag 与发布**：正式发布打 `vX.Y.Z` tag；release 流水线校验 tag 版本与五处
+  一致，自动构建 NSIS 安装包并运行 `verify-installer.ps1`（安装→冒烟→卸载）。
+- **开发版**：发布后立即推进为下一个目标版本的 `-dev` 形式——下个迭代为功能
+  版本则 `0.(Y+1).0-dev`，仅为修复则 `0.Y.(Z+1)-dev`；release 时去掉 `-dev`。
+- **0.x 允许破坏性变更**：升 Y 并在 CHANGELOG 标注 `**Breaking**`；仅修复 bug
+  升 Z，不额外升号。
+- **数据版本与应用版本解耦**：`Settings.version`（配置 schema）与未来的数据库
+  schema 版本独立演进，经 `Settings::migrate()` / 数据库迁移逐级升级；应用版本
+  升级不代表数据格式必然变化。
+- **1.0 门槛**：核心闭环稳定（安装→监听→搜索→打开→归档）、存储 schema 有迁移
+  且无已知数据丢失 bug、真实用户试用无重大回归、命令与配置接口语义稳定；达到后
+  再升 1.0，并承担向后兼容承诺。
+
 ## 验收冒烟清单
 
 每次改动涉及上述模块后，至少手动验证：
@@ -148,7 +178,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **共享交互组件**：`components/Button.tsx`（primary/secondary/danger/amber/ghost × xs/sm/md，样式等价映射见组件内注释与 README）、`components/Banner.tsx`（brand/warn/error，可选关闭）、`components/IconButton.tsx`（xs/sm/md × neutral/danger/brand/inherit，统一图标按钮与 × 悬停反馈）、`components/Chip.tsx`（sm=h-6 / md=h-7 × neutral/active/brand/selectable，支持 icon/badge/onRemove/onClick，文件页与设置弹窗共用）、`components/SectionLabel.tsx`（sm/xs 两级区块标题）、`components/ConfirmDialog.tsx`（基于 Modal 的确认弹窗）、`components/ConfirmButton.tsx`（两步确认状态封装）。所有新页面优先复用，禁止复制手写变体。
 - **基础表单与状态组件**：`Input`（sm/md，统一边框/聚焦/深浅色）、`Select`、`InlineNotice`（success/error/info）、`EmptyState`、`PageHeader`、`SyntaxTable`（语法行单一来源）均为共享组件；新增输入/提示/空态/页头一律复用，禁止手写等价样式。
 - **帮助中心与新手引导**：`HelpCenterProvider` 全局装配（侧栏入口 + 首次欢迎 + 分组帮助弹窗）；首次欢迎用 localStorage `rootup.onboarding.v1` 一次性标记，帮助中心可重看；IDE 指导数据在 `lib/ideGuide.ts`（仅官方链接）；后端 `list_detected_tools` 返回已检测工具 key，`open_url` 仅允许 https 且命中 `core/tools.rs` 白名单域名（`ALLOWED_DOWNLOAD_DOMAINS`），非法 URL 拒绝并记日志。
-- **打包与发布约定**：`tauri.conf.json` 启用 NSIS（`installMode: currentUser`、中英语言选择、开始菜单 RootUp），图标由 `npm run tauri icon resources/icons/rootup-sprout.svg` 生成全套；发布验证统一走 `scripts/verify-installer.ps1`（静默安装 → 冒烟 → 卸载），日常 CI 为 `ci.yml`（构建 + smoke + 架构校验），发布为 `release.yml`（打 `v*` tag 构建安装包 → 验证 → 上传 GitHub Release）；不签名、不启用 updater，SmartScreen 提示写入发布说明。
+- **打包与发布约定**：`tauri.conf.json` 启用 NSIS（`installMode: currentUser`、中英语言选择、开始菜单 RootUp），图标由 `npm run tauri icon resources/icons/rootup-sprout.svg` 生成全套；发布前必须 `npm run check:version` 全绿（规则见"版本号规则与发布纪律"）；发布验证统一走 `scripts/verify-installer.ps1`（静默安装 → 冒烟 → 卸载），日常 CI 为 `ci.yml`（构建 + smoke + 架构校验），发布为 `release.yml`（打 `v*` tag 构建安装包 → 验证 → 上传 GitHub Release）；不签名、不启用 updater，SmartScreen 提示写入发布说明。
 - **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/`（自包含组件 + hooks + API），`pages/` 只保留入口。
 - **托盘菜单**：在 `infra/tray.rs` 中扩展菜单项与事件处理。
 - **后端命令**：在 `commands/` 新增模块，并在 `app.rs` 的 `invoke_handler` 中注册。
