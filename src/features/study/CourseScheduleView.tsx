@@ -187,13 +187,9 @@ export function CourseScheduleView({
   const { t, i18n } = useTranslation();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [slotCourses, setSlotCourses] = useState<Course[] | null>(null);
-  const scheduleRef = useRef<HTMLDivElement>(null);
   const [stackOverlay, setStackOverlay] = useState<{
     key: string;
     courses: Course[];
-    x: number;
-    y: number;
-    width: number;
   } | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -250,27 +246,15 @@ export function CourseScheduleView({
     homework.filter((item) => item.courseId === courseId).length;
 
   const openStackOverlay = (
-    event: { currentTarget: HTMLElement },
+    _event: { currentTarget: HTMLElement },
     key: string,
     courses: Course[],
   ) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const rootRect = scheduleRef.current?.getBoundingClientRect();
-    const containerWidth = scheduleRef.current?.clientWidth ?? 720;
-    const width = Math.max(320, Math.min(720, containerWidth - 16));
-    const x = Math.max(
-      8,
-      Math.min(rect.left - (rootRect?.left ?? 0), window.innerWidth - width - 8),
-    );
-    const y = Math.max(
-      8,
-      Math.min(rect.top - (rootRect?.top ?? 0), window.innerHeight - 240),
-    );
-    setStackOverlay({ key, courses, x, y, width });
+    setStackOverlay({ key, courses });
   };
 
   return (
-    <div ref={scheduleRef} className="relative mt-5">
+    <div className="mt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-secondary">
@@ -634,94 +618,89 @@ export function CourseScheduleView({
       {stackOverlay && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-slate-900/10"
+            className="fixed inset-0 z-40"
             aria-hidden
             onClick={() => setStackOverlay(null)}
           />
-          <div
-            role="dialog"
-            aria-label={t("study.stackCourses", {
-              count: stackOverlay.courses.length,
-            })}
-            className="floating-panel pop-in absolute z-50 flex max-h-[75vh] flex-col rounded-lg p-3"
-            style={{
-              top: stackOverlay.y,
-              left: stackOverlay.x,
-              width: stackOverlay.width,
-            }}
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 dark:border-slate-800">
-              <span className="truncate text-xs font-medium text-secondary">
-                {t("study.stackCourses", {
-                  count: stackOverlay.courses.length,
-                })}
-              </span>
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="pointer-events-auto relative w-full max-w-2xl">
               <IconButton
                 label={t("study.collapseStack")}
                 icon={X}
                 size="sm"
                 tone="neutral"
+                className="absolute -top-3 right-0 z-10"
                 onClick={() => setStackOverlay(null)}
               />
-            </div>
-            <div className="flex min-h-0 flex-1 flex-wrap content-start gap-2 overflow-y-auto pt-2">
-              {stackOverlay.courses.map((course, index) => {
-                const dealStyle = {
-                  animationDelay: `${index * 40}ms`,
-                  "--deal-rotate": `${index % 2 === 0 ? -2 : 2}deg`,
-                } as CSSProperties;
-                return (
-                  <button
-                    key={course.id}
-                    type="button"
-                    onClick={() => {
-                      onOpenDetail(course);
-                      setStackOverlay(null);
-                    }}
-                    className="deal-in flex w-56 flex-col rounded-md border border-slate-200 bg-white p-2.5 text-left shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
-                    style={dealStyle}
-                  >
-                    <span className="flex items-start gap-1.5">
-                      <span
-                        className={`mt-0.5 size-2.5 shrink-0 rounded-full ${LABEL_COLORS[course.color].dot}`}
-                      />
-                      <span
-                        title={course.name}
-                        className="line-clamp-2 min-w-0 flex-1 text-xs font-semibold text-strong"
-                      >
-                        {course.name}
+              <div
+                data-testid="stack-spread"
+                aria-label={t("study.stackCourses", {
+                  count: stackOverlay.courses.length,
+                })}
+                className="flex max-h-[80vh] flex-wrap content-start justify-center gap-2 overflow-y-auto pt-1"
+              >
+                {stackOverlay.courses.map((course, index) => {
+                  const dealStyle = {
+                    animationDelay: `${index * 40}ms`,
+                    "--deal-rotate": `${index % 2 === 0 ? -2 : 2}deg`,
+                  } as CSSProperties;
+                  return (
+                    <button
+                      key={course.id}
+                      type="button"
+                      onClick={() => {
+                        onOpenDetail(course);
+                        setStackOverlay(null);
+                      }}
+                      className="deal-in flex w-56 flex-col rounded-md border border-slate-200 bg-white p-2.5 text-left shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
+                      style={dealStyle}
+                    >
+                      <span className="flex items-start gap-1.5">
+                        <span
+                          className={`mt-0.5 size-2.5 shrink-0 rounded-full ${LABEL_COLORS[course.color].dot}`}
+                        />
+                        <span
+                          title={course.name}
+                          className="line-clamp-2 min-w-0 flex-1 text-xs font-semibold text-strong"
+                        >
+                          {course.name}
+                        </span>
                       </span>
-                    </span>
-                    <span className="mt-1 text-[10px] tabular-nums text-muted">
-                      {formatClockRange(course.startMin, course.endMin, lang)}
-                    </span>
-                    <span className="mt-1 flex flex-wrap gap-1">
-                      {weekBadge(course) && (
-                        <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
-                          {weekBadge(course)}
+                      <span className="mt-1 text-[10px] tabular-nums text-muted">
+                        {formatClockRange(
+                          course.startMin,
+                          course.endMin,
+                          lang,
+                        )}
+                      </span>
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {weekBadge(course) && (
+                          <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
+                            {weekBadge(course)}
+                          </span>
+                        )}
+                        {homeworkCountOf(course.id) > 0 && (
+                          <span className="rounded-xs bg-brand-50 px-1.5 py-px text-[9px] font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                            {t("study.homeworkCount", {
+                              count: homeworkCountOf(course.id),
+                            })}
+                          </span>
+                        )}
+                      </span>
+                      {(course.teacher || course.location) && (
+                        <span
+                          title={`${course.teacher ?? ""}${course.teacher && course.location ? " · " : ""}${course.location ?? ""}`}
+                          className="mt-1 truncate text-[10px] text-muted"
+                        >
+                          {course.teacher}
+                          {course.teacher && course.location ? " · " : ""}
+                          {course.location}
                         </span>
                       )}
-                      {homeworkCountOf(course.id) > 0 && (
-                        <span className="rounded-xs bg-brand-50 px-1.5 py-px text-[9px] font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-                          {t("study.homeworkCount", {
-                            count: homeworkCountOf(course.id),
-                          })}
-                        </span>
-                      )}
-                    </span>
-                    {(course.teacher || course.location) && (
-                      <span
-                        title={`${course.teacher ?? ""}${course.teacher && course.location ? " · " : ""}${course.location ?? ""}`}
-                        className="mt-1 truncate text-[10px] text-muted"
-                      >
-                        {course.teacher}
-                        {course.teacher && course.location ? " · " : ""}
-                        {course.location}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </>
