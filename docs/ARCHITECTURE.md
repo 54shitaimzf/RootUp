@@ -208,7 +208,8 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **切换控件与圆角刻度**：`SegmentedControl` 支持 `segmented`（默认，`p-1/gap-1`）与 `tabs`（底边线 + 品牌色下划线）两种变体；页面主切换用 tabs（支持 `icon`/`equal`/`badge`，学业页为等宽双栏 + 图标 + 待办数），次级筛选用 segmented。学业页圆角刻度：表格容器 0（方形）、课程卡 4px（rounded-sm）、作业行/空态卡 12px（rounded-lg）、徽章 2px（rounded-xs）。
 -- **学业页课程表布局约定**：时间刻度移到表格外左侧页边距（中文 48px / 英文 64px），与整点横线共用 `axisTopPercent` 计算保证对齐，表格内部不再有左列；课程卡 `rounded-sm`、内部徽章与色条 `rounded-xs`；卡片内容按高度降级（≥64px full / ≥40px standard / <40px compact），最小高度 28px。时段排布由 `layoutDayCourses` 承载：时间连通分量 → 贪心分列（同列课程周次互斥）→ 同起止错周课折叠为堆叠卡（层叠边缘 + “共 N 门”角标），点击后每张课程卡作为独立固定元素围绕点击位置摊开（无容器/滚动框/面板，展开期间原堆叠卡隐藏），大卡完整展示信息，最多 4 张并用 +N 收口，deal-in 逐张动效，Esc/点外部/浮动关闭按钮收起；堆叠卡不设更高层级，层叠边缘可轻微越界，由其它课程卡渲染在其上层盖住、不同起止错周课 6px 叠放偏移、同周重叠最多 2 列并折叠为 “+N”（`SlotCoursesDialog` 列出该时段全部课程）；同周冲突卡使用弱玫瑰色描边。点击课程卡打开 `CourseDetailDialog`（完整信息 + 作业列表），编辑/删除/查看作业均需显式操作。
 - 学期生命周期：`Semester` 模型（i18n 名称/起止日期/周数），工具栏分层展示——主行 学期选择 + 周步进 + 回到本周，次行 周起始/全部周次；当前周按学期起始推算并可手动预览，`clampWeek` 限制 1..weekCount；学期选择随偏好持久化。
-- 学业数据持久化（v1：localStorage）：键 `rootup.study.data.v1`，结构 `StudyDataV1`（学期数组 + 每学期课程/作业桶）；学期即课表，复制只带课程（新 id）不带作业；删除学期连同课程/作业；损坏数据回退种子并覆盖（与设置类备份策略不同）；表单校验（名称 ≤40/去重、起止日期、周数 1–30）；后端持久化仍为后续迭代。
+- 学业数据链路（v1：后端 study.json）：`core/study.rs` 模型/校验/种子 + `infra/study_store.rs`（原子写、损坏备份）+ `commands/study.rs`（get/save/exists/reapply）；课程携带稳定 `course-<id>` 标签键；`StudyClassifier` 追加进分类链（完整课程名匹配、长名优先、≥2 字符）；`save_study_data` 保存后执行定向重分类（`IndexStore::all_records/update_labels` 只刷新 labels 列）；旧 localStorage `rootup.study.data.v1` 首次启动一次性迁移并删除；迁移时并入“演示：边界场景”学期。
+- 课程标签展示：文件列表/筛选 chips/搜索自动补全通过 `buildCourseLabelDefs` 把 `course-<key>` 映射为课程名与课程色；搜索语法 `label:course-<key>` 直接可用。
 - 学业页工具栏布局：主行 = 学期选择/管理/周步进，次行 = 视图切换 + “添加课程”（紧贴课表上方右侧）。
 - 长标题边界样例：示例 `c-demo-5`（周二全周）用于目验课表截断、铺开浮层换行、详情全文与筛选 chips 截断。
 - 堆叠细节：同列课程按上课顺序排序（开始 → 结束 → 名称）；自动配色优先避开同课时段已有颜色；折叠角标为“图标 + 数量数字”，内容预留右侧空间避免重叠。

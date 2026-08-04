@@ -17,6 +17,8 @@ import { useFilterHabits } from "../hooks/useFilterHabits";
 import { useLabelDefs } from "../hooks/useLabelDefs";
 import type { ScanController } from "../hooks/useScan";
 import { LABEL_COLORS, labelColorKey } from "../lib/labelDefs";
+import { buildCourseLabelDefs } from "../lib/studyStore";
+import { getStudyData } from "../lib/tauri";
 import {
   fileStateMeta,
   buildQuery,
@@ -65,6 +67,9 @@ export function FilePage({
   const { settings } = useSettings();
   const { habits, touch } = useFilterHabits();
   const labelDefs = useLabelDefs();
+  const [courseLabelDefs, setCourseLabelDefs] = useState<
+    Record<string, { key: string; name: string; icon: string; color: string }>
+  >({});
   const archiveRoot = settings?.archive_root?.trim() ?? "";
   const autoArchive = settings?.auto_archive ?? false;
   const [query, setQuery] = useState("");
@@ -109,6 +114,17 @@ export function FilePage({
       .catch(() => setWatchedCount(0));
   }, []);
 
+  useEffect(() => {
+    getStudyData()
+      .then((data) => setCourseLabelDefs(buildCourseLabelDefs(data)))
+      .catch(() => setCourseLabelDefs({}));
+  }, []);
+
+  const mergedLabelDefs = useMemo(
+    () => ({ ...labelDefs, ...courseLabelDefs }),
+    [labelDefs, courseLabelDefs],
+  );
+
   const queryString = useMemo(
     () => buildQuery({ text: debouncedQuery, types, states, labels }),
     [debouncedQuery, types, states, labels],
@@ -145,10 +161,10 @@ export function FilePage({
         key: `label:${label}`,
         raw: label,
         token: `label:${label}`,
-        display: labelDefs[label]?.name ?? label,
+        display: mergedLabelDefs[label]?.name ?? label,
       })),
     ];
-  }, [categories, availableLabels, labelDefs, t]);
+  }, [categories, availableLabels, mergedLabelDefs, t]);
 
   const { items, total, loading, stale } = useFiles(
     queryString,
@@ -315,7 +331,7 @@ export function FilePage({
         labels={labels}
         candidates={autocompleteCandidates}
         habits={habits}
-        labelDefs={labelDefs}
+        labelDefs={mergedLabelDefs}
         onHabitUsed={touch}
         onTextChange={(value) => {
           setQuery(value);
@@ -352,7 +368,7 @@ export function FilePage({
         onHabitUsed={touch}
         categories={categories}
         labels={availableLabels}
-        labelDefs={labelDefs}
+        labelDefs={mergedLabelDefs}
         selectedTypes={types}
         selectedLabels={labels}
         onTypesChange={(value) => {
@@ -581,13 +597,13 @@ export function FilePage({
                             key={label}
                             className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                           >
-                            {labelDefs[label] && (
+                            {mergedLabelDefs[label] && (
                               <span
-                                className={`size-1.5 rounded-full ${LABEL_COLORS[labelColorKey(labelDefs[label].color)].dot}`}
+                                className={`size-1.5 rounded-full ${LABEL_COLORS[labelColorKey(mergedLabelDefs[label].color)].dot}`}
                               />
                             )}
-                            {labelDefs[label]
-                              ? labelDefs[label].name
+                            {mergedLabelDefs[label]
+                              ? mergedLabelDefs[label].name
                               : t(`filter.${label}`, label)}
                           </span>
                         ))}

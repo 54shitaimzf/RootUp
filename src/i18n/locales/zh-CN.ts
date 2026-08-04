@@ -163,6 +163,8 @@ export default {
     nextWeek: "下一周",
     backToThisWeek: "回到本周",
     weekCount: "共 {{count}} 周",
+    loading: "加载中…",
+    retry: "重试",
     homeworkEmpty: "还没有作业",
     homeworkEmptyDesc: "添加作业后，会按截止时间显示在这里。",
     noMatchingHomework: "没有符合筛选条件的作业",

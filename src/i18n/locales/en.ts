@@ -167,6 +167,8 @@ export default {
     nextWeek: "Next week",
     backToThisWeek: "Back to this week",
     weekCount: "{{count}} weeks",
+    loading: "Loading…",
+    retry: "Retry",
     homeworkEmpty: "No homework yet",
     homeworkEmptyDesc: "Add homework and it will be listed by deadline here.",
     noMatchingHomework: "No homework matches these filters.",

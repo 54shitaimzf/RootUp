@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, ClipboardList } from "lucide-react";
+import { Button } from "../components/Button";
+import { InlineNotice } from "../components/InlineNotice";
 import { PageHeader } from "../components/PageHeader";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { CourseDetailDialog } from "../features/study/CourseDetailDialog";
@@ -20,11 +22,17 @@ import {
   type WeekStart,
 } from "../lib/study";
 import {
+  LEGACY_STUDY_STORAGE_KEY,
   copyCoursesForSemester,
-  loadStudyData,
-  saveStudyData,
-  type StudyDataV1,
+  ensureDemoScenario,
+  type StudyData,
 } from "../lib/studyStore";
+import {
+  getStudyData,
+  logEvent,
+  saveStudyData,
+  studyStoreExists,
+} from "../lib/tauri";
 
 const PREF_KEY = "rootup.study.prefs.v1";
 
@@ -58,20 +66,23 @@ function loadPrefs(): StudyPrefs {
   }
 }
 
-/** 学业页：学期即课表，数据持久化到 localStorage，偏好记忆用同一存储区。*/
-export function StudyPage({ today = new Date() }: { today?: Date }) {
+/** 学业页：数据由后端 study.json 统一管理，UI 仅做展示与整份保存。*/
+export function StudyPage({
+  today = new Date(),
+  initialData,
+}: {
+  today?: Date;
+  initialData?: StudyData;
+}) {
   const { t } = useTranslation();
   const [prefs] = useState(loadPrefs);
-  const [data, setData] = useState<StudyDataV1>(loadStudyData);
+  const [data, setData] = useState<StudyData | null>(initialData ?? null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [view, setView] = useState<StudyView>(prefs.view);
   const [weekStart, setWeekStart] = useState<WeekStart>(prefs.weekStart);
   const [showAllWeeks, setShowAllWeeks] = useState(prefs.showAllWeeks);
-  const [semesterId, setSemesterId] = useState<string>(() => {
-    const saved = prefs.semesterId;
-    return saved && data.semesters.some((item) => item.id === saved)
-      ? saved
-      : (data.semesters[0]?.id ?? "");
-  });
+  const [semesterId, setSemesterId] = useState("");
   const [weekOverride, setWeekOverride] = useState<number | null>(null);
   const [semesterManageOpen, setSemesterManageOpen] = useState(false);
   const [courseFormOpen, setCourseFormOpen] = useState(false);
@@ -88,7 +99,50 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   const idSeq = useRef(0);
 
   useEffect(() => {
-    saveStudyData(data);
+    if (initialData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const exists = await studyStoreExists();
+        const legacyRaw = localStorage.getItem(LEGACY_STUDY_STORAGE_KEY);
+        if (!exists && legacyRaw) {
+          try {
+            const legacy = JSON.parse(legacyRaw) as StudyData;
+            const merged = ensureDemoScenario(legacy);
+            await saveStudyData(merged);
+            localStorage.removeItem(LEGACY_STUDY_STORAGE_KEY);
+          } catch (error) {
+            logEvent("warn", `study: 旧数据迁移失败 ${String(error)}`);
+          }
+        }
+        const loaded = await getStudyData();
+        if (!cancelled) setData(loaded);
+      } catch (error) {
+        if (!cancelled) setLoadError(String(error));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData, reloadKey]);
+
+  useEffect(() => {
+    if (!data) return;
+    const saved = prefs.semesterId;
+    setSemesterId((prev) => {
+      if (prev && data.semesters.some((item) => item.id === prev)) return prev;
+      if (saved && data.semesters.some((item) => item.id === saved)) {
+        return saved;
+      }
+      return data.semesters[0]?.id ?? "";
+    });
+  }, [data, prefs.semesterId]);
+
+  useEffect(() => {
+    if (!data) return;
+    saveStudyData(data).catch((error) => {
+      logEvent("warn", `study: 保存失败 ${String(error)}`);
+    });
   }, [data]);
 
   useEffect(() => {
@@ -98,15 +152,17 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         JSON.stringify({ view, weekStart, showAllWeeks, semesterId }),
       );
     } catch {
-      // 读取或写入失败时静默回退默认，不阻塞页面
+      // 偏好写入失败时静默回退，不阻塞页面
     }
   }, [view, weekStart, showAllWeeks, semesterId]);
 
   const semester =
-    data.semesters.find((item) => item.id === semesterId) ??
-    data.semesters[0];
-  const courses = data.coursesBySemester[semester?.id ?? ""] ?? [];
-  const homework = data.homeworkBySemester[semester?.id ?? ""] ?? [];
+    data?.semesters.find((item) => item.id === semesterId) ??
+    data?.semesters[0];
+  const courses = semester ? (data?.coursesBySemester[semester.id] ?? []) : [];
+  const homework = semester
+    ? (data?.homeworkBySemester[semester.id] ?? [])
+    : [];
   const actualWeek = semester
     ? weekNumberFromDate(semester.startDate, today)
     : 1;
@@ -119,13 +175,13 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
 
   const updateCourses = (updater: (list: Course[]) => Course[]) => {
     setData((prev) => {
-      const id = semester?.id ?? "";
-      const list = prev.coursesBySemester[id] ?? [];
+      if (!prev || !semester) return prev;
+      const list = prev.coursesBySemester[semester.id] ?? [];
       return {
         ...prev,
         coursesBySemester: {
           ...prev.coursesBySemester,
-          [id]: updater(list),
+          [semester.id]: updater(list),
         },
       };
     });
@@ -133,13 +189,13 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
 
   const updateHomework = (updater: (list: Homework[]) => Homework[]) => {
     setData((prev) => {
-      const id = semester?.id ?? "";
-      const list = prev.homeworkBySemester[id] ?? [];
+      if (!prev || !semester) return prev;
+      const list = prev.homeworkBySemester[semester.id] ?? [];
       return {
         ...prev,
         homeworkBySemester: {
           ...prev.homeworkBySemester,
-          [id]: updater(list),
+          [semester.id]: updater(list),
         },
       };
     });
@@ -233,35 +289,42 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     copyFromId?: string,
   ) => {
     if (editingId) {
-      setData((prev) => ({
-        ...prev,
-        semesters: prev.semesters.map((item) =>
-          item.id === editingId ? { ...item, ...input } : item,
-        ),
-      }));
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          semesters: prev.semesters.map((item) =>
+            item.id === editingId ? { ...item, ...input } : item,
+          ),
+        };
+      });
       return;
     }
     const id = `sem-${Date.now()}-${(idSeq.current += 1)}`;
-    setData((prev) => ({
-      ...prev,
-      semesters: [...prev.semesters, { id, ...input }],
-      coursesBySemester: {
-        ...prev.coursesBySemester,
-        [id]: copyFromId
-          ? copyCoursesForSemester(prev.coursesBySemester[copyFromId] ?? [])
-          : [],
-      },
-      homeworkBySemester: {
-        ...prev.homeworkBySemester,
-        [id]: [],
-      },
-    }));
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        semesters: [...prev.semesters, { id, ...input }],
+        coursesBySemester: {
+          ...prev.coursesBySemester,
+          [id]: copyFromId
+            ? copyCoursesForSemester(prev.coursesBySemester[copyFromId] ?? [])
+            : [],
+        },
+        homeworkBySemester: {
+          ...prev.homeworkBySemester,
+          [id]: [],
+        },
+      };
+    });
     setSemesterId(id);
   };
 
   const handleDeleteSemester = (id: string) => {
-    const remaining = data.semesters.filter((item) => item.id !== id);
+    const remaining = (data?.semesters ?? []).filter((item) => item.id !== id);
     setData((prev) => {
+      if (!prev) return prev;
       const coursesBySemester = { ...prev.coursesBySemester };
       const homeworkBySemester = { ...prev.homeworkBySemester };
       delete coursesBySemester[id];
@@ -281,15 +344,51 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   };
 
   const courseCounts = Object.fromEntries(
-    data.semesters.map((item) => [
+    (data?.semesters ?? []).map((item) => [
       item.id,
-      (data.coursesBySemester[item.id] ?? []).length,
+      (data?.coursesBySemester[item.id] ?? []).length,
     ]),
   );
 
   const pendingCount = homework.filter(
     (item) => item.status === "pending",
   ).length;
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          title={t("pages.study.title")}
+          description={t("pages.study.description")}
+        />
+        <InlineNotice variant="error" className="mt-5">
+          {loadError}
+        </InlineNotice>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="mt-3"
+          onClick={() => setReloadKey((key) => key + 1)}
+        >
+          {t("study.retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  if (!data || !semester) {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          title={t("pages.study.title")}
+          description={t("pages.study.description")}
+        />
+        <p className="mt-8 text-center text-sm text-muted">
+          {t("study.loading")}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -404,7 +503,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         initial={editingHomework}
         courses={courses}
         today={today}
-        semesterStart={semester?.startDate}
+        semesterStart={semester.startDate}
         onSave={saveHomework}
         onClose={() => setHomeworkFormOpen(false)}
       />

@@ -21,6 +21,8 @@ export interface Course {
   weekRule: WeekRule;
   weekRange?: string;
   color: LabelColorKey;
+  /** 后端生成的稳定课程标签键（course-<id>），前端只读展示。 */
+  labelKey?: string;
 }
 
 export type CourseDraft = Omit<Course, "id">;

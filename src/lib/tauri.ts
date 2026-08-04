@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { StudyData } from "./studyStore";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type Language = "zh-CN" | "en";
@@ -398,4 +399,21 @@ export function listDetectedTools(): Promise<string[]> {
 
 export function openUrl(url: string): Promise<void> {
   return invoke<void>("open_url", { url });
+}
+
+/** 学业数据：后端 study.json 统一管理（不再使用 localStorage）。*/
+export function getStudyData(): Promise<StudyData> {
+  return invoke<StudyData>("get_study_data");
+}
+
+export function saveStudyData(data: StudyData): Promise<StudyData> {
+  return invoke<StudyData>("save_study_data", { data });
+}
+
+export function studyStoreExists(): Promise<boolean> {
+  return invoke<boolean>("study_store_exists");
+}
+
+export function reapplyStudyLabels(): Promise<number> {
+  return invoke<number>("reapply_study_labels");
 }

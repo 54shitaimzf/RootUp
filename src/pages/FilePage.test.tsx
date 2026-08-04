@@ -20,6 +20,12 @@ vi.mock("../lib/tauri", () => ({
   },
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
+  getStudyData: vi.fn(async () => ({
+    version: 1,
+    semesters: [],
+    coursesBySemester: {},
+    homeworkBySemester: {},
+  })),
   queryFiles: vi.fn(),
   logEvent: vi.fn(),
   openFile: vi.fn(),

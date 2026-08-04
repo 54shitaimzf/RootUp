@@ -1,16 +1,37 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { StudyPage } from "./StudyPage";
+import { createSeedStudyData, ensureDemoScenario } from "../lib/studyStore";
+import {
+  getStudyData,
+  saveStudyData,
+  studyStoreExists,
+} from "../lib/tauri";
+
+vi.mock("../lib/tauri", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/tauri")>();
+  return {
+    ...actual,
+    getStudyData: vi.fn(async () => {
+      throw new Error("should use initialData or migration path");
+    }),
+    saveStudyData: vi.fn(async (data: unknown) => data),
+    studyStoreExists: vi.fn(async () => true),
+    reapplyStudyLabels: vi.fn(async () => 0),
+    logEvent: vi.fn(async () => {}),
+  };
+});
 
 const TODAY = new Date("2026-08-04T12:00:00");
 
 function renderStudy() {
-  return render(<StudyPage today={TODAY} />);
+  return render(<StudyPage today={TODAY} initialData={createSeedStudyData()} />);
 }
 
 describe("StudyPage", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
   });
 
   it("默认显示课程表与示例课程、当前周信息，主切换为等宽图标页签", () => {
@@ -330,8 +351,8 @@ describe("StudyPage", () => {
     ).toBe("spring-2027");
   });
 
-  it("学期管理：新建并切换为空课表且持久化", () => {
-    const first = renderStudy();
+  it("学期管理：新建并切换为空课表且自动保存", () => {
+    renderStudy();
     fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
     fireEvent.click(screen.getByRole("button", { name: "新建学期" }));
     fireEvent.change(screen.getByLabelText("学期名称"), {
@@ -347,10 +368,13 @@ describe("StudyPage", () => {
     const select = screen.getByLabelText("学期") as HTMLSelectElement;
     expect(select.selectedOptions[0].text).toBe("2028 春季学期");
     expect(screen.getByText("还没有课程")).toBeInTheDocument();
-    first.unmount();
-    renderStudy();
-    const restored = screen.getByLabelText("学期") as HTMLSelectElement;
-    expect(restored.selectedOptions[0].text).toBe("2028 春季学期");
+    const calls = vi.mocked(saveStudyData).mock.calls;
+    const lastSave = calls[calls.length - 1]?.[0] as {
+      semesters: { name: string }[];
+    };
+    expect(
+      lastSave.semesters.some((semester) => semester.name === "2028 春季学期"),
+    ).toBe(true);
   });
 
   it("学期管理：复制学期为新课表且作业为空", () => {
@@ -381,14 +405,26 @@ describe("StudyPage", () => {
     expect(screen.getByText("还没有课程")).toBeInTheDocument();
   });
 
-  it("学业数据损坏时回退示例", () => {
-    localStorage.setItem("rootup.study.data.v1", "{bad json");
-    renderStudy();
-    expect(screen.getByText("高等数学")).toBeInTheDocument();
+  it("旧 localStorage 数据迁移到后端并清除旧键", async () => {
+    const legacy = createSeedStudyData();
+    localStorage.setItem("rootup.study.data.v1", JSON.stringify(legacy));
+    vi.mocked(studyStoreExists).mockResolvedValueOnce(false);
+    const migrated = ensureDemoScenario(legacy);
+    vi.mocked(getStudyData).mockResolvedValueOnce(migrated);
+    render(<StudyPage today={TODAY} />);
+    expect(await screen.findByText("高等数学")).toBeInTheDocument();
+    expect(localStorage.getItem("rootup.study.data.v1")).toBeNull();
+    expect(saveStudyData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        semesters: expect.arrayContaining([
+          expect.objectContaining({ id: "demo-scenarios" }),
+        ]),
+      }),
+    );
   });
 
-  it("课程与作业按学期隔离并持久化", () => {
-    const first = renderStudy();
+  it("课程与作业按学期隔离并自动保存到后端", () => {
+    renderStudy();
     fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
     fireEvent.click(screen.getByRole("button", { name: "新建学期" }));
     fireEvent.change(screen.getByLabelText("学期名称"), {
@@ -435,9 +471,15 @@ describe("StudyPage", () => {
       target: { value: newId },
     });
     expect(screen.getByText("新课")).toBeInTheDocument();
-    first.unmount();
-    renderStudy();
-    expect(screen.getByText("新课")).toBeInTheDocument();
+    const calls = vi.mocked(saveStudyData).mock.calls;
+    const lastSave = calls[calls.length - 1]?.[0] as {
+      coursesBySemester: Record<string, { name: string }[]>;
+    };
+    expect(
+      Object.values(lastSave.coursesBySemester)
+        .flat()
+        .some((course) => course.name === "新课"),
+    ).toBe(true);
   });
 
   it("学期管理：编辑学期名称生效", () => {
