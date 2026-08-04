@@ -41,7 +41,10 @@ export function Sidebar({
         </div>
         <div className="min-w-0">
           <div className="text-sm font-semibold leading-tight">{APP_NAME}</div>
-          <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+          <div
+            className="truncate text-xs text-slate-500 dark:text-slate-400"
+            title={t("app.tagline")}
+          >
             {t("app.tagline")}
           </div>
         </div>
