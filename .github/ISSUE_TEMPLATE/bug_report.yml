@@ -1,0 +1,56 @@
+name: Bug 报告
+description: 提交一个可复现的问题，帮助我们修复
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量提供完整信息，便于快速定位。
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 发生了什么？你期望看到什么？
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 一步步说明如何触发该问题
+      placeholder: |
+        1. 打开 RootUp
+        2. 添加监控目录…
+        3. 观察到…
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 侧栏显示的版本号（如 v0.6.0）
+      placeholder: v0.6.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 系统
+      options:
+        - Windows 10
+        - Windows 11
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: 帮助中心“搜索与高级用法”中会给出日志位置（rootup.log），请粘贴相关片段
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 截图、样例文件、设置导出等
