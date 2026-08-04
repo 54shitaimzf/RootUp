@@ -60,6 +60,13 @@ pub struct SqliteIndexStore {
 impl SqliteIndexStore {
     /// 打开（或创建）索引库。`path` 为数据库文件路径，`:memory:` 仅用于测试。
     pub fn open(path: impl AsRef<Path>) -> Result<Self, String> {
+        let path = path.as_ref();
+        // 全新用户首次启动时数据目录可能尚不存在，必须显式创建（CI 冒烟曾暴露同类问题）
+        if path != Path::new(":memory:") {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+        }
         let mut conn = Connection::open(path).map_err(|e| e.to_string())?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| e.to_string())?;
@@ -488,6 +495,20 @@ mod tests {
             assert_eq!(s.count().unwrap(), 1);
         }
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn open_creates_missing_parent_directory() {
+        let dir = std::env::temp_dir().join(format!(
+            "rootup_index_missing_parent_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db = dir.join("nested").join("rootup.db");
+        let store = SqliteIndexStore::open(&db).expect("应自动创建父目录并打开");
+        drop(store);
+        assert!(db.is_file());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
