@@ -7,8 +7,7 @@ use crate::core::project::{
 use crate::core::settings::PREFERRED_IDE_NONE;
 use crate::core::tools::{self, extension_of};
 use crate::infra::app_finder::{
-    build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv,
-    SystemRunner,
+    build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv, SystemRunner,
 };
 use crate::infra::shortcut;
 use crate::infra::storage;

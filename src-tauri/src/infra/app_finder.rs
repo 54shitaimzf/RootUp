@@ -341,10 +341,7 @@ pub fn find_app(
 }
 
 /// 探测当前环境已安装的全部工具 key（按 TOOL_KEYS 顺序）。
-pub fn detect_installed_tools(
-    custom: &[CustomOpenCommand],
-    env: &dyn AppEnv,
-) -> Vec<&'static str> {
+pub fn detect_installed_tools(custom: &[CustomOpenCommand], env: &dyn AppEnv) -> Vec<&'static str> {
     tools::TOOL_KEYS
         .iter()
         .filter(|tool| find_app(tool, custom, env).is_some())
