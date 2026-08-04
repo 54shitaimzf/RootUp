@@ -41,8 +41,8 @@ jobs:
           npm test 2>&1 | Tee-Object -FilePath frontend-test.log
           exit $LASTEXITCODE
 
-      - name: Upload frontend test log on failure
-        if: failure()
+      - name: Upload frontend test log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-test-output
@@ -69,8 +69,8 @@ jobs:
           cargo test 2>&1 | Tee-Object -FilePath test-output.log
           exit $LASTEXITCODE
 
-      - name: Upload test logs on failure
-        if: failure()
+      - name: Upload test logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-output
