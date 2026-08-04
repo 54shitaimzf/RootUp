@@ -2,26 +2,33 @@ import { describe, expect, it } from "vitest";
 import {
   DEMO_COURSES,
   DEMO_HOMEWORK,
+  DEFAULT_COURSE_DURATION,
   autoAssignCourseColor,
   axisRange,
   axisTopPercent,
   calendarDaysUntil,
+  clampCourseEnd,
   compareHomework,
   courseCardDensity,
+  courseConflicts,
   coursePosition,
   daysUntilDue,
   filterHomework,
   formatClock,
   formatClockRange,
+  homeworkStatusTone,
   isOverdue,
   isValidWeekRange,
   jsDayToStudyDay,
   layoutDayCourses,
   minToTime,
+  normalizeWeekRange,
   overdueDays,
   parseWeekRange,
   sessionActiveInWeek,
+  snapToFiveMinutes,
   splitOverlaps,
+  suggestDueForCourse,
   timeToMin,
   weekDaysOrder,
   weekNumberFromDate,
@@ -251,6 +258,121 @@ describe("课程卡密度与时间轴刻度", () => {
     expect(axisTopPercent(480, { start: 480, end: 720 })).toBe(0);
     expect(axisTopPercent(600, { start: 480, end: 720 })).toBe(50);
     expect(axisTopPercent(720, { start: 480, end: 720 })).toBe(100);
+  });
+});
+
+describe("智能时间与周次容错", () => {
+  it("5 分钟取整并按 00:00–23:55 钳制", () => {
+    expect(snapToFiveMinutes(0)).toBe(0);
+    expect(snapToFiveMinutes(2)).toBe(0);
+    expect(snapToFiveMinutes(3)).toBe(5);
+    expect(snapToFiveMinutes(480)).toBe(480);
+    expect(snapToFiveMinutes(1435)).toBe(1435);
+    expect(snapToFiveMinutes(1440)).toBe(1435);
+    expect(snapToFiveMinutes(1438)).toBe(1435);
+    expect(snapToFiveMinutes(-5)).toBe(0);
+  });
+
+  it("结束时间按开始+时长计算且不跨午夜", () => {
+    expect(clampCourseEnd(480, DEFAULT_COURSE_DURATION)).toBe(580);
+    expect(clampCourseEnd(1380, 100)).toBe(1435);
+    expect(clampCourseEnd(480, 45)).toBe(525);
+  });
+
+  it("周次范围全角/空格/“周”字归一化", () => {
+    expect(normalizeWeekRange("2－16 周")).toBe("2-16");
+    expect(normalizeWeekRange("1、3、5-8")).toBe("1,3,5-8");
+    expect(normalizeWeekRange("１，３")).toBe("1,3");
+    expect(normalizeWeekRange("2 周")).toBe("2");
+    expect(normalizeWeekRange("2-16")).toBe("2-16");
+    expect(normalizeWeekRange("abc")).toBe("abc");
+  });
+});
+
+describe("课程冲突与作业状态色", () => {
+  const base = {
+    id: "c",
+    name: "课程",
+    teacher: "",
+    location: "",
+    day: 1,
+    startMin: 480,
+    endMin: 580,
+    weekRule: "all" as const,
+    color: "sky" as const,
+  };
+
+  it("同星期重叠且周次相交才判为冲突", () => {
+    const other = { ...base, id: "other" };
+    expect(courseConflicts(base, [other])).toHaveLength(1);
+    expect(
+      courseConflicts(
+        { ...base, weekRule: "odd" as const },
+        [{ ...other, weekRule: "even" as const }],
+      ),
+    ).toHaveLength(0);
+    expect(
+      courseConflicts(base, [{ ...other, day: 2 }]),
+    ).toHaveLength(0);
+    expect(
+      courseConflicts(base, [{ ...other, startMin: 600, endMin: 700 }]),
+    ).toHaveLength(0);
+  });
+
+  it("编辑时排除自身", () => {
+    const draft = { ...base, day: 1, startMin: 500, endMin: 600 };
+    expect(courseConflicts(draft, [base, { ...base, id: "x" }], "c")).toEqual([
+      expect.objectContaining({ id: "x" }),
+    ]);
+  });
+
+  it("作业状态色按状态与逾期区分", () => {
+    const now = new Date("2026-08-04T12:00:00");
+    expect(homeworkStatusTone("pending", "2026-08-06T18:00:00", now)).toBe(
+      "pending",
+    );
+    expect(homeworkStatusTone("pending", "2026-08-02T23:59:00", now)).toBe(
+      "overdue",
+    );
+    expect(homeworkStatusTone("done", "2026-08-01T00:00:00", now)).toBe(
+      "done",
+    );
+    expect(homeworkStatusTone("archived", "2026-08-01T00:00:00", now)).toBe(
+      "archived",
+    );
+  });
+});
+
+describe("按课程时间建议截止", () => {
+  it("本周尚未开课则取本周上课日", () => {
+    const course = { day: 3, weekRule: "all" as const };
+    expect(
+      suggestDueForCourse(course, new Date("2026-08-04T12:00:00")),
+    ).toBe("2026-08-05");
+  });
+
+  it("本周上课日已过则顺延到下周匹配周次", () => {
+    expect(
+      suggestDueForCourse(
+        { day: 1, weekRule: "all" as const },
+        new Date("2026-08-04T12:00:00"),
+      ),
+    ).toBe("2026-08-10");
+    expect(
+      suggestDueForCourse(
+        { day: 1, weekRule: "odd" as const },
+        new Date("2026-08-04T12:00:00"),
+      ),
+    ).toBe("2026-08-17");
+  });
+
+  it("学期内找不到匹配周次时回退 7 天后", () => {
+    expect(
+      suggestDueForCourse(
+        { day: 1, weekRule: "range" as const, weekRange: "1-4" },
+        new Date("2026-09-02T12:00:00"),
+      ),
+    ).toBe("2026-09-09");
   });
 });
 

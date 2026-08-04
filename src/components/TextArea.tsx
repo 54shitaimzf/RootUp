@@ -24,7 +24,7 @@ export const TextArea = forwardRef<
   return (
     <textarea
       ref={ref}
-      className={`min-w-0 w-full rounded-md border bg-slate-50 outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800 ${
+      className={`min-w-0 w-full rounded-md border bg-slate-50 outline-none transition-colors placeholder:text-slate-400 focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800 dark:placeholder:text-slate-500 ${
         invalid
           ? "border-red-400 dark:border-red-500/50"
           : "border-slate-200"

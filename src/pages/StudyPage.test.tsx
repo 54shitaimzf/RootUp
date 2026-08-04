@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { StudyPage } from "./StudyPage";
 
@@ -9,6 +9,10 @@ function renderStudy() {
 }
 
 describe("StudyPage", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("默认显示课程表与示例课程、当前周信息，主切换为等宽图标页签", () => {
     const { container } = renderStudy();
     expect(
@@ -95,17 +99,21 @@ describe("StudyPage", () => {
       within(dialog).getByRole("heading", { name: "课程作业" }),
     ).toBeInTheDocument();
     expect(within(dialog).getByText("高等数学 作业 3")).toBeInTheDocument();
-    expect(within(dialog).getByText("待办")).toBeInTheDocument();
+    expect(within(dialog).getByText("已逾期")).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "查看该课作业" }),
+    ).toBeNull();
   });
 
-  it("课程详情可查看该课作业", () => {
+  it("课程详情作业行可点击并自动展开详情", () => {
     renderStudy();
     fireEvent.click(screen.getByRole("button", { name: /高等数学/ }));
     const dialog = screen.getByRole("dialog", { name: "课程详情" });
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "查看该课作业" }),
+      within(dialog).getByRole("button", { name: /高等数学 作业 3/ }),
     );
     expect(screen.getByText("高等数学 作业 3")).toBeInTheDocument();
+    expect(screen.getByText(/要求写出完整推导过程/)).toBeInTheDocument();
     expect(
       screen.queryByText("程序设计 实验报告"),
     ).not.toBeInTheDocument();
@@ -237,5 +245,29 @@ describe("StudyPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     fireEvent.click(screen.getByRole("button", { name: "已归档" }));
     expect(screen.getByText("没有符合筛选条件的作业")).toBeInTheDocument();
+  });
+
+  it("偏好记忆：视图与周起始日写入并在下次渲染恢复", () => {
+    const first = renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^课程表/ }));
+    fireEvent.click(screen.getByRole("button", { name: "周日开头" }));
+    first.unmount();
+    renderStudy();
+    expect(
+      screen.getByRole("button", { name: /^课程表/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "周日开头" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("偏好数据损坏时回退默认", () => {
+    localStorage.setItem("rootup.study.prefs.v1", "{bad json");
+    renderStudy();
+    expect(
+      screen.getByRole("button", { name: /^课程表/ }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });

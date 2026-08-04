@@ -9,33 +9,48 @@ import { Modal } from "../../components/Modal";
 import { FormSection } from "../../components/FormSection";
 import { Select } from "../../components/Select";
 import { TextArea } from "../../components/TextArea";
-import type { Course, Homework, HomeworkDraft } from "../../lib/study";
+import { TimeSelect } from "../../components/TimeSelect";
+import {
+  minToTime,
+  snapToFiveMinutes,
+  suggestDueForCourse,
+  type Course,
+  type Homework,
+  type HomeworkDraft,
+} from "../../lib/study";
 
 const NOTE_MAX = 200;
 const DETAILS_MAX = 5000;
 
-function toLocalDateTimeInput(date: Date): string {
+function toISODate(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}`;
 }
 
 export function HomeworkFormDialog({
   open,
   initial,
   courses,
+  today,
   onSave,
   onClose,
 }: {
   open: boolean;
   initial: Homework | null;
   courses: Course[];
+  today: Date;
   onSave: (draft: HomeworkDraft) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState("");
-  const [dueAt, setDueAt] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("23:59");
+  const [dueTouched, setDueTouched] = useState(false);
+  const [suggestedCourse, setSuggestedCourse] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [details, setDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,27 +58,78 @@ export function HomeworkFormDialog({
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setDueTouched(true);
+    setSuggestedCourse(null);
     if (initial) {
       setTitle(initial.title);
       setCourseId(initial.courseId ?? "");
-      setDueAt(initial.dueAt.slice(0, 16));
+      setDueDate(initial.dueAt.slice(0, 10));
+      setDueTime(initial.dueAt.slice(11, 16));
       setNote(initial.note);
       setDetails(initial.details);
     } else {
+      const fallback = new Date(today);
+      fallback.setDate(fallback.getDate() + 7);
       setTitle("");
       setCourseId("");
-      setDueAt(toLocalDateTimeInput(new Date(Date.now() + 7 * 86_400_000)));
+      setDueDate(toISODate(fallback));
+      setDueTime(
+        minToTime(snapToFiveMinutes(today.getHours() * 60 + today.getMinutes())),
+      );
+      setDueTouched(false);
       setNote("");
       setDetails("");
     }
-  }, [open, initial]);
+  }, [open, initial, today]);
+
+  const dueIso =
+    dueDate && dueTime ? `${dueDate}T${dueTime}:00` : "";
+  const duePast =
+    dueIso !== "" &&
+    (initial?.status ?? "pending") === "pending" &&
+    new Date(dueIso).getTime() < today.getTime();
+
+  const handleCourseChange = (value: string) => {
+    setCourseId(value);
+    if (dueTouched) return;
+    const fallback = new Date(today);
+    fallback.setDate(fallback.getDate() + 7);
+    if (value === "") {
+      setDueDate(toISODate(fallback));
+      setDueTime(
+        minToTime(
+          snapToFiveMinutes(today.getHours() * 60 + today.getMinutes()),
+        ),
+      );
+      setSuggestedCourse(null);
+      return;
+    }
+    const course = courses.find((item) => item.id === value);
+    if (!course) return;
+    setDueDate(suggestDueForCourse(course, today));
+    setDueTime("23:59");
+    setSuggestedCourse(course.name);
+  };
+
+  const handleDueDateChange = (value: string) => {
+    setDueDate(value);
+    setDueTouched(true);
+    setSuggestedCourse(null);
+  };
+
+  const handleDueTimeChange = (value: string) => {
+    setDueTime(value);
+    setDueTouched(true);
+    setSuggestedCourse(null);
+  };
 
   const handleSave = () => {
     const trimmedTitle = title.trim();
     if (
       !trimmedTitle ||
       trimmedTitle.length > 60 ||
-      !dueAt ||
+      !dueDate ||
+      !dueTime ||
       note.length > NOTE_MAX ||
       details.length > DETAILS_MAX
     ) {
@@ -76,7 +142,7 @@ export function HomeworkFormDialog({
       title: trimmedTitle,
       note: note.trim(),
       details: details.trim(),
-      dueAt: `${dueAt}:00`,
+      dueAt: `${dueDate}T${dueTime}:00`,
       status: initial?.status ?? "pending",
     });
     onClose();
@@ -99,11 +165,6 @@ export function HomeworkFormDialog({
         </DialogFooter>
       }
     >
-      {error && (
-        <InlineNotice variant="error" className="mb-4">
-          {error}
-        </InlineNotice>
-      )}
       <div className="space-y-4">
         <FormSection title={t("study.sectionBasic")}>
           <div className="space-y-2.5">
@@ -111,6 +172,7 @@ export function HomeworkFormDialog({
               <Input
                 id="homework-title"
                 size="sm"
+                autoFocus
                 value={title}
                 maxLength={60}
                 onChange={(event) => setTitle(event.target.value)}
@@ -124,7 +186,7 @@ export function HomeworkFormDialog({
               <Select
                 id="homework-course"
                 value={courseId}
-                onChange={(event) => setCourseId(event.target.value)}
+                onChange={(event) => handleCourseChange(event.target.value)}
               >
                 <option value="">{t("study.noCourse")}</option>
                 {courses.map((course) => (
@@ -138,14 +200,39 @@ export function HomeworkFormDialog({
         </FormSection>
 
         <FormSection title={t("study.dueAt")}>
-          <Input
-            id="homework-due"
-            size="sm"
-            type="datetime-local"
-            aria-label={t("study.dueAt")}
-            value={dueAt}
-            onChange={(event) => setDueAt(event.target.value)}
-          />
+          <div className="flex items-end gap-2">
+            <Field
+              label={t("study.date")}
+              htmlFor="homework-due-date"
+              className="min-w-0 flex-1"
+            >
+              <Input
+                id="homework-due-date"
+                size="sm"
+                type="date"
+                value={dueDate}
+                onChange={(event) => handleDueDateChange(event.target.value)}
+              />
+            </Field>
+            <Field label={t("study.time")} htmlFor="homework-due-time">
+              <TimeSelect
+                id="homework-due-time"
+                ariaLabel={t("study.time")}
+                value={dueTime}
+                onChange={handleDueTimeChange}
+              />
+            </Field>
+          </div>
+          {suggestedCourse && (
+            <p className="mt-1.5 text-xs text-muted">
+              {t("study.dueSuggested", { name: suggestedCourse })}
+            </p>
+          )}
+          {duePast && (
+            <InlineNotice variant="error" className="mt-2">
+              {t("study.duePastWarning")}
+            </InlineNotice>
+          )}
         </FormSection>
 
         <FormSection title={t("study.sectionHomeworkDetails")}>
@@ -186,6 +273,8 @@ export function HomeworkFormDialog({
             </Field>
           </div>
         </FormSection>
+
+        {error && <InlineNotice variant="error">{error}</InlineNotice>}
       </div>
     </Modal>
   );

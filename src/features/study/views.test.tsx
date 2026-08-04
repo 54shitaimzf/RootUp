@@ -142,6 +142,7 @@ describe("HomeworkFormDialog", () => {
         open
         initial={null}
         courses={DEMO_COURSES}
+        today={new Date("2026-08-04T12:00:00")}
         onSave={() => {}}
         onClose={() => {}}
       />,
@@ -157,6 +158,7 @@ describe("HomeworkFormDialog", () => {
         open
         initial={null}
         courses={DEMO_COURSES}
+        today={new Date("2026-08-04T12:00:00")}
         onSave={onSave}
         onClose={() => {}}
       />,
@@ -180,6 +182,7 @@ describe("HomeworkFormDialog", () => {
         open
         initial={null}
         courses={DEMO_COURSES}
+        today={new Date("2026-08-04T12:00:00")}
         onSave={() => {}}
         onClose={() => {}}
       />,
@@ -194,6 +197,7 @@ describe("HomeworkFormDialog", () => {
         open
         initial={null}
         courses={DEMO_COURSES}
+        today={new Date("2026-08-04T12:00:00")}
         onSave={() => {}}
         onClose={() => {}}
       />,

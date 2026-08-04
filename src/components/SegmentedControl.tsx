@@ -35,7 +35,7 @@ export function SegmentedControl<T extends string>({
     `rounded-xs px-1.5 py-px text-[9px] font-semibold ${
       active
         ? "bg-brand-600 text-white dark:bg-brand-500"
-        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+        : "bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-100"
     }`;
 
   const renderContent = (option: SegmentedOption<T>, active: boolean) => {
@@ -56,7 +56,7 @@ export function SegmentedControl<T extends string>({
       <div
         role="group"
         className={`flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 ${
-          equal ? "w-full" : "inline-flex"
+          equal ? "w-full max-w-sm" : "inline-flex"
         } ${className}`}
       >
         {options.map((option) => {

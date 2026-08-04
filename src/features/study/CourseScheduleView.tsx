@@ -127,7 +127,7 @@ function CourseCard({
             {(badge || homeworkCount > 0) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-1">
                 {badge && (
-                  <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                  <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
                     {badge}
                   </span>
                 )}

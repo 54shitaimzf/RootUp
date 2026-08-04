@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { CalendarDays, ClipboardList } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { SegmentedControl } from "../components/SegmentedControl";
-import { CalendarDays, ClipboardList } from "lucide-react";
 import { CourseDetailDialog } from "../features/study/CourseDetailDialog";
 import { CourseFormDialog } from "../features/study/CourseFormDialog";
 import { CourseScheduleView } from "../features/study/CourseScheduleView";
@@ -21,26 +21,67 @@ import {
   type WeekStart,
 } from "../lib/study";
 
-/**
- * 学业页（UI 第一版）：课程表 + 作业两个平级视图。
- * 数据仅存前端内存；下一轮按 lib/study.ts 的类型接后端持久化。
- */
+const PREF_KEY = "rootup.study.prefs.v1";
+
+interface StudyPrefs {
+  view: StudyView;
+  weekStart: WeekStart;
+  showAllWeeks: boolean;
+}
+
+const DEFAULT_PREFS: StudyPrefs = {
+  view: "schedule",
+  weekStart: "monday",
+  showAllWeeks: true,
+};
+
+function loadPrefs(): StudyPrefs {
+  try {
+    const raw = localStorage.getItem(PREF_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    const parsed = JSON.parse(raw) as Partial<StudyPrefs>;
+    return {
+      view: parsed.view === "homework" ? "homework" : "schedule",
+      weekStart: parsed.weekStart === "sunday" ? "sunday" : "monday",
+      showAllWeeks: parsed.showAllWeeks !== false,
+    };
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+
+/** 学业页：课程表 + 作业；数据仅存前端内存，偏好记忆用 localStorage。*/
 export function StudyPage({ today = new Date() }: { today?: Date }) {
   const { t } = useTranslation();
-  const [view, setView] = useState<StudyView>("schedule");
+  const [prefs] = useState(loadPrefs);
+  const [view, setView] = useState<StudyView>(prefs.view);
   const [courses, setCourses] = useState<Course[]>(DEMO_COURSES);
   const [homework, setHomework] = useState<Homework[]>(DEMO_HOMEWORK);
-  const [weekStart, setWeekStart] = useState<WeekStart>("monday");
-  const [showAllWeeks, setShowAllWeeks] = useState(true);
+  const [weekStart, setWeekStart] = useState<WeekStart>(prefs.weekStart);
+  const [showAllWeeks, setShowAllWeeks] = useState(prefs.showAllWeeks);
   const [courseFormOpen, setCourseFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [homeworkFormOpen, setHomeworkFormOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
+  const [expandedHomeworkId, setExpandedHomeworkId] = useState<string | null>(
+    null,
+  );
   const [homeworkCourseFilter, setHomeworkCourseFilter] = useState<
     "all" | "none" | string
   >("all");
   const idSeq = useRef(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        PREF_KEY,
+        JSON.stringify({ view, weekStart, showAllWeeks }),
+      );
+    } catch {
+      // 读取或写入失败时静默回退默认，不阻塞页面
+    }
+  }, [view, weekStart, showAllWeeks]);
 
   const nextId = (prefix: string) =>
     `${prefix}-${Date.now()}-${(idSeq.current += 1)}`;
@@ -108,9 +149,10 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     setHomework((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const openCourseHomework = (courseId: string) => {
+  const openCourseHomework = (courseId: string, homeworkId?: string) => {
     setHomeworkCourseFilter(courseId);
     setView("homework");
+    setExpandedHomeworkId(homeworkId ?? null);
   };
 
   const pendingCount = homework.filter(
@@ -171,6 +213,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
           courseFilter={homeworkCourseFilter}
           onCourseFilterChange={setHomeworkCourseFilter}
           today={today}
+          expandHomeworkId={expandedHomeworkId}
           onAdd={() => {
             setEditingHomework(null);
             setHomeworkFormOpen(true);
@@ -188,6 +231,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
       <CourseFormDialog
         open={courseFormOpen}
         initial={editingCourse}
+        existingCourses={courses}
         existingColors={courses.map((course) => course.color)}
         onSave={saveCourse}
         onDelete={deleteCourse}
@@ -209,9 +253,9 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
           setSelectedCourse(null);
         }}
         onDelete={deleteCourse}
-        onViewHomework={() => {
+        onSelectHomework={(homeworkId) => {
           if (!selectedCourse) return;
-          openCourseHomework(selectedCourse.id);
+          openCourseHomework(selectedCourse.id, homeworkId);
           setSelectedCourse(null);
         }}
         onClose={() => setSelectedCourse(null)}
@@ -220,6 +264,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         open={homeworkFormOpen}
         initial={editingHomework}
         courses={courses}
+        today={today}
         onSave={saveHomework}
         onClose={() => setHomeworkFormOpen(false)}
       />

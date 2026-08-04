@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Archive,
@@ -35,6 +35,7 @@ export function HomeworkView({
   courseFilter,
   onCourseFilterChange,
   today,
+  expandHomeworkId = null,
   onAdd,
   onEdit,
   onToggleStatus,
@@ -46,6 +47,7 @@ export function HomeworkView({
   courseFilter: "all" | "none" | string;
   onCourseFilterChange: (value: "all" | "none" | string) => void;
   today: Date;
+  expandHomeworkId?: string | null;
   onAdd: () => void;
   onEdit: (item: Homework) => void;
   onToggleStatus: (id: string) => void;
@@ -58,6 +60,16 @@ export function HomeworkView({
   const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null);
   const [doneTarget, setDoneTarget] = useState<Homework | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!expandHomeworkId) return;
+    setExpandedIds((prev) => {
+      if (prev.has(expandHomeworkId)) return prev;
+      const next = new Set(prev);
+      next.add(expandHomeworkId);
+      return next;
+    });
+  }, [expandHomeworkId]);
 
   const items = filterHomework(homework, {
     status: statusFilter,

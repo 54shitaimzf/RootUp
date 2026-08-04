@@ -1,9 +1,10 @@
 import { Field } from "./Field";
-import { Input, type InputSize } from "./Input";
+import type { InputSize } from "./Input";
+import { TimeSelect } from "./TimeSelect";
 
 /**
- * 时间对字段：开始与结束作为一组语义单元，中间用连接符（如“至”）连接。
- * 两个输入框等宽（flex-1），标签保持与 Field 一致的文字层级。
+ * 时间对字段：开始与结束各用紧凑的自定义 TimeSelect（5 分钟粒度），
+ * 中间用连接符（如“至”）连接，不再拉伸整行。
  */
 export function TimeRangeField({
   startLabel,
@@ -16,6 +17,8 @@ export function TimeRangeField({
   startId,
   endId,
   size = "sm",
+  startInvalid = false,
+  endInvalid = false,
 }: {
   startLabel: string;
   endLabel: string;
@@ -27,26 +30,30 @@ export function TimeRangeField({
   startId?: string;
   endId?: string;
   size?: InputSize;
+  startInvalid?: boolean;
+  endInvalid?: boolean;
 }) {
   return (
     <div className="flex items-end gap-2">
-      <Field label={startLabel} htmlFor={startId} className="flex-1">
-        <Input
+      <Field label={startLabel} htmlFor={startId}>
+        <TimeSelect
           id={startId}
           size={size}
-          type="time"
+          ariaLabel={startLabel}
           value={startValue}
-          onChange={(event) => onStartChange(event.target.value)}
+          onChange={onStartChange}
+          invalid={startInvalid}
         />
       </Field>
       <span className="pb-2.5 text-xs text-muted">{connector}</span>
-      <Field label={endLabel} htmlFor={endId} className="flex-1">
-        <Input
+      <Field label={endLabel} htmlFor={endId}>
+        <TimeSelect
           id={endId}
           size={size}
-          type="time"
+          ariaLabel={endLabel}
           value={endValue}
-          onChange={(event) => onEndChange(event.target.value)}
+          onChange={onEndChange}
+          invalid={endInvalid}
         />
       </Field>
     </div>

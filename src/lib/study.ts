@@ -288,6 +288,105 @@ export function layoutDayCourses(dayCourses: Course[]): SlotBlock[] {
   });
 }
 
+/** 默认课程时长与快捷选项（分钟）。*/
+export const DEFAULT_COURSE_DURATION = 100;
+export const COURSE_DURATION_PRESETS = [45, 60, 90, 100, 120] as const;
+
+/** 按 5 分钟取整并钳制在 00:00–23:55。*/
+export function snapToFiveMinutes(min: number): number {
+  return Math.max(0, Math.min(23 * 60 + 55, Math.round(min / 5) * 5));
+}
+
+/** 结束时间 = 开始 + 时长，最晚不跨午夜（23:55）。*/
+export function clampCourseEnd(startMin: number, duration: number): number {
+  return Math.min(startMin + duration, 23 * 60 + 55);
+}
+
+/** 周次范围容错：全角数字/逗号/短横转半角，去空格与“周”字。*/
+export function normalizeWeekRange(input: string): string {
+  let out = "";
+  for (const char of input) {
+    const code = char.codePointAt(0);
+    if (code !== undefined && code >= 0xff10 && code <= 0xff19) {
+      out += String.fromCharCode(code - 0xff10 + 0x30);
+    } else if (char === "，" || char === "、" || char === "；") {
+      out += ",";
+    } else if (char === "－" || char === "–" || char === "—") {
+      out += "-";
+    } else {
+      out += char;
+    }
+  }
+  return out.replace(/[\s\u3000周]/g, "");
+}
+
+/** 与草稿同星期、时间重叠且周次有交集的既有课程（编辑时排除自身）。*/
+export function courseConflicts(
+  draft: Pick<
+    Course,
+    "day" | "startMin" | "endMin" | "weekRule" | "weekRange"
+  >,
+  existing: Course[],
+  excludeId?: string,
+): Course[] {
+  return existing.filter((course) => {
+    if (course.id === excludeId) return false;
+    if (course.day !== draft.day) return false;
+    if (course.startMin >= draft.endMin || draft.startMin >= course.endMin) {
+      return false;
+    }
+    return weeksOverlap(course, draft);
+  });
+}
+
+/** 作业状态色相：待办 / 逾期 / 已完成 / 已归档。*/
+export type HomeworkStatusTone = "pending" | "overdue" | "done" | "archived";
+
+export function homeworkStatusTone(
+  status: HomeworkStatus,
+  dueAt: string,
+  now: Date,
+): HomeworkStatusTone {
+  if (status === "pending" && new Date(dueAt).getTime() < now.getTime()) {
+    return "overdue";
+  }
+  if (status === "done") return "done";
+  if (status === "archived") return "archived";
+  return "pending";
+}
+
+/** 按课程周次规则找 30 周内最近一次上课日；找不到回退 7 天后。*/
+export function suggestDueForCourse(
+  course: Pick<Course, "day" | "weekRule" | "weekRange">,
+  today: Date,
+  semesterStart = DEMO_SEMESTER_START,
+): string {
+  const currentWeek = weekNumberFromDate(semesterStart, today);
+  const base = new Date(`${semesterStart}T00:00:00`);
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  for (let week = currentWeek; week <= WEEK_MAX; week += 1) {
+    if (!sessionActiveInWeek(course.weekRule, course.weekRange, week)) continue;
+    const date = new Date(base);
+    date.setDate(base.getDate() + (week - 1) * 7 + (course.day - 1));
+    if (date.getTime() < startOfToday.getTime()) continue;
+    return toISODate(date);
+  }
+  const fallback = new Date(today);
+  fallback.setDate(fallback.getDate() + 7);
+  return toISODate(fallback);
+}
+
+function toISODate(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}`;
+}
+
 export function formatClock(min: number, lang: "zh-CN" | "en"): string {
   const hour = Math.floor(min / 60) % 24;
   const minute = String(min % 60).padStart(2, "0");

@@ -13,7 +13,7 @@ describe("TimeRangeField", () => {
     endId: "course-end",
   };
 
-  it("渲染标签、连接符与两个时间输入", () => {
+  it("渲染标签、连接符与两个紧凑时间选择", () => {
     render(
       <TimeRangeField
         {...base}
@@ -21,9 +21,10 @@ describe("TimeRangeField", () => {
         onEndChange={() => {}}
       />,
     );
-    expect(screen.getByLabelText("开始时间")).toHaveValue("08:00");
-    expect(screen.getByLabelText("结束时间")).toHaveValue("09:40");
+    expect(screen.getByLabelText("开始时间")).toHaveTextContent("08:00");
+    expect(screen.getByLabelText("结束时间")).toHaveTextContent("09:40");
     expect(screen.getByText("至")).toBeInTheDocument();
+    expect(screen.getByLabelText("开始时间").className).toContain("w-28");
   });
 
   it("变化回调传出新值", () => {
@@ -32,13 +33,26 @@ describe("TimeRangeField", () => {
     render(
       <TimeRangeField {...base} onStartChange={onStart} onEndChange={onEnd} />,
     );
-    fireEvent.change(screen.getByLabelText("开始时间"), {
-      target: { value: "10:00" },
-    });
-    fireEvent.change(screen.getByLabelText("结束时间"), {
-      target: { value: "11:30" },
-    });
-    expect(onStart).toHaveBeenCalledWith("10:00");
-    expect(onEnd).toHaveBeenCalledWith("11:30");
+    fireEvent.click(screen.getByLabelText("开始时间"));
+    fireEvent.click(screen.getByRole("option", { name: "30" }));
+    expect(onStart).toHaveBeenCalledWith("08:30");
+
+    fireEvent.click(screen.getByLabelText("结束时间"));
+    fireEvent.click(screen.getByRole("option", { name: "55" }));
+    expect(onEnd).toHaveBeenCalledWith("09:55");
+  });
+
+  it("字段级 invalid 红框透传", () => {
+    render(
+      <TimeRangeField
+        {...base}
+        onStartChange={() => {}}
+        onEndChange={() => {}}
+        endInvalid
+      />,
+    );
+    expect(screen.getByLabelText("结束时间").className).toContain(
+      "border-red-400",
+    );
   });
 });

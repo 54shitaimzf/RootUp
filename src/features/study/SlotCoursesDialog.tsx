@@ -57,7 +57,7 @@ export function SlotCoursesDialog({
                   {formatClockRange(course.startMin, course.endMin, lang)}
                 </span>
                 {badge && (
-                  <span className="shrink-0 rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                  <span className="shrink-0 rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
                     {badge}
                   </span>
                 )}

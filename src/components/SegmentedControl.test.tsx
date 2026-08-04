@@ -77,7 +77,7 @@ describe("SegmentedControl", () => {
     );
   });
 
-  it("tabs 等宽模式下按钮均分且容器占满", () => {
+  it("tabs 等宽模式下按钮均分且容器限宽", () => {
     const { container } = render(
       <SegmentedControl
         variant="tabs"
@@ -96,13 +96,16 @@ describe("SegmentedControl", () => {
     expect(container.querySelector('[role="group"]')?.className).toContain(
       "w-full",
     );
+    expect(container.querySelector('[role="group"]')?.className).toContain(
+      "max-w-sm",
+    );
   });
 
   it("选项支持图标与数量徽标", () => {
     const { container } = render(
       <SegmentedControl
         variant="tabs"
-        value="a"
+        value="b"
         onChange={() => {}}
         options={[
           { value: "a", label: "A", icon: CalendarDays, badge: 3 },
@@ -112,6 +115,8 @@ describe("SegmentedControl", () => {
     );
     expect(container.querySelector("svg")).not.toBeNull();
     expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("3").className).toContain("dark:bg-slate-600");
+    expect(screen.getByText("3").className).toContain("dark:text-slate-100");
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { DialogFooter } from "../../components/DialogFooter";
@@ -8,8 +8,10 @@ import { Modal } from "../../components/Modal";
 import { LABEL_COLORS } from "../../lib/labelDefs";
 import {
   formatClockRange,
+  homeworkStatusTone,
   type Course,
   type Homework,
+  type HomeworkStatusTone,
 } from "../../lib/study";
 import { DueText } from "./DueText";
 
@@ -23,6 +25,13 @@ const DAY_KEYS = [
   "sunday",
 ] as const;
 
+const TONE_DOT: Record<HomeworkStatusTone, string> = {
+  pending: "bg-brand-500",
+  overdue: "bg-red-500",
+  done: "bg-blue-500",
+  archived: "bg-slate-400 dark:bg-slate-500",
+};
+
 export function CourseDetailDialog({
   open,
   course,
@@ -30,7 +39,7 @@ export function CourseDetailDialog({
   today,
   onEdit,
   onDelete,
-  onViewHomework,
+  onSelectHomework,
   onClose,
 }: {
   open: boolean;
@@ -39,7 +48,7 @@ export function CourseDetailDialog({
   today: Date;
   onEdit: () => void;
   onDelete: (id: string) => void;
-  onViewHomework: () => void;
+  onSelectHomework: (homeworkId: string) => void;
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -88,13 +97,6 @@ export function CourseDetailDialog({
               {t("study.deleteCourse")}
             </Button>
             <DialogFooter>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={onViewHomework}
-              >
-                {t("study.viewCourseHomework")}
-              </Button>
               <Button variant="primary" size="md" icon={Pencil} onClick={onEdit}>
                 {t("settings.edit")}
               </Button>
@@ -113,7 +115,7 @@ export function CourseDetailDialog({
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
           {infoItems.map((item) => (
-            <div key={item.label}>
+            <div key={item.label} title={item.value}>
               <dt className="text-xs text-muted">{item.label}</dt>
               <dd className="mt-0.5 truncate text-sm text-secondary">
                 {item.value}
@@ -132,40 +134,46 @@ export function CourseDetailDialog({
           ) : (
             <ul className="mt-3 space-y-2">
               {homework.map((item) => {
+                const tone = homeworkStatusTone(item.status, item.dueAt, today);
                 const done = item.status === "done";
                 const archived = item.status === "archived";
                 const statusLabel = archived
                   ? t("study.statusArchived")
                   : done
                     ? t("study.statusDone")
-                    : t("study.statusPending");
+                    : tone === "overdue"
+                      ? t("study.statusOverdue")
+                      : t("study.statusPending");
                 return (
-                  <li
-                    key={item.id}
-                    className="flex items-center gap-2.5 rounded-md border border-slate-200 px-3 py-2 dark:border-slate-700"
-                  >
-                    <span
-                      className={`size-2 shrink-0 rounded-full ${
-                        done || archived
-                          ? "bg-slate-300 dark:bg-slate-600"
-                          : "bg-brand-500"
-                      }`}
-                    />
-                    <span
-                      className={`min-w-0 flex-1 truncate text-sm ${
-                        done || archived
-                          ? "text-slate-400 line-through dark:text-slate-500"
-                          : "text-strong"
-                      }`}
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectHomework(item.id)}
+                      className="flex w-full items-center gap-2.5 rounded-md border border-slate-200 px-3 py-2 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
                     >
-                      {item.title}
-                    </span>
-                    <span className="shrink-0 text-[10px] text-muted">
-                      <DueText homework={item} today={today} />
-                    </span>
-                    <span className="shrink-0 rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                      {statusLabel}
-                    </span>
+                      <span
+                        className={`size-2 shrink-0 rounded-full ${TONE_DOT[tone]}`}
+                      />
+                      <span
+                        className={`min-w-0 flex-1 truncate text-sm ${
+                          done || archived
+                            ? "text-slate-400 line-through dark:text-slate-500"
+                            : "text-strong"
+                        }`}
+                      >
+                        {item.title}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted">
+                        <DueText homework={item} today={today} />
+                      </span>
+                      <span className="shrink-0 rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                        {statusLabel}
+                      </span>
+                      <ChevronRight
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-muted"
+                      />
+                    </button>
                   </li>
                 );
               })}
