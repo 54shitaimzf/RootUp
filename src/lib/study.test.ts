@@ -11,6 +11,8 @@ import {
   clampWeek,
   clampCourseEnd,
   compareHomework,
+  compareIds,
+  compareNames,
   courseCardDensity,
   courseConflicts,
   coursePosition,
@@ -268,6 +270,37 @@ describe("周次互斥与时段排布", () => {
       "A 课程",
       "B 课程",
     ]);
+  });
+
+  it("中文课程名排序固定使用中文规则，不随运行环境 locale 漂移", () => {
+    const a = {
+      ...base,
+      id: "a",
+      name: "程序设计",
+      weekRule: "odd" as const,
+      startMin: 480,
+      endMin: 580,
+    };
+    const b = {
+      ...base,
+      id: "b",
+      name: "大学物理",
+      weekRule: "even" as const,
+      startMin: 480,
+      endMin: 580,
+    };
+    const blocks = layoutDayCourses([a, b]);
+    expect(blocks[0].columns[0].courses.map((course) => course.name)).toEqual([
+      "程序设计",
+      "大学物理",
+    ]);
+    // 堆叠顶层为最后一门（大学物理），与 StudyPage 默认视图断言一致
+    const stacked = blocks[0].columns[0].courses;
+    expect(stacked[stacked.length - 1].name).toBe("大学物理");
+    expect(compareNames("程序设计", "大学物理")).toBeLessThan(0);
+    // id 按码点确定性比较（不随 locale 变化），数值语义不参与排序
+    expect(compareIds("c-10", "c-2")).toBeLessThan(0);
+    expect(compareIds("c-2", "c-10")).toBeGreaterThan(0);
   });
 });
 

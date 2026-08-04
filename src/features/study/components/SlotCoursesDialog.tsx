@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Modal } from "../../../components/Modal";
 import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
+  compareIds,
   formatClockRange,
   type Course,
 } from "../../../lib/study";
@@ -20,7 +21,7 @@ export function SlotCoursesDialog({
   const { t, i18n } = useTranslation();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const sorted = [...courses].sort(
-    (a, b) => a.startMin - b.startMin || a.id.localeCompare(b.id),
+    (a, b) => a.startMin - b.startMin || compareIds(a.id, b.id),
   );
 
   return (

@@ -23,6 +23,7 @@ import { isComposing } from "../../../lib/ime";
 import {
   axisRange,
   axisTopPercent,
+  compareIds,
   courseCardDensity,
   formatClock,
   formatClockRange,
@@ -496,7 +497,7 @@ export function CourseScheduleView({
                       ].sort(
                         (a, b) =>
                           a.startMin - b.startMin ||
-                          a.id.localeCompare(b.id),
+                          compareIds(a.id, b.id),
                       );
                       return (
                         <Fragment key={`${block.startMin}-${block.endMin}`}>

@@ -47,6 +47,16 @@ export const WEEK_RANGE_PATTERN = /^\d+(-\d+)?(,\d+(-\d+)?)*$/;
 export const DEFAULT_AXIS = { start: 8 * 60, end: 22 * 60 };
 export const DEMO_SEMESTER_START = "2026-08-03";
 
+/** 确定性名称比较：固定中文排序规则，避免运行时 locale 不同导致顺序漂移（CI 与本地不一致）。 */
+export function compareNames(a: string, b: string): number {
+  return a.localeCompare(b, "zh-CN");
+}
+
+/** 确定性 id/ASCII 比较：按码点比较，避免 locale 影响。 */
+export function compareIds(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** 学期生命周期：名称走 i18n，startDate 用于推算当前周，weekCount 限定周次范围。*/
 export interface Semester {
   id: string;
@@ -156,7 +166,7 @@ export function splitOverlaps(
   courses: Course[],
 ): Record<string, { left: number; width: number }> {
   const sorted = [...courses].sort(
-    (a, b) => a.startMin - b.startMin || a.id.localeCompare(b.id),
+    (a, b) => a.startMin - b.startMin || compareIds(a.id, b.id),
   );
   const groups: Course[][] = [];
   let current: Course[] = [];
@@ -179,7 +189,7 @@ export function splitOverlaps(
   const result: Record<string, { left: number; width: number }> = {};
   for (const group of groups) {
     const members = [...group].sort(
-      (a, b) => a.startMin - b.startMin || a.id.localeCompare(b.id),
+      (a, b) => a.startMin - b.startMin || compareIds(a.id, b.id),
     );
     const width = 100 / members.length;
     members.forEach((member, index) => {
@@ -268,8 +278,8 @@ function sortBySchedule(a: Course, b: Course): number {
   return (
     a.startMin - b.startMin ||
     a.endMin - b.endMin ||
-    a.name.localeCompare(b.name) ||
-    a.id.localeCompare(b.id)
+    compareNames(a.name, b.name) ||
+    compareIds(a.id, b.id)
   );
 }
 
@@ -281,7 +291,7 @@ function sortBySchedule(a: Course, b: Course): number {
  */
 export function layoutDayCourses(dayCourses: Course[]): SlotBlock[] {
   const sorted = [...dayCourses].sort(
-    (a, b) => a.startMin - b.startMin || a.id.localeCompare(b.id),
+    (a, b) => a.startMin - b.startMin || compareIds(a.id, b.id),
   );
   const components: Course[][] = [];
   let current: Course[] = [];
@@ -545,9 +555,9 @@ const STATUS_RANK: Record<HomeworkStatus, number> = {
 export function compareHomework(a: Homework, b: Homework): number {
   const rankDiff = STATUS_RANK[a.status] - STATUS_RANK[b.status];
   if (rankDiff !== 0) return rankDiff;
-  const dueDiff = a.dueAt.localeCompare(b.dueAt);
+  const dueDiff = compareIds(a.dueAt, b.dueAt);
   if (dueDiff !== 0) return dueDiff;
-  return a.title.localeCompare(b.title);
+  return compareNames(a.title, b.title);
 }
 
 export function filterHomework(

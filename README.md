@@ -50,7 +50,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 质量检查
 
-- 前端测试：`npm test`（纯函数 + 组件交互，约 324 用例）
+- 前端测试：`npm test`（纯函数 + 组件交互，约 325 用例）
 - Rust 测试：`cargo test`（约 247 用例）
 - 架构依赖校验：`npm run check:arch`（单向依赖防回归）
 - Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
