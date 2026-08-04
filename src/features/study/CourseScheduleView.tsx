@@ -481,14 +481,13 @@ export function CourseScheduleView({
                                           column.courses,
                                         );
                                       }
-                                  }}
+                                    }}
                                   className="absolute"
                                   style={{
                                     left: `${column.left}%`,
                                     width: `${column.width}%`,
                                     top: blockTopPx,
                                     height: blockHeightPx,
-                                    zIndex: 15,
                                   }}
                                 >
                                   {Array.from(

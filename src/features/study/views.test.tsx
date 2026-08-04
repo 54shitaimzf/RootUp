@@ -376,6 +376,8 @@ describe("视图空态", () => {
     expect(screen.queryByText("单周")).not.toBeInTheDocument();
     const stack = screen.getByRole("button", { name: /共 2 门/ });
     expect(stack).toHaveAttribute("aria-expanded", "false");
+    expect(stack.className).not.toContain("overflow-hidden");
+    expect(stack.style.zIndex).toBe("");
     expect(stack.querySelector(".lucide-layers")).not.toBeNull();
     expect(within(stack).getByText("2")).toBeInTheDocument();
     fireEvent.click(stack);
