@@ -230,6 +230,16 @@ export interface SlotBlock {
   conflict: boolean;
 }
 
+/** 同列课程按上课顺序排序：开始时间 → 结束时间 → 名称 → id。*/
+function sortBySchedule(a: Course, b: Course): number {
+  return (
+    a.startMin - b.startMin ||
+    a.endMin - b.endMin ||
+    a.name.localeCompare(b.name) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 /**
  * 同一天课程的排布：
  * 1. 按时间重叠切成连通分量；
@@ -272,8 +282,11 @@ export function layoutDayCourses(dayCourses: Course[]): SlotBlock[] {
         columns[columnIndex].push(course);
       }
     }
-    const visible = columns.slice(0, 2);
-    const overflow = columns.slice(2).flat();
+    const sortedColumns = columns.map((column) =>
+      [...column].sort(sortBySchedule),
+    );
+    const visible = sortedColumns.slice(0, 2);
+    const overflow = sortedColumns.slice(2).flat();
     return {
       startMin,
       endMin,
@@ -460,19 +473,31 @@ export function overdueDays(dueAt: string, now: Date): number {
 /** 自动配色：按色板顺序选择“最少被使用”的颜色，平局取更靠前者。 */
 export function autoAssignCourseColor(
   existingColors: LabelColorKey[],
+  reserved: LabelColorKey[] = [],
 ): LabelColorKey {
   const counts = new Map<LabelColorKey, number>();
   for (const key of LABEL_COLOR_KEYS) counts.set(key, 0);
   for (const color of existingColors) {
     if (counts.has(color)) counts.set(color, (counts.get(color) ?? 0) + 1);
   }
+  const reservedSet = new Set(reserved);
   let best: LabelColorKey = LABEL_COLOR_KEYS[0];
   let bestCount = Infinity;
   for (const key of LABEL_COLOR_KEYS) {
+    if (reservedSet.has(key)) continue;
     const count = counts.get(key) ?? 0;
     if (count < bestCount) {
       best = key;
       bestCount = count;
+    }
+  }
+  if (bestCount === Infinity) {
+    for (const key of LABEL_COLOR_KEYS) {
+      const count = counts.get(key) ?? 0;
+      if (count < bestCount) {
+        best = key;
+        bestCount = count;
+      }
     }
   }
   return best;

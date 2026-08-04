@@ -35,6 +35,7 @@ import {
   weekParity,
   weeksOverlap,
 } from "./study";
+import { LABEL_COLOR_KEYS } from "./labelDefs";
 
 describe("周次规则", () => {
   it("校验指定周次格式", () => {
@@ -242,6 +243,30 @@ describe("周次互斥与时段排布", () => {
     expect(blocks[0].columns).toHaveLength(1);
     expect(blocks[0].columns[0].courses).toHaveLength(2);
   });
+
+  it("同槽错周课程按上课顺序排序（开始时间→名称）", () => {
+    const a = {
+      ...base,
+      id: "a",
+      name: "B 课程",
+      weekRule: "odd" as const,
+      startMin: 480,
+      endMin: 580,
+    };
+    const b = {
+      ...base,
+      id: "b",
+      name: "A 课程",
+      weekRule: "even" as const,
+      startMin: 480,
+      endMin: 580,
+    };
+    const blocks = layoutDayCourses([a, b]);
+    expect(blocks[0].columns[0].courses.map((course) => course.name)).toEqual([
+      "A 课程",
+      "B 课程",
+    ]);
+  });
 });
 
 describe("课程卡密度与时间轴刻度", () => {
@@ -421,6 +446,14 @@ describe("自动配色", () => {
       "orange", "emerald", "blue", "teal", "lime", "cyan", "fuchsia",
     ] as const;
     expect(autoAssignCourseColor([...all])).toBe("sky");
+  });
+
+  it("自动配色优先避开同课时段的保留色", () => {
+    expect(autoAssignCourseColor([], ["slate"])).toBe("sky");
+  });
+
+  it("保留色全部占用时回退最少使用色", () => {
+    expect(autoAssignCourseColor([], [...LABEL_COLOR_KEYS])).toBe("slate");
   });
 });
 

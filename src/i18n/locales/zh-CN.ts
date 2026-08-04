@@ -137,6 +137,7 @@ export default {
     statusOverdue: "已逾期",
     stackCount: "共 {{count}} 门",
     collapseStack: "收起",
+    stackCourses: "同课时段 {{count}} 门",
     homeworkEmpty: "还没有作业",
     homeworkEmptyDesc: "添加作业后，会按截止时间显示在这里。",
     noMatchingHomework: "没有符合筛选条件的作业",

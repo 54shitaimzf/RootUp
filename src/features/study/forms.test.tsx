@@ -71,6 +71,29 @@ describe("CourseFormDialog 智能表单", () => {
     ).toBeInTheDocument();
   });
 
+  it("自动配色避开同课时段课程的已有颜色", () => {
+    const onSave = vi.fn();
+    const neighbor = {
+      ...DEMO_COURSES[0],
+      id: "neighbor",
+      weekRule: "odd" as const,
+    };
+    renderCourseForm({
+      existingCourses: [neighbor],
+      existingColors: ["sky"],
+      onSave,
+    });
+    fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
+      target: { value: "大学物理" },
+    });
+    fireEvent.change(screen.getByLabelText("周次规则"), {
+      target: { value: "even" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    const draft = onSave.mock.calls[0][0] as { color: string };
+    expect(draft.color).not.toBe("sky");
+  });
+
   it("周次范围失焦时归一化全角与“周”字", () => {
     const onSave = vi.fn();
     renderCourseForm({ onSave });

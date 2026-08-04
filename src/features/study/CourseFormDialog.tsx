@@ -213,6 +213,14 @@ export function CourseFormDialog({
       return;
     }
     setError(null);
+    const slotNeighbors = existingCourses.filter(
+      (course) =>
+        course.id !== initial?.id &&
+        course.day === day &&
+        course.startMin < (end as number) &&
+        (start as number) < course.endMin,
+    );
+    const reservedColors = slotNeighbors.map((course) => course.color);
     onSave({
       name,
       teacher: form.teacher.trim(),
@@ -224,7 +232,7 @@ export function CourseFormDialog({
       weekRange: form.weekRule === "range" ? normalizedWeekRange : undefined,
       color:
         form.color === "auto"
-          ? autoAssignCourseColor(existingColors)
+          ? autoAssignCourseColor(existingColors, reservedColors)
           : form.color,
     });
     onClose();

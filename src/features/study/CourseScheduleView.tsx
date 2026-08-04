@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronUp, Layers, Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { IconButton } from "../../components/IconButton";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { LABEL_COLORS } from "../../lib/labelDefs";
 import { isComposing } from "../../lib/ime";
@@ -180,11 +181,25 @@ export function CourseScheduleView({
   const { t, i18n } = useTranslation();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [slotCourses, setSlotCourses] = useState<Course[] | null>(null);
-  const [expandedStacks, setExpandedStacks] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const scheduleRef = useRef<HTMLDivElement>(null);
+  const [stackOverlay, setStackOverlay] = useState<{
+    courses: Course[];
+    x: number;
+    y: number;
+    width: number;
+  } | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!stackOverlay) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (isComposing(event)) return;
+      if (event.key === "Escape") setStackOverlay(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stackOverlay]);
 
   useEffect(() => {
     const el = headerRef.current;
@@ -227,20 +242,26 @@ export function CourseScheduleView({
   const homeworkCountOf = (courseId: string) =>
     homework.filter((item) => item.courseId === courseId).length;
 
-  const toggleStack = (key: string) => {
-    setExpandedStacks((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
+  const openStackOverlay = (
+    event: { currentTarget: HTMLElement },
+    courses: Course[],
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const rootRect = scheduleRef.current?.getBoundingClientRect();
+    const width = Math.max(rect.width, 256);
+    const x = Math.max(
+      8,
+      Math.min(rect.left - (rootRect?.left ?? 0), window.innerWidth - width - 8),
+    );
+    const y = Math.max(
+      8,
+      Math.min(rect.top - (rootRect?.top ?? 0), window.innerHeight - 240),
+    );
+    setStackOverlay({ courses, x, y, width });
   };
 
   return (
-    <div className="mt-5">
+    <div ref={scheduleRef} className="relative mt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-secondary">
@@ -412,7 +433,7 @@ export function CourseScheduleView({
                       );
                       return (
                         <Fragment key={`${block.startMin}-${block.endMin}`}>
-                          {block.columns.map((column, columnIndex) => {
+                          {block.columns.map((column) => {
                             const sameTime =
                               column.courses.length > 1 &&
                               column.courses.every(
@@ -422,121 +443,32 @@ export function CourseScheduleView({
                                   course.endMin === column.courses[0].endMin,
                               );
                             if (sameTime) {
-                              const STACK_GAP = 2;
-                              const rowHeightPx = Math.max(
-                                MIN_CARD_HEIGHT,
-                                (blockHeightPx -
-                                  STACK_GAP * (column.courses.length - 1)) /
-                                  column.courses.length,
-                              );
-                              const stackKey = `${day}-${block.startMin}-${block.endMin}-${columnIndex}`;
-                              const expanded = expandedStacks.has(stackKey);
-                              if (!expanded) {
-                                const top = column.courses[0];
-                                const depth = column.courses.length;
-                                const density = courseCardDensity(blockHeightPx);
-                                return (
-                                  <div
-                                    key={stackKey}
-                                    role="button"
-                                    tabIndex={0}
-                                    data-testid={`course-stack-${top.id}`}
-                                    aria-expanded={false}
-                                    onClick={() => toggleStack(stackKey)}
-                                    onKeyDown={(event) => {
-                                      if (isComposing(event)) return;
-                                      if (
-                                        event.key === "Enter" ||
-                                        event.key === " "
-                                      ) {
-                                        event.preventDefault();
-                                        toggleStack(stackKey);
-                                      }
-                                    }}
-                                    className="absolute"
-                                    style={{
-                                      left: `${column.left}%`,
-                                      width: `${column.width}%`,
-                                      top: blockTopPx,
-                                      height: blockHeightPx,
-                                    }}
-                                  >
-                                    {Array.from(
-                                      { length: Math.min(2, depth - 1) },
-                                      (_, index) => (
-                                        <div
-                                          key={index}
-                                          aria-hidden
-                                          className="absolute inset-0 rounded-sm bg-white ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-slate-700"
-                                          style={{
-                                            transform: `translate(${(index + 1) * 4}px, ${(index + 1) * 4}px)`,
-                                          }}
-                                        />
-                                      ),
-                                    )}
-                                    <div className="absolute inset-0 overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700">
-                                      <span
-                                        className={`absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-xs ${LABEL_COLORS[top.color].dot}`}
-                                      />
-                                      <div
-                                        className={`relative px-2.5 pl-3 ${
-                                          density === "compact"
-                                            ? "py-0.5"
-                                            : "py-1.5"
-                                        }`}
-                                      >
-                                        {density === "compact" ? (
-                                          <div className="flex items-baseline gap-1">
-                                            <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-strong">
-                                              {top.name}
-                                            </span>
-                                            <span className="shrink-0 text-[9px] tabular-nums text-muted">
-                                              {formatClockRange(
-                                                top.startMin,
-                                                top.endMin,
-                                                lang,
-                                              )}
-                                            </span>
-                                          </div>
-                                        ) : (
-                                          <>
-                                            <div
-                                              className={`text-xs font-semibold text-strong ${
-                                                density === "full"
-                                                  ? "line-clamp-2"
-                                                  : "truncate"
-                                              }`}
-                                            >
-                                              {top.name}
-                                            </div>
-                                            <div className="truncate text-[10px] tabular-nums text-muted">
-                                              {formatClockRange(
-                                                top.startMin,
-                                                top.endMin,
-                                                lang,
-                                              )}
-                                            </div>
-                                            {weekBadge(top) && (
-                                              <div className="mt-0.5">
-                                                <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
-                                                  {weekBadge(top)}
-                                                </span>
-                                              </div>
-                                            )}
-                                          </>
-                                        )}
-                                      </div>
-                                      <span className="absolute right-1 top-1 z-10 inline-flex items-center gap-1 rounded-xs bg-slate-900/70 px-1.5 py-px text-[9px] font-semibold text-white">
-                                        <Layers aria-hidden className="size-3" />
-                                        {t("study.stackCount", { count: depth })}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              }
+                              const top = column.courses[0];
+                              const depth = column.courses.length;
+                              const density = courseCardDensity(blockHeightPx);
                               return (
                                 <div
-                                  key={stackKey}
+                                  key={top.id}
+                                  role="button"
+                                  tabIndex={0}
+                                  data-testid={`course-stack-${top.id}`}
+                                  aria-expanded={false}
+                                  aria-label={t("study.stackCount", {
+                                    count: depth,
+                                  })}
+                                  onClick={(event) =>
+                                    openStackOverlay(event, column.courses)
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (isComposing(event)) return;
+                                    if (
+                                      event.key === "Enter" ||
+                                      event.key === " "
+                                    ) {
+                                      event.preventDefault();
+                                      openStackOverlay(event, column.courses);
+                                    }
+                                  }}
                                   className="absolute"
                                   style={{
                                     left: `${column.left}%`,
@@ -545,38 +477,78 @@ export function CourseScheduleView({
                                     height: blockHeightPx,
                                   }}
                                 >
-                                  <button
-                                    type="button"
-                                    aria-label={t("study.collapseStack")}
-                                    onClick={() => toggleStack(stackKey)}
-                                    className="absolute right-1 top-0.5 z-20 rounded-xs bg-slate-900/60 px-1.5 py-px text-[9px] font-semibold text-white transition-colors hover:bg-slate-900"
-                                  >
-                                    <ChevronUp aria-hidden className="size-3" />
-                                  </button>
-                                  {column.courses.map((course, rowIndex) => (
-                                    <CourseCard
-                                      key={course.id}
-                                      course={course}
-                                      lang={lang}
-                                      left={0}
-                                      width={100}
-                                      topPx={
-                                        blockTopPx +
-                                        rowIndex * (rowHeightPx + STACK_GAP)
-                                      }
-                                      heightPx={rowHeightPx}
-                                      conflict={block.conflict}
-                                      badge={weekBadge(course)}
-                                      homeworkCount={homeworkCountOf(course.id)}
-                                      homeworkLabel={t("study.homeworkCount", {
-                                        count: homeworkCountOf(course.id),
-                                      })}
-                                      onOpenDetail={onOpenDetail}
-                                      onOpenCourseHomework={
-                                        onOpenCourseHomework
-                                      }
+                                  {Array.from(
+                                    { length: Math.min(2, depth - 1) },
+                                    (_, index) => (
+                                      <div
+                                        key={index}
+                                        aria-hidden
+                                        className="absolute inset-0 rounded-sm bg-white ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-slate-700"
+                                        style={{
+                                          transform: `translate(${(index + 1) * 4}px, ${(index + 1) * 4}px)`,
+                                        }}
+                                      />
+                                    ),
+                                  )}
+                                  <div className="absolute inset-0 overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700">
+                                    <span
+                                      className={`absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-xs ${LABEL_COLORS[top.color].dot}`}
                                     />
-                                  ))}
+                                    <div
+                                      className={`relative px-2.5 pl-3 pr-6 ${
+                                        density === "compact"
+                                          ? "py-0.5"
+                                          : "py-1.5"
+                                      }`}
+                                    >
+                                      {density === "compact" ? (
+                                        <div className="flex items-baseline gap-1">
+                                          <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-strong">
+                                            {top.name}
+                                          </span>
+                                          <span className="shrink-0 text-[9px] tabular-nums text-muted">
+                                            {formatClockRange(
+                                              top.startMin,
+                                              top.endMin,
+                                              lang,
+                                            )}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div
+                                            className={`text-xs font-semibold text-strong ${
+                                              density === "full"
+                                                ? "line-clamp-2"
+                                                : "truncate"
+                                            }`}
+                                          >
+                                            {top.name}
+                                          </div>
+                                          <div className="truncate text-[10px] tabular-nums text-muted">
+                                            {formatClockRange(
+                                              top.startMin,
+                                              top.endMin,
+                                              lang,
+                                            )}
+                                          </div>
+                                          {weekBadge(top) && (
+                                            <div className="mt-0.5">
+                                              <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
+                                                {weekBadge(top)}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                    <span
+                                      aria-hidden
+                                      className="absolute right-1 top-1 z-10 flex size-4 min-w-4 items-center justify-center rounded-xs bg-slate-900/70 px-0.5 text-[9px] font-semibold text-white"
+                                    >
+                                      {depth}
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             }
@@ -637,6 +609,83 @@ export function CourseScheduleView({
             </div>
           </div>
         </div>
+      )}
+
+      {stackOverlay && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            aria-hidden
+            onClick={() => setStackOverlay(null)}
+          />
+          <div
+            role="dialog"
+            aria-label={t("study.stackCourses", {
+              count: stackOverlay.courses.length,
+            })}
+            className="floating-panel pop-in absolute z-50 rounded-lg p-2"
+            style={{
+              top: stackOverlay.y,
+              left: stackOverlay.x,
+              width: stackOverlay.width,
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+              <span className="truncate text-xs font-medium text-secondary">
+                {t("study.stackCourses", {
+                  count: stackOverlay.courses.length,
+                })}
+              </span>
+              <IconButton
+                label={t("study.collapseStack")}
+                icon={X}
+                size="sm"
+                tone="neutral"
+                onClick={() => setStackOverlay(null)}
+              />
+            </div>
+            <ul className="mt-1.5 max-h-[50vh] space-y-1.5 overflow-y-auto pr-0.5">
+              {stackOverlay.courses.map((course, index) => (
+                <li
+                  key={course.id}
+                  className="fan-in"
+                  style={{ animationDelay: `${index * 40}ms` }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenDetail(course);
+                      setStackOverlay(null);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
+                  >
+                    <span
+                      className={`size-2.5 shrink-0 rounded-full ${LABEL_COLORS[course.color].dot}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-strong">
+                      {course.name}
+                    </span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted">
+                      {formatClockRange(course.startMin, course.endMin, lang)}
+                    </span>
+                    {weekBadge(course) && (
+                      <span className="shrink-0 rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
+                        {weekBadge(course)}
+                      </span>
+                    )}
+                    {homeworkCountOf(course.id) > 0 && (
+                      <span className="shrink-0 rounded-xs bg-brand-50 px-1.5 py-px text-[9px] font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                        {t("study.homeworkCount", {
+                          count: homeworkCountOf(course.id),
+                        })}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
       )}
 
       <SlotCoursesDialog
