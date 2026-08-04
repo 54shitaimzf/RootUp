@@ -12,6 +12,8 @@ import {
 import { Button } from "../../components/Button";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import { IconButton } from "../../components/IconButton";
+import { InlineNotice } from "../../components/InlineNotice";
+import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
 import { SectionLabel } from "../../components/SectionLabel";
 
@@ -122,7 +124,8 @@ export function SchemeDialog({
         {t("settings.schemeSaveHint")}
       </div>
       <div className="mt-2 flex gap-2">
-        <input
+        <Input
+          size="sm"
           type="text"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -130,21 +133,21 @@ export function SchemeDialog({
             if (event.key === "Enter") void save();
           }}
           placeholder={t("settings.schemeNamePlaceholder")}
-          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+          className="flex-1"
         />
         <Button variant="primary" size="sm" onClick={() => void save()}>
           {t("settings.schemeSave")}
         </Button>
       </div>
       {message && (
-        <p className="mt-2 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+        <InlineNotice variant="success" className="mt-2">
           {message}
-        </p>
+        </InlineNotice>
       )}
       {error && (
-        <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-400">
+        <InlineNotice variant="error" className="mt-2">
           {error}
-        </p>
+        </InlineNotice>
       )}
 
       <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
@@ -163,14 +166,15 @@ export function SchemeDialog({
                   key={scheme.id}
                   className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-1.5 dark:bg-slate-800"
                 >
-                  <input
+                  <Input
+                    size="sm"
                     type="text"
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") void commitRename();
                     }}
-                    className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+                    className="flex-1 !border-slate-200 !bg-white dark:!border-slate-700 dark:!bg-slate-900"
                   />
                   <IconButton
                     label={t("settings.schemeRename")}

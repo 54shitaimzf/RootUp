@@ -9,7 +9,10 @@ import {
 import type { ClassifyDefaultEntry, ClassifyRule } from "../../lib/tauri";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
+import { InlineNotice } from "../../components/InlineNotice";
+import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
+import { Select } from "../../components/Select";
 
 interface EditorAnchor {
   top: number;
@@ -138,12 +141,13 @@ export function ClassifyMappingDialog({
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
-          <input
+          <Input
+            size="sm"
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("settings.mappingSearch")}
-            className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+            className="w-full pl-8 pr-3"
           />
         </div>
         <button
@@ -160,9 +164,9 @@ export function ClassifyMappingDialog({
       </div>
 
       {error && (
-        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-400">
+        <InlineNotice variant="error" className="mt-3">
           {error}
-        </p>
+        </InlineNotice>
       )}
 
       {groups.length === 0 ? (
@@ -235,21 +239,21 @@ export function ClassifyMappingDialog({
             <div className="text-xs font-semibold text-secondary">
               .{editing.ext}
             </div>
-            <select
+            <Select
               value={editing.category}
               onChange={(event) =>
                 setEditing((prev) =>
                   prev ? { ...prev, category: event.target.value } : prev,
                 )
               }
-              className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none dark:border-slate-700 dark:bg-slate-800"
+              className="mt-2"
             >
               {categories.map((category) => (
                 <option key={category} value={category}>
                   {t(`filter.${category}`)}
                 </option>
               ))}
-            </select>
+            </Select>
             <div className="mt-3 flex items-center justify-between gap-2">
               {effective.overridden.has(editing.ext) ? (
                 <button

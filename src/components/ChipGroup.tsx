@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Chip } from "./Chip";
+import { Input } from "./Input";
 
 /** 通用 chip 编辑组：展示 + 删除 + 添加输入框。 */
 export function ChipGroup({
@@ -44,7 +45,8 @@ export function ChipGroup({
         )}
       </div>
       <div className="mt-2 flex gap-2">
-        <input
+        <Input
+          size="sm"
           type="text"
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -52,7 +54,7 @@ export function ChipGroup({
             if (event.key === "Enter") submit();
           }}
           placeholder={placeholder}
-          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+          className="flex-1"
         />
         <button
           type="button"
