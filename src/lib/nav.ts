@@ -2,7 +2,6 @@
 export type PageKey =
   | "files"
   | "projects"
-  | "homework"
-  | "courses"
+  | "study"
   | "tools"
   | "settings";

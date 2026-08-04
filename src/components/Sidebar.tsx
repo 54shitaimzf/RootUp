@@ -1,5 +1,4 @@
 import {
-  CalendarDays,
   FolderKanban,
   FolderOpen,
   GraduationCap,
@@ -17,8 +16,7 @@ import { useHelpCenter } from "./HelpCenter";
 const NAV_ITEMS: { key: PageKey; icon: LucideIcon; labelKey: string }[] = [
   { key: "files", icon: FolderOpen, labelKey: "nav.files" },
   { key: "projects", icon: FolderKanban, labelKey: "nav.projects" },
-  { key: "homework", icon: GraduationCap, labelKey: "nav.homework" },
-  { key: "courses", icon: CalendarDays, labelKey: "nav.courses" },
+  { key: "study", icon: GraduationCap, labelKey: "nav.study" },
   { key: "tools", icon: Wrench, labelKey: "nav.tools" },
   { key: "settings", icon: Settings, labelKey: "nav.settings" },
 ];

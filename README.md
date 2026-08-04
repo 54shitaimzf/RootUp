@@ -24,7 +24,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity 项目，自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
 - 新手引导与帮助中心：首次启动欢迎弹窗、侧栏全局帮助入口（新手入门 / 搜索与高级用法）、IDE 选择与官方下载指导、检测到代码项目但无 IDE 时按需引导
 - 首个公开发布：NSIS 安装包（per-user、免管理员、中英语言选择）、品牌图标全套、安装包自动验证
-- 开发中（v0.8.0-dev）：课程表与作业管理——课程表记录与学期设置、作业待办与截止提醒、课程关键词纳入分类规则；AI 能力在学业数据落地后接入
+- 开发中（v0.8.0-dev）：学业页 UI 第一版——课程表（时间轴周视图，支持单双周 / 指定周次、周起始日切换）与作业（截止排序、状态 / 课程筛选）；数据持久化、截止提醒与课程关键词联动后续接入
 
 ### 搜索语法
 
@@ -50,7 +50,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 质量检查
 
-- 前端测试：`npm test`（纯函数 + 组件交互，约 166 用例）
+- 前端测试：`npm test`（纯函数 + 组件交互，约 205 用例）
 - Rust 测试：`cargo test`（约 218 用例）
 - 架构依赖校验：`npm run check:arch`（单向依赖防回归）
 - Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
@@ -110,7 +110,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Configurable rules: ignore rules and classification mapping with three presets (default / developer / creative); takes effect after restart
 - Label management: custom display names, icons and a preset palette for labels; built-in categories stay read-only
 - Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
-- In development (v0.8.0-dev): course schedules and homework management, deadline reminders, and course keywords feeding the classification chain; AI capabilities will be added after this data layer lands
+- In development (v0.8.0-dev): Study page UI v1 — a timeline weekly schedule (odd/even/custom weeks, Monday/Sunday week start) plus homework tracking with deadline sorting and status/course filters; persistence, reminders and course-keyword classification come next
 
 ### Search Syntax
 

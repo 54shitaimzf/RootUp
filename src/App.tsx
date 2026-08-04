@@ -9,6 +9,7 @@ import i18n from "./i18n";
 import { SettingsPage } from "./pages/SettingsPage";
 import { FilePage } from "./pages/FilePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { StudyPage } from "./pages/StudyPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { HelpCenterProvider } from "./components/HelpCenter";
 
@@ -29,20 +30,8 @@ function renderPage(
       return <FilePage onNavigate={onNavigate} scan={scan} />;
     case "projects":
       return <ProjectsPage onNavigate={onNavigate} />;
-    case "homework":
-      return (
-        <PagePlaceholder
-          titleKey="pages.homework.title"
-          descriptionKey="pages.homework.description"
-        />
-      );
-    case "courses":
-      return (
-        <PagePlaceholder
-          titleKey="pages.courses.title"
-          descriptionKey="pages.courses.description"
-        />
-      );
+    case "study":
+      return <StudyPage />;
     case "tools":
       return (
         <PagePlaceholder
