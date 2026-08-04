@@ -9,9 +9,10 @@ import { CourseScheduleView } from "../features/study/CourseScheduleView";
 import { HomeworkFormDialog } from "../features/study/HomeworkFormDialog";
 import { HomeworkView } from "../features/study/HomeworkView";
 import {
+  DEMO_SEMESTERS,
   DEMO_COURSES,
   DEMO_HOMEWORK,
-  DEMO_SEMESTER_START,
+  clampWeek,
   weekNumberFromDate,
   type Course,
   type CourseDraft,
@@ -27,6 +28,7 @@ interface StudyPrefs {
   view: StudyView;
   weekStart: WeekStart;
   showAllWeeks: boolean;
+  semesterId?: string;
 }
 
 const DEFAULT_PREFS: StudyPrefs = {
@@ -44,6 +46,11 @@ function loadPrefs(): StudyPrefs {
       view: parsed.view === "homework" ? "homework" : "schedule",
       weekStart: parsed.weekStart === "sunday" ? "sunday" : "monday",
       showAllWeeks: parsed.showAllWeeks !== false,
+      semesterId:
+        typeof parsed.semesterId === "string" &&
+        DEMO_SEMESTERS.some((item) => item.id === parsed.semesterId)
+          ? parsed.semesterId
+          : DEMO_SEMESTERS[0].id,
     };
   } catch {
     return DEFAULT_PREFS;
@@ -59,6 +66,8 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   const [homework, setHomework] = useState<Homework[]>(DEMO_HOMEWORK);
   const [weekStart, setWeekStart] = useState<WeekStart>(prefs.weekStart);
   const [showAllWeeks, setShowAllWeeks] = useState(prefs.showAllWeeks);
+  const [semesterId, setSemesterId] = useState(prefs.semesterId);
+  const [weekOverride, setWeekOverride] = useState<number | null>(null);
   const [courseFormOpen, setCourseFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -76,17 +85,21 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     try {
       localStorage.setItem(
         PREF_KEY,
-        JSON.stringify({ view, weekStart, showAllWeeks }),
+        JSON.stringify({ view, weekStart, showAllWeeks, semesterId }),
       );
     } catch {
       // 读取或写入失败时静默回退默认，不阻塞页面
     }
-  }, [view, weekStart, showAllWeeks]);
+  }, [view, weekStart, showAllWeeks, semesterId]);
 
   const nextId = (prefix: string) =>
     `${prefix}-${Date.now()}-${(idSeq.current += 1)}`;
 
-  const currentWeek = weekNumberFromDate(DEMO_SEMESTER_START, today);
+  const semester =
+    DEMO_SEMESTERS.find((item) => item.id === semesterId) ??
+    DEMO_SEMESTERS[0];
+  const actualWeek = weekNumberFromDate(semester.startDate, today);
+  const currentWeek = clampWeek(weekOverride ?? actualWeek, semester.weekCount);
 
   const saveCourse = (draft: CourseDraft) => {
     if (editingCourse) {
@@ -159,6 +172,17 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     (item) => item.status === "pending",
   ).length;
 
+  const handleSemesterChange = (id: string) => {
+    setSemesterId(id);
+    setWeekOverride(null);
+  };
+
+  const handleWeekChange = (week: number) => {
+    setWeekOverride(clampWeek(week, semester.weekCount));
+  };
+
+  const handleResetWeek = () => setWeekOverride(null);
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
@@ -193,11 +217,17 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         <CourseScheduleView
           courses={courses}
           homework={homework}
+          semesters={DEMO_SEMESTERS}
+          semester={semester}
+          onSemesterChange={handleSemesterChange}
           weekStart={weekStart}
           onWeekStartChange={setWeekStart}
           showAllWeeks={showAllWeeks}
           onShowAllWeeksChange={setShowAllWeeks}
           currentWeek={currentWeek}
+          actualWeek={actualWeek}
+          onWeekChange={handleWeekChange}
+          onResetWeek={handleResetWeek}
           today={today}
           onAdd={() => {
             setEditingCourse(null);
@@ -265,6 +295,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         initial={editingHomework}
         courses={courses}
         today={today}
+        semesterStart={semester.startDate}
         onSave={saveHomework}
         onClose={() => setHomeworkFormOpen(false)}
       />

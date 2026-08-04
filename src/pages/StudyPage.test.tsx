@@ -31,6 +31,9 @@ describe("StudyPage", () => {
     expect(screen.getByText("大学物理")).toBeInTheDocument();
     expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();
     expect(
+      (screen.getByLabelText("学期") as HTMLSelectElement).value,
+    ).toBe("fall-2026");
+    expect(
       container.querySelector('[data-testid="day-header-1"]'),
     ).toBeInTheDocument();
     expect(
@@ -295,5 +298,31 @@ describe("StudyPage", () => {
     expect(
       screen.getByRole("button", { name: /^课程表/ }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("学期切换与当前周预览", () => {
+    renderStudy();
+    const select = screen.getByLabelText("学期") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "spring-2027" } });
+    expect(select.value).toBe("spring-2027");
+    fireEvent.click(screen.getByRole("button", { name: "下一周" }));
+    expect(screen.getByText("第 2 周 · 双周")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "回到本周" }));
+    expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "回到本周" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("偏好记忆：学期选择持久化", () => {
+    const first = renderStudy();
+    fireEvent.change(screen.getByLabelText("学期"), {
+      target: { value: "spring-2027" },
+    });
+    first.unmount();
+    renderStudy();
+    expect(
+      (screen.getByLabelText("学期") as HTMLSelectElement).value,
+    ).toBe("spring-2027");
   });
 });

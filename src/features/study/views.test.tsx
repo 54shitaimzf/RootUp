@@ -4,7 +4,11 @@ import { CourseFormDialog } from "./CourseFormDialog";
 import { CourseScheduleView } from "./CourseScheduleView";
 import { HomeworkFormDialog } from "./HomeworkFormDialog";
 import { HomeworkView } from "./HomeworkView";
-import { DEMO_COURSES, DEMO_HOMEWORK } from "../../lib/study";
+import {
+  DEMO_COURSES,
+  DEMO_HOMEWORK,
+  DEMO_SEMESTERS,
+} from "../../lib/study";
 
 describe("CourseFormDialog", () => {
   it("空名称提交显示错误且不保存", () => {
@@ -212,11 +216,17 @@ describe("HomeworkFormDialog", () => {
 
 describe("视图空态", () => {
   const commonProps = {
+    semesters: DEMO_SEMESTERS,
+    semester: DEMO_SEMESTERS[0],
+    onSemesterChange: () => {},
     weekStart: "monday" as const,
     onWeekStartChange: () => {},
     showAllWeeks: true,
     onShowAllWeeksChange: () => {},
     currentWeek: 1,
+    actualWeek: 1,
+    onWeekChange: () => {},
+    onResetWeek: () => {},
     today: new Date("2026-08-04T12:00:00"),
     onAdd: () => {},
     onOpenDetail: () => {},
@@ -570,5 +580,47 @@ describe("视图空态", () => {
       "data-density",
       "full",
     );
+  });
+
+  it("学期选择与周步进回调", () => {
+    const onSemesterChange = vi.fn();
+    const onWeekChange = vi.fn();
+    render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[0]]}
+        homework={[]}
+        {...commonProps}
+        onSemesterChange={onSemesterChange}
+        onWeekChange={onWeekChange}
+      />,
+    );
+    const select = screen.getByLabelText("学期") as HTMLSelectElement;
+    expect(select.value).toBe("fall-2026");
+    fireEvent.change(select, { target: { value: "spring-2027" } });
+    expect(onSemesterChange).toHaveBeenCalledWith("spring-2027");
+    fireEvent.click(screen.getByRole("button", { name: "下一周" }));
+    expect(onWeekChange).toHaveBeenCalledWith(2);
+    fireEvent.click(screen.getByRole("button", { name: "上一周" }));
+    expect(onWeekChange).toHaveBeenCalledWith(1);
+  });
+
+  it("当前周不等于实际周时显示回到本周", () => {
+    const onResetWeek = vi.fn();
+    render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[0]]}
+        homework={[]}
+        {...commonProps}
+        currentWeek={3}
+        actualWeek={1}
+        onResetWeek={onResetWeek}
+      />,
+    );
+    expect(screen.getByText("第 3 周 · 单周")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "回到本周" }));
+    expect(onResetWeek).toHaveBeenCalled();
+    expect(
+      screen.getByText("2026-08-03 ~ 2026-12-20 · 共 20 周"),
+    ).toBeInTheDocument();
   });
 });

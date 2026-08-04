@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   DEMO_COURSES,
   DEMO_HOMEWORK,
+  DEMO_SEMESTERS,
   DEFAULT_COURSE_DURATION,
   autoAssignCourseColor,
   axisRange,
   axisTopPercent,
   calendarDaysUntil,
+  clampWeek,
   clampCourseEnd,
   compareHomework,
   courseCardDensity,
@@ -311,6 +313,19 @@ describe("智能时间与周次容错", () => {
     expect(normalizeWeekRange("2 周")).toBe("2");
     expect(normalizeWeekRange("2-16")).toBe("2-16");
     expect(normalizeWeekRange("abc")).toBe("abc");
+  });
+});
+
+describe("学期生命周期", () => {
+  it("示例学期数据合法且周次钳制", () => {
+    expect(DEMO_SEMESTERS.length).toBeGreaterThanOrEqual(1);
+    for (const semester of DEMO_SEMESTERS) {
+      expect(semester.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(semester.weekCount).toBeGreaterThan(0);
+    }
+    expect(clampWeek(0, 20)).toBe(1);
+    expect(clampWeek(21, 20)).toBe(20);
+    expect(clampWeek(10, 20)).toBe(10);
   });
 });
 

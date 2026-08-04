@@ -11,6 +11,7 @@ import { Select } from "../../components/Select";
 import { TextArea } from "../../components/TextArea";
 import { TimeSelect } from "../../components/TimeSelect";
 import {
+  DEMO_SEMESTER_START,
   minToTime,
   snapToFiveMinutes,
   suggestDueForCourse,
@@ -34,6 +35,7 @@ export function HomeworkFormDialog({
   initial,
   courses,
   today,
+  semesterStart = DEMO_SEMESTER_START,
   onSave,
   onClose,
 }: {
@@ -41,6 +43,7 @@ export function HomeworkFormDialog({
   initial: Homework | null;
   courses: Course[];
   today: Date;
+  semesterStart?: string;
   onSave: (draft: HomeworkDraft) => void;
   onClose: () => void;
 }) {
@@ -106,7 +109,7 @@ export function HomeworkFormDialog({
     }
     const course = courses.find((item) => item.id === value);
     if (!course) return;
-    setDueDate(suggestDueForCourse(course, today));
+    setDueDate(suggestDueForCourse(course, today, semesterStart));
     setDueTime("23:59");
     setSuggestedCourse(course.name);
   };

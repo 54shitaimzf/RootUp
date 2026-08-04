@@ -6,9 +6,10 @@ import {
   type CSSProperties,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Layers, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Layers, Plus, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { Select } from "../../components/Select";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { LABEL_COLORS } from "../../lib/labelDefs";
 import { isComposing } from "../../lib/ime";
@@ -26,6 +27,7 @@ import {
   type Course,
   type CourseCardDensity,
   type Homework,
+  type Semester,
   type WeekStart,
 } from "../../lib/study";
 import { SlotCoursesDialog } from "./SlotCoursesDialog";
@@ -161,11 +163,17 @@ function CourseCard({
 export function CourseScheduleView({
   courses,
   homework,
+  semesters,
+  semester,
+  onSemesterChange,
   weekStart,
   onWeekStartChange,
   showAllWeeks,
   onShowAllWeeksChange,
   currentWeek,
+  actualWeek,
+  onWeekChange,
+  onResetWeek,
   today,
   onAdd,
   onOpenDetail,
@@ -173,11 +181,17 @@ export function CourseScheduleView({
 }: {
   courses: Course[];
   homework: Homework[];
+  semesters: Semester[];
+  semester: Semester;
+  onSemesterChange: (id: string) => void;
   weekStart: WeekStart;
   onWeekStartChange: (value: WeekStart) => void;
   showAllWeeks: boolean;
   onShowAllWeeksChange: (value: boolean) => void;
   currentWeek: number;
+  actualWeek: number;
+  onWeekChange: (week: number) => void;
+  onResetWeek: () => void;
   today: Date;
   onAdd: () => void;
   onOpenDetail: (course: Course) => void;
@@ -266,35 +280,78 @@ export function CourseScheduleView({
   return (
     <div className="mt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium text-secondary">
-            {t("study.weekInfo", {
-              week: currentWeek,
-              parity: t(parity === "odd" ? "study.oddWeek" : "study.evenWeek"),
-            })}
-          </span>
-          <SegmentedControl
-            value={showAllWeeks ? "all" : "current"}
-            onChange={(value) => onShowAllWeeksChange(value === "all")}
-            options={[
-              { value: "all", label: t("study.allWeeks") },
-              { value: "current", label: t("study.currentWeekOnly") },
-            ]}
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            aria-label={t("study.semester")}
+            value={semester.id}
+            onChange={(event) => onSemesterChange(event.target.value)}
+            className="w-44"
+          >
+            {semesters.map((item) => (
+              <option key={item.id} value={item.id}>
+                {t(item.nameKey)}
+              </option>
+            ))}
+          </Select>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={t("study.previousWeek")}
+              onClick={() => onWeekChange(Math.max(1, currentWeek - 1))}
+              className="flex size-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            >
+              <ChevronLeft aria-hidden className="size-4" />
+            </button>
+            <span className="min-w-20 text-center text-sm font-medium text-secondary">
+              {t("study.weekInfo", {
+                week: currentWeek,
+                parity: t(
+                  parity === "odd" ? "study.oddWeek" : "study.evenWeek",
+                ),
+              })}
+            </span>
+            <button
+              type="button"
+              aria-label={t("study.nextWeek")}
+              onClick={() =>
+                onWeekChange(Math.min(semester.weekCount, currentWeek + 1))
+              }
+              className="flex size-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            >
+              <ChevronRight aria-hidden className="size-4" />
+            </button>
+          </div>
+          {currentWeek !== actualWeek && (
+            <Button variant="ghost" size="sm" onClick={onResetWeek}>
+              {t("study.backToThisWeek")}
+            </Button>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <SegmentedControl
-            value={weekStart}
-            onChange={onWeekStartChange}
-            options={[
-              { value: "monday", label: t("study.weekStartMonday") },
-              { value: "sunday", label: t("study.weekStartSunday") },
-            ]}
-          />
-          <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
-            {t("study.addCourse")}
-          </Button>
-        </div>
+        <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
+          {t("study.addCourse")}
+        </Button>
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted">
+        {semester.startDate} ~ {semester.endDate ?? ""} ·{" "}
+        {t("study.weekCount", { count: semester.weekCount })}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <SegmentedControl
+          value={weekStart}
+          onChange={onWeekStartChange}
+          options={[
+            { value: "monday", label: t("study.weekStartMonday") },
+            { value: "sunday", label: t("study.weekStartSunday") },
+          ]}
+        />
+        <SegmentedControl
+          value={showAllWeeks ? "all" : "current"}
+          onChange={(value) => onShowAllWeeksChange(value === "all")}
+          options={[
+            { value: "all", label: t("study.allWeeks") },
+            { value: "current", label: t("study.currentWeekOnly") },
+          ]}
+        />
       </div>
 
       {visibleCourses.length === 0 ? (

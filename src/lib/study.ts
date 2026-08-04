@@ -45,6 +45,37 @@ export const WEEK_RANGE_PATTERN = /^\d+(-\d+)?(,\d+(-\d+)?)*$/;
 export const DEFAULT_AXIS = { start: 8 * 60, end: 22 * 60 };
 export const DEMO_SEMESTER_START = "2026-08-03";
 
+/** 学期生命周期：名称走 i18n，startDate 用于推算当前周，weekCount 限定周次范围。*/
+export interface Semester {
+  id: string;
+  nameKey: string;
+  startDate: string;
+  endDate?: string;
+  weekCount: number;
+}
+
+export const DEMO_SEMESTERS: Semester[] = [
+  {
+    id: "fall-2026",
+    nameKey: "study.semesterFall2026",
+    startDate: "2026-08-03",
+    endDate: "2026-12-20",
+    weekCount: 20,
+  },
+  {
+    id: "spring-2027",
+    nameKey: "study.semesterSpring2027",
+    startDate: "2027-03-01",
+    endDate: "2027-07-18",
+    weekCount: 20,
+  },
+];
+
+/** 周次钳制：1..weekCount。*/
+export function clampWeek(week: number, weekCount: number): number {
+  return Math.max(1, Math.min(week, weekCount));
+}
+
 /** 指定周次格式校验：如 2-16、1,3,5-8，数值均在 1–30 且区间合法。 */
 export function isValidWeekRange(value: string): boolean {
   const trimmed = value.trim();
