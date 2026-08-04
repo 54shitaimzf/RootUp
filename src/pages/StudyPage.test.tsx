@@ -81,7 +81,9 @@ describe("StudyPage", () => {
 
   it("添加课程成功与校验失败", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "添加课程" }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "添加课程" })[0],
+    );
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByText(/请检查填写内容/)).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
@@ -183,7 +185,9 @@ describe("StudyPage", () => {
   it("添加作业后出现在列表", () => {
     renderStudy();
     fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
-    fireEvent.click(screen.getByRole("button", { name: "添加作业" }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "添加作业" })[0],
+    );
     fireEvent.change(screen.getByPlaceholderText("如：高数作业 3"), {
       target: { value: "新作业" },
     });
@@ -380,6 +384,87 @@ describe("StudyPage", () => {
   it("学业数据损坏时回退示例", () => {
     localStorage.setItem("rootup.study.data.v1", "{bad json");
     renderStudy();
+    expect(screen.getByText("高等数学")).toBeInTheDocument();
+  });
+
+  it("课程与作业按学期隔离并持久化", () => {
+    const first = renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建学期" }));
+    fireEvent.change(screen.getByLabelText("学期名称"), {
+      target: { value: "隔离测试学期" },
+    });
+    fireEvent.change(screen.getByLabelText("开始日期"), {
+      target: { value: "2028-03-01" },
+    });
+    fireEvent.change(screen.getByLabelText("周数"), {
+      target: { value: "20" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    const newId = (screen.getByLabelText("学期") as HTMLSelectElement).value;
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "添加课程" })[0],
+    );
+    fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
+      target: { value: "新课" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(screen.getByText("新课")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "添加作业" })[0],
+    );
+    fireEvent.change(screen.getByPlaceholderText("如：高数作业 3"), {
+      target: { value: "新作业" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(screen.getByText("新作业")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^课程表/ }));
+    fireEvent.change(screen.getByLabelText("学期"), {
+      target: { value: "fall-2026" },
+    });
+    expect(screen.queryByText("新课")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    expect(screen.queryByText("新作业")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^课程表/ }));
+    fireEvent.change(screen.getByLabelText("学期"), {
+      target: { value: newId },
+    });
+    expect(screen.getByText("新课")).toBeInTheDocument();
+    first.unmount();
+    renderStudy();
+    expect(screen.getByText("新课")).toBeInTheDocument();
+  });
+
+  it("学期管理：编辑学期名称生效", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "编辑学期" })[0]);
+    fireEvent.change(screen.getByLabelText("学期名称"), {
+      target: { value: "2026 秋季（修订）" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(
+      (screen.getByLabelText("学期") as HTMLSelectElement).selectedOptions[0]
+        .text,
+    ).toBe("2026 秋季（修订）");
+  });
+
+  it("学期管理：删除非当前学期不影响当前选择", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "删除学期" })[1]);
+    const confirms = screen.getAllByRole("button", {
+      name: "删除学期",
+    });
+    fireEvent.click(confirms[confirms.length - 1]);
+    expect(
+      (screen.getByLabelText("学期") as HTMLSelectElement).value,
+    ).toBe("fall-2026");
     expect(screen.getByText("高等数学")).toBeInTheDocument();
   });
 });

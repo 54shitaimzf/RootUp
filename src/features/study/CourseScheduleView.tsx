@@ -344,31 +344,33 @@ export function CourseScheduleView({
             </Button>
           )}
         </div>
-        <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
-          {t("study.addCourse")}
-        </Button>
       </div>
       <p className="mt-1.5 text-[10px] text-muted">
         {semester.startDate} ~ {semester.endDate ?? ""} ·{" "}
         {t("study.weekCount", { count: semester.weekCount })}
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-3">
-        <SegmentedControl
-          value={weekStart}
-          onChange={onWeekStartChange}
-          options={[
-            { value: "monday", label: t("study.weekStartMonday") },
-            { value: "sunday", label: t("study.weekStartSunday") },
-          ]}
-        />
-        <SegmentedControl
-          value={showAllWeeks ? "all" : "current"}
-          onChange={(value) => onShowAllWeeksChange(value === "all")}
-          options={[
-            { value: "all", label: t("study.allWeeks") },
-            { value: "current", label: t("study.currentWeekOnly") },
-          ]}
-        />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedControl
+            value={weekStart}
+            onChange={onWeekStartChange}
+            options={[
+              { value: "monday", label: t("study.weekStartMonday") },
+              { value: "sunday", label: t("study.weekStartSunday") },
+            ]}
+          />
+          <SegmentedControl
+            value={showAllWeeks ? "all" : "current"}
+            onChange={(value) => onShowAllWeeksChange(value === "all")}
+            options={[
+              { value: "all", label: t("study.allWeeks") },
+              { value: "current", label: t("study.currentWeekOnly") },
+            ]}
+          />
+        </div>
+        <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
+          {t("study.addCourse")}
+        </Button>
       </div>
 
       {visibleCourses.length === 0 ? (

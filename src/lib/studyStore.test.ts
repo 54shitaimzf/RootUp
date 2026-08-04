@@ -96,6 +96,46 @@ describe("studyStore", () => {
     }
   });
 
+  it("校验补充边界：同日、小数周数、空列表、编辑排除自身", () => {
+    const existing: Semester[] = [
+      {
+        id: "a",
+        name: "Fall 2026",
+        startDate: "2026-08-03",
+        weekCount: 20,
+      },
+    ];
+    const base = {
+      name: "Fall 2026",
+      startDate: "2026-08-03",
+      endDate: "2026-08-03",
+      weekCount: "20",
+    };
+    expect(validateSemesterForm(base, existing, "a").ok).toBe(true);
+    expect(
+      validateSemesterForm({ ...base, weekCount: "20.5" }, existing, "a").ok,
+    ).toBe(false);
+    expect(validateSemesterForm({ ...base, name: "New" }, []).ok).toBe(true);
+    expect(
+      validateSemesterForm({ ...base, name: "fall 2026" }, existing).ok,
+    ).toBe(false);
+  });
+
+  it("load 自动补齐缺失的学期桶", () => {
+    const data = createSeedStudyData();
+    delete data.coursesBySemester["spring-2027"];
+    saveStudyData(data);
+    expect(loadStudyData().coursesBySemester["spring-2027"]).toEqual([]);
+  });
+
+  it("复制空列表返回空列表", () => {
+    expect(copyCoursesForSemester([])).toEqual([]);
+  });
+
+  it("结束日期早于开始时周数钳制为 1", () => {
+    expect(defaultWeekCount("2026-08-10", "2026-08-03")).toBe(1);
+  });
+
   it("复制课程生成全新 id 且字段完整", () => {
     const copied = copyCoursesForSemester(DEMO_COURSES);
     expect(copied).toHaveLength(DEMO_COURSES.length);
