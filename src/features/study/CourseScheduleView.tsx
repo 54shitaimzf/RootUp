@@ -4,6 +4,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { LABEL_COLORS } from "../../lib/labelDefs";
+import { isComposing } from "../../lib/ime";
 import {
   axisRange,
   coursePosition,
@@ -183,7 +184,7 @@ export function CourseScheduleView({
                     {date.getMonth() + 1}/{date.getDate()}
                   </span>
                   {isToday && (
-                    <span className="rounded-full bg-brand-700 px-2 py-px text-[9px] font-medium text-white">
+                    <span className="rounded-sm bg-brand-700 px-2 py-px text-[9px] font-medium text-white">
                       {t("study.today")}
                     </span>
                   )}
@@ -262,6 +263,7 @@ export function CourseScheduleView({
                         tabIndex={0}
                         onClick={() => onEdit(course)}
                         onKeyDown={(event) => {
+                          if (isComposing(event)) return;
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             onEdit(course);
@@ -276,7 +278,7 @@ export function CourseScheduleView({
                         }}
                       >
                         <span
-                          className={`absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-full ${LABEL_COLORS[course.color].dot}`}
+                          className={`absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-sm ${LABEL_COLORS[course.color].dot}`}
                         />
                         <div className="relative px-2.5 py-1.5 pl-3">
                           <div className="truncate text-xs font-semibold text-strong">
@@ -299,7 +301,7 @@ export function CourseScheduleView({
                           {(badge || count > 0) && (
                             <div className="mt-1 flex flex-wrap items-center gap-1">
                               {badge && (
-                                <span className="rounded-full bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                                <span className="rounded-sm bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
                                   {badge}
                                 </span>
                               )}
@@ -310,7 +312,7 @@ export function CourseScheduleView({
                                     event.stopPropagation();
                                     onOpenCourseHomework(course.id);
                                   }}
-                                  className="rounded-full bg-brand-50 px-1.5 py-px text-[9px] font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25"
+                                  className="rounded-sm bg-brand-50 px-1.5 py-px text-[9px] font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25"
                                 >
                                   {t("study.homeworkCount", { count })}
                                 </button>

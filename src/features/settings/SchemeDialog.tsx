@@ -16,6 +16,7 @@ import { InlineNotice } from "../../components/InlineNotice";
 import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
 import { SectionLabel } from "../../components/SectionLabel";
+import { isComposing } from "../../lib/ime";
 
 const MAX_NAME_LEN = 40;
 
@@ -130,6 +131,7 @@ export function SchemeDialog({
           value={name}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
+            if (isComposing(event)) return;
             if (event.key === "Enter") void save();
           }}
           placeholder={t("settings.schemeNamePlaceholder")}
@@ -172,6 +174,7 @@ export function SchemeDialog({
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onKeyDown={(event) => {
+                      if (isComposing(event)) return;
                       if (event.key === "Enter") void commitRename();
                     }}
                     className="flex-1 !border-slate-200 !bg-white dark:!border-slate-700 dark:!bg-slate-900"

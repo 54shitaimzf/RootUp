@@ -4,6 +4,7 @@ import { PagePlaceholder } from "./components/PagePlaceholder";
 import { Sidebar } from "./components/Sidebar";
 import type { PageKey } from "./lib/nav";
 import { useScan, type ScanController } from "./hooks/useScan";
+import { useImeGuard } from "./hooks/useImeGuard";
 import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -53,6 +54,7 @@ export default function App() {
 }
 
 function Shell() {
+  useImeGuard();
   const [page, setPage] = useState<PageKey>("files");
   const { settings } = useSettings();
   const scan = useScan();

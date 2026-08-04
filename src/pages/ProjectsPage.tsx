@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
+import { isComposing } from "../lib/ime";
 import {
   addProjectDir,
   archiveProject,
@@ -274,6 +275,7 @@ export function ProjectsPage({
           value={newDir}
           onChange={(event) => setNewDir(event.target.value)}
           onKeyDown={(event) => {
+            if (isComposing(event)) return;
             if (event.key === "Enter") void handleAdd();
           }}
           placeholder={t("projects.addPlaceholder")}

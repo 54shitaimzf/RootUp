@@ -20,6 +20,7 @@ import {
 } from "../lib/autocomplete";
 import { fileStateMeta } from "../lib/fileUtils";
 import type { FilterHabits } from "../lib/filterHabits";
+import { isComposing } from "../lib/ime";
 import { LABEL_COLORS, labelColorKey } from "../lib/labelDefs";
 import { logEvent, type FileRecord, type LabelDef } from "../lib/tauri";
 import { Chip } from "./Chip";
@@ -127,6 +128,7 @@ export function SearchAutocomplete({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (isComposing(event)) return;
     if (event.key === "Backspace") {
       handleBackspace();
       return;

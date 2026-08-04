@@ -36,6 +36,19 @@ describe("Modal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("输入法组合期间 Esc 不关闭", () => {
+    const onClose = vi.fn();
+    render(
+      <Modal open title="Esc" onClose={onClose}>
+        <p>内容</p>
+      </Modal>,
+    );
+    const event = new KeyboardEvent("keydown", { key: "Escape" });
+    Object.defineProperty(event, "isComposing", { value: true });
+    fireEvent(window, event);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("点击遮罩关闭，点击面板不关闭", () => {
     const onClose = vi.fn();
     const { container } = render(

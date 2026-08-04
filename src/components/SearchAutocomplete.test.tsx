@@ -261,4 +261,28 @@ describe("SearchAutocomplete", () => {
     fireEvent.change(input(), { target: { value: "a" } });
     expect(screen.getByText("压缩包")).toBeInTheDocument();
   });
+
+  it("输入法组合期间 Enter/Tab/Escape 不触发应用逻辑", () => {
+    const onTextChange = vi.fn();
+    const onTagsChange = vi.fn();
+    const onInsert = vi.fn();
+    render(<Harness callbacks={{ onTextChange, onTagsChange, onInsert }} />);
+    fireEvent.focus(input());
+    fireEvent.change(input(), { target: { value: "a" } });
+    onTextChange.mockClear();
+    onTagsChange.mockClear();
+    onInsert.mockClear();
+    const composingKey = (key: string) => {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true });
+      Object.defineProperty(event, "isComposing", { value: true });
+      fireEvent(input(), event);
+    };
+    composingKey("Enter");
+    composingKey("Tab");
+    composingKey("Escape");
+    expect(onTextChange).not.toHaveBeenCalled();
+    expect(onTagsChange).not.toHaveBeenCalled();
+    expect(onInsert).not.toHaveBeenCalled();
+    expect(screen.getByText("压缩包")).toBeInTheDocument();
+  });
 });

@@ -8,7 +8,7 @@ import { Field } from "../../components/Field";
 import { InlineNotice } from "../../components/InlineNotice";
 import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
+import { FormSection } from "../../components/FormSection";
 import { Select } from "../../components/Select";
 import type { LabelColorKey } from "../../lib/labelDefs";
 import {
@@ -167,139 +167,138 @@ export function CourseFormDialog({
           </div>
         }
       >
-        <div className="space-y-5">
-          {error && <InlineNotice variant="error">{error}</InlineNotice>}
-          <section>
-            <SectionLabel>{t("study.sectionBasic")}</SectionLabel>
-            <div className="mt-3 space-y-3">
-              <Field label={t("study.courseName")} htmlFor="course-name">
-                <Input
-                  id="course-name"
-                  size="sm"
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm({ ...form, name: event.target.value })
-                  }
-                  placeholder={t("study.courseNamePlaceholder")}
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label={t("study.teacher")} htmlFor="course-teacher">
-                  <Input
-                    id="course-teacher"
-                    size="sm"
-                    value={form.teacher}
-                    onChange={(event) =>
-                      setForm({ ...form, teacher: event.target.value })
-                    }
-                    placeholder={t("study.teacherPlaceholder")}
-                  />
-                </Field>
-                <Field label={t("study.location")} htmlFor="course-location">
-                  <Input
-                    id="course-location"
-                    size="sm"
-                    value={form.location}
-                    onChange={(event) =>
-                      setForm({ ...form, location: event.target.value })
-                    }
-                    placeholder={t("study.locationPlaceholder")}
-                  />
-                </Field>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <SectionLabel>{t("study.sectionTimeWeeks")}</SectionLabel>
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <Field label={t("study.day")} htmlFor="course-day">
-                <Select
-                  id="course-day"
-                  value={form.day}
-                  onChange={(event) =>
-                    setForm({ ...form, day: event.target.value })
-                  }
-                >
-                  {DAY_KEYS.map((key, index) => (
-                    <option key={key} value={String(index + 1)}>
-                      {t(`study.${key}`)}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label={t("study.startTime")} htmlFor="course-start">
-                <Input
-                  id="course-start"
-                  size="sm"
-                  type="time"
-                  value={form.startTime}
-                  onChange={(event) =>
-                    setForm({ ...form, startTime: event.target.value })
-                  }
-                />
-              </Field>
-              <Field label={t("study.endTime")} htmlFor="course-end">
-                <Input
-                  id="course-end"
-                  size="sm"
-                  type="time"
-                  value={form.endTime}
-                  onChange={(event) =>
-                    setForm({ ...form, endTime: event.target.value })
-                  }
-                />
-              </Field>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <Field label={t("study.weekRule")} htmlFor="course-week-rule">
-                <Select
-                  id="course-week-rule"
-                  value={form.weekRule}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      weekRule: event.target.value as WeekRule,
-                    })
-                  }
-                >
-                  <option value="all">{t("study.weekRuleAll")}</option>
-                  <option value="odd">{t("study.weekRuleOdd")}</option>
-                  <option value="even">{t("study.weekRuleEven")}</option>
-                  <option value="range">{t("study.weekRuleRange")}</option>
-                </Select>
-              </Field>
-              <Field
-                label={t("study.weekRangePlaceholder")}
-                hint={t("study.weekRangeHint")}
-                htmlFor="course-week-range"
-              >
-                <Input
-                  id="course-week-range"
-                  size="sm"
-                  value={form.weekRange}
-                  disabled={form.weekRule !== "range"}
-                  onChange={(event) =>
-                    setForm({ ...form, weekRange: event.target.value })
-                  }
-                  placeholder={t("study.weekRangePlaceholder")}
-                />
-              </Field>
-            </div>
-          </section>
-
-          <section>
-            <SectionLabel>{t("study.sectionColor")}</SectionLabel>
-            <div className="mt-3">
-              <ColorPicker
-                allowAuto
-                autoLabel={t("study.colorAuto")}
-                value={form.color}
-                onChange={(color) => setForm({ ...form, color })}
+      {error && (
+        <InlineNotice variant="error" className="mb-4">
+          {error}
+        </InlineNotice>
+      )}
+      <div className="space-y-4 divide-y divide-slate-100 dark:divide-slate-800">
+        <FormSection title={t("study.sectionBasic")}>
+          <div className="space-y-2.5">
+            <Field label={t("study.courseName")} htmlFor="course-name">
+              <Input
+                id="course-name"
+                size="sm"
+                value={form.name}
+                onChange={(event) =>
+                  setForm({ ...form, name: event.target.value })
+                }
+                placeholder={t("study.courseNamePlaceholder")}
               />
+            </Field>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Field label={t("study.teacher")} htmlFor="course-teacher">
+                <Input
+                  id="course-teacher"
+                  size="sm"
+                  value={form.teacher}
+                  onChange={(event) =>
+                    setForm({ ...form, teacher: event.target.value })
+                  }
+                  placeholder={t("study.teacherPlaceholder")}
+                />
+              </Field>
+              <Field label={t("study.location")} htmlFor="course-location">
+                <Input
+                  id="course-location"
+                  size="sm"
+                  value={form.location}
+                  onChange={(event) =>
+                    setForm({ ...form, location: event.target.value })
+                  }
+                  placeholder={t("study.locationPlaceholder")}
+                />
+              </Field>
             </div>
-          </section>
-        </div>
+          </div>
+        </FormSection>
+
+        <FormSection title={t("study.sectionTimeWeeks")}>
+          <div className="grid grid-cols-3 gap-2.5">
+            <Field label={t("study.day")} htmlFor="course-day">
+              <Select
+                id="course-day"
+                value={form.day}
+                onChange={(event) =>
+                  setForm({ ...form, day: event.target.value })
+                }
+              >
+                {DAY_KEYS.map((key, index) => (
+                  <option key={key} value={String(index + 1)}>
+                    {t(`study.${key}`)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("study.startTime")} htmlFor="course-start">
+              <Input
+                id="course-start"
+                size="sm"
+                type="time"
+                value={form.startTime}
+                onChange={(event) =>
+                  setForm({ ...form, startTime: event.target.value })
+                }
+              />
+            </Field>
+            <Field label={t("study.endTime")} htmlFor="course-end">
+              <Input
+                id="course-end"
+                size="sm"
+                type="time"
+                value={form.endTime}
+                onChange={(event) =>
+                  setForm({ ...form, endTime: event.target.value })
+                }
+              />
+            </Field>
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+            <Field label={t("study.weekRule")} htmlFor="course-week-rule">
+              <Select
+                id="course-week-rule"
+                value={form.weekRule}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    weekRule: event.target.value as WeekRule,
+                  })
+                }
+              >
+                <option value="all">{t("study.weekRuleAll")}</option>
+                <option value="odd">{t("study.weekRuleOdd")}</option>
+                <option value="even">{t("study.weekRuleEven")}</option>
+                <option value="range">{t("study.weekRuleRange")}</option>
+              </Select>
+            </Field>
+            <Field
+              label={t("study.weekRangePlaceholder")}
+              hint={t("study.weekRangeHint")}
+              htmlFor="course-week-range"
+            >
+              <Input
+                id="course-week-range"
+                size="sm"
+                value={form.weekRange}
+                disabled={form.weekRule !== "range"}
+                onChange={(event) =>
+                  setForm({ ...form, weekRange: event.target.value })
+                }
+                placeholder={t("study.weekRangePlaceholder")}
+              />
+            </Field>
+          </div>
+        </FormSection>
+
+        <FormSection title={t("study.sectionColor")}>
+          <ColorPicker
+            allowAuto
+            autoLabel={t("study.colorAuto")}
+            value={form.color}
+            onChange={(color) => setForm({ ...form, color })}
+          />
+        </FormSection>
+      </div>
       </Modal>
       {initial && onDelete && (
         <ConfirmDialog

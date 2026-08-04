@@ -6,8 +6,9 @@ import { Field } from "../../components/Field";
 import { InlineNotice } from "../../components/InlineNotice";
 import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
+import { FormSection } from "../../components/FormSection";
 import { Select } from "../../components/Select";
+import { TextArea } from "../../components/TextArea";
 import type { Course, Homework, HomeworkDraft } from "../../lib/study";
 
 const NOTE_MAX = 200;
@@ -98,11 +99,14 @@ export function HomeworkFormDialog({
         </DialogFooter>
       }
     >
-      <div className="space-y-5">
-        {error && <InlineNotice variant="error">{error}</InlineNotice>}
-        <section>
-          <SectionLabel>{t("study.sectionBasic")}</SectionLabel>
-          <div className="mt-3 space-y-3">
+      {error && (
+        <InlineNotice variant="error" className="mb-4">
+          {error}
+        </InlineNotice>
+      )}
+      <div className="space-y-4 divide-y divide-slate-100 dark:divide-slate-800">
+        <FormSection title={t("study.sectionBasic")}>
+          <div className="space-y-2.5">
             <Field label={t("study.homeworkTitle")} htmlFor="homework-title">
               <Input
                 id="homework-title"
@@ -131,26 +135,21 @@ export function HomeworkFormDialog({
               </Select>
             </Field>
           </div>
-        </section>
+        </FormSection>
 
-        <section>
-          <SectionLabel>{t("study.dueAt")}</SectionLabel>
-          <div className="mt-3">
-            <Field label={t("study.dueAt")} htmlFor="homework-due">
-              <Input
-                id="homework-due"
-                size="sm"
-                type="datetime-local"
-                value={dueAt}
-                onChange={(event) => setDueAt(event.target.value)}
-              />
-            </Field>
-          </div>
-        </section>
+        <FormSection title={t("study.dueAt")}>
+          <Input
+            id="homework-due"
+            size="sm"
+            type="datetime-local"
+            aria-label={t("study.dueAt")}
+            value={dueAt}
+            onChange={(event) => setDueAt(event.target.value)}
+          />
+        </FormSection>
 
-        <section>
-          <SectionLabel>{t("study.sectionHomeworkDetails")}</SectionLabel>
-          <div className="mt-3 space-y-3">
+        <FormSection title={t("study.sectionHomeworkDetails")}>
+          <div className="space-y-2.5">
             <Field
               label={t("study.note")}
               hint={t("study.noteHint")}
@@ -173,20 +172,20 @@ export function HomeworkFormDialog({
               hint={t("study.detailsHint")}
               htmlFor="homework-details"
             >
-              <textarea
+              <TextArea
                 id="homework-details"
+                size="sm"
                 value={details}
                 maxLength={DETAILS_MAX}
                 onChange={(event) => setDetails(event.target.value)}
                 rows={5}
-                className="min-w-0 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
               />
               <div className="mt-1 text-right text-[10px] text-muted">
                 {t("study.detailsCounter", { count: details.length })}
               </div>
             </Field>
           </div>
-        </section>
+        </FormSection>
       </div>
     </Modal>
   );

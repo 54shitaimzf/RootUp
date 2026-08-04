@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { HelpCircle } from "lucide-react";
 import { IconButton } from "./IconButton";
 import { SyntaxTable } from "./SyntaxTable";
+import { isComposing } from "../lib/ime";
 
 /**
  * 搜索语法帮助弹层：低学习成本，进阶用户可直达完整语法。
@@ -25,6 +26,7 @@ export function SyntaxHelp({ className = "" }: { className?: string }) {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isComposing(event)) return;
       if (event.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);

@@ -97,6 +97,21 @@ describe("CourseFormDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByText(/请检查填写内容/)).toBeInTheDocument();
   });
+
+  it("使用分隔线分区渲染三个区块", () => {
+    render(
+      <CourseFormDialog
+        open
+        initial={null}
+        onSave={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText("基本信息")).toBeInTheDocument();
+    expect(screen.getByText("时间与周次")).toBeInTheDocument();
+    expect(screen.getByText("颜色")).toBeInTheDocument();
+    expect(document.querySelector(".divide-y")).not.toBeNull();
+  });
 });
 
 describe("HomeworkFormDialog", () => {
@@ -150,6 +165,22 @@ describe("HomeworkFormDialog", () => {
     );
     expect(screen.getByLabelText("备注")).toHaveAttribute("maxlength", "200");
     expect(screen.getByLabelText("详情")).toHaveAttribute("maxlength", "5000");
+  });
+
+  it("使用分隔线分区渲染三个区块", () => {
+    render(
+      <HomeworkFormDialog
+        open
+        initial={null}
+        courses={DEMO_COURSES}
+        onSave={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText("基本信息")).toBeInTheDocument();
+    expect(screen.getByText("截止时间")).toBeInTheDocument();
+    expect(screen.getByText("作业详情")).toBeInTheDocument();
+    expect(document.querySelector(".divide-y")).not.toBeNull();
   });
 });
 
@@ -224,5 +255,21 @@ describe("视图空态", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "已归档" }));
     expect(screen.getByText("没有符合筛选条件的作业")).toBeInTheDocument();
+  });
+
+  it("周次徽章与今天标记使用小圆角而非胶囊", () => {
+    render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[2]]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    const badge = screen.getByText("双周");
+    expect(badge.className).toContain("rounded-sm");
+    expect(badge.className).not.toContain("rounded-full");
+    const today = screen.getByText("今天");
+    expect(today.className).toContain("rounded-sm");
+    expect(today.className).not.toContain("rounded-full");
   });
 });

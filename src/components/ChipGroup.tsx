@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Chip } from "./Chip";
 import { Input } from "./Input";
+import { isComposing } from "../lib/ime";
 
 /** 通用 chip 编辑组：展示 + 删除 + 添加输入框。 */
 export function ChipGroup({
@@ -51,6 +52,7 @@ export function ChipGroup({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
+            if (isComposing(event)) return;
             if (event.key === "Enter") submit();
           }}
           placeholder={placeholder}

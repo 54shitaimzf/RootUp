@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Check, Copy, RefreshCw, RotateCcw } from "lucide-react";
 import { useSettings } from "../hooks/useSettings";
 import type { ScanController } from "../hooks/useScan";
+import { isComposing } from "../lib/ime";
 import { applyPreset, RULE_PRESETS } from "../lib/presets";
 import {
   addWatchedDir,
@@ -90,6 +91,7 @@ function Row({
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(event) => {
+        if (isComposing(event)) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onClick();
@@ -360,6 +362,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             value={newDir}
             onChange={(event) => setNewDir(event.target.value)}
             onKeyDown={(event) => {
+              if (isComposing(event)) return;
               if (event.key === "Enter") void handleAddDir();
             }}
             placeholder={t("settings.dirPlaceholder")}

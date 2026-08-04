@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "./IconButton";
+import { isComposing } from "../lib/ime";
 
 /**
  * 共享弹窗壳：遮罩点击 / Esc 关闭、滚动内容区、吸底按钮区。
@@ -28,6 +29,7 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      if (isComposing(event)) return;
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
