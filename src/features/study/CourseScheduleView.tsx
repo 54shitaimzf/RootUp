@@ -6,9 +6,17 @@ import {
   type CSSProperties,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight, Layers, Plus, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  Plus,
+  Settings2,
+  X,
+} from "lucide-react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { IconButton } from "../../components/IconButton";
 import { Select } from "../../components/Select";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { LABEL_COLORS } from "../../lib/labelDefs";
@@ -166,6 +174,7 @@ export function CourseScheduleView({
   semesters,
   semester,
   onSemesterChange,
+  onManageSemesters,
   weekStart,
   onWeekStartChange,
   showAllWeeks,
@@ -184,6 +193,7 @@ export function CourseScheduleView({
   semesters: Semester[];
   semester: Semester;
   onSemesterChange: (id: string) => void;
+  onManageSemesters: () => void;
   weekStart: WeekStart;
   onWeekStartChange: (value: WeekStart) => void;
   showAllWeeks: boolean;
@@ -289,10 +299,17 @@ export function CourseScheduleView({
           >
             {semesters.map((item) => (
               <option key={item.id} value={item.id}>
-                {t(item.nameKey)}
+                {item.name}
               </option>
             ))}
           </Select>
+          <IconButton
+            label={t("study.manageSemesters")}
+            icon={Settings2}
+            size="sm"
+            tone="neutral"
+            onClick={onManageSemesters}
+          />
           <div className="flex items-center gap-1">
             <button
               type="button"

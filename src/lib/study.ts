@@ -48,7 +48,7 @@ export const DEMO_SEMESTER_START = "2026-08-03";
 /** 学期生命周期：名称走 i18n，startDate 用于推算当前周，weekCount 限定周次范围。*/
 export interface Semester {
   id: string;
-  nameKey: string;
+  name: string;
   startDate: string;
   endDate?: string;
   weekCount: number;
@@ -57,14 +57,14 @@ export interface Semester {
 export const DEMO_SEMESTERS: Semester[] = [
   {
     id: "fall-2026",
-    nameKey: "study.semesterFall2026",
+    name: "2026 秋季学期",
     startDate: "2026-08-03",
     endDate: "2026-12-20",
     weekCount: 20,
   },
   {
     id: "spring-2027",
-    nameKey: "study.semesterSpring2027",
+    name: "2027 春季学期",
     startDate: "2027-03-01",
     endDate: "2027-07-18",
     weekCount: 20,

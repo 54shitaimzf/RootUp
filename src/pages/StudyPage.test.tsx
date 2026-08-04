@@ -325,4 +325,61 @@ describe("StudyPage", () => {
       (screen.getByLabelText("学期") as HTMLSelectElement).value,
     ).toBe("spring-2027");
   });
+
+  it("学期管理：新建并切换为空课表且持久化", () => {
+    const first = renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建学期" }));
+    fireEvent.change(screen.getByLabelText("学期名称"), {
+      target: { value: "2028 春季学期" },
+    });
+    fireEvent.change(screen.getByLabelText("开始日期"), {
+      target: { value: "2028-03-01" },
+    });
+    fireEvent.change(screen.getByLabelText("周数"), {
+      target: { value: "20" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    const select = screen.getByLabelText("学期") as HTMLSelectElement;
+    expect(select.selectedOptions[0].text).toBe("2028 春季学期");
+    expect(screen.getByText("还没有课程")).toBeInTheDocument();
+    first.unmount();
+    renderStudy();
+    const restored = screen.getByLabelText("学期") as HTMLSelectElement;
+    expect(restored.selectedOptions[0].text).toBe("2028 春季学期");
+  });
+
+  it("学期管理：复制学期为新课表且作业为空", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "复制" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(screen.getByText("高等数学")).toBeInTheDocument();
+    expect(
+      (screen.getByLabelText("学期") as HTMLSelectElement).selectedOptions[0]
+        .text,
+    ).toContain("副本");
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    expect(screen.getByText("还没有作业")).toBeInTheDocument();
+  });
+
+  it("学期管理：删除当前学期并回退到剩余学期", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "管理学期" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "删除学期" })[0]);
+    const confirms = screen.getAllByRole("button", {
+      name: "删除学期",
+    });
+    fireEvent.click(confirms[confirms.length - 1]);
+    expect(
+      (screen.getByLabelText("学期") as HTMLSelectElement).value,
+    ).toBe("spring-2027");
+    expect(screen.getByText("还没有课程")).toBeInTheDocument();
+  });
+
+  it("学业数据损坏时回退示例", () => {
+    localStorage.setItem("rootup.study.data.v1", "{bad json");
+    renderStudy();
+    expect(screen.getByText("高等数学")).toBeInTheDocument();
+  });
 });

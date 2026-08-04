@@ -8,10 +8,8 @@ import { CourseFormDialog } from "../features/study/CourseFormDialog";
 import { CourseScheduleView } from "../features/study/CourseScheduleView";
 import { HomeworkFormDialog } from "../features/study/HomeworkFormDialog";
 import { HomeworkView } from "../features/study/HomeworkView";
+import { SemesterManageDialog } from "../features/study/SemesterManageDialog";
 import {
-  DEMO_SEMESTERS,
-  DEMO_COURSES,
-  DEMO_HOMEWORK,
   clampWeek,
   weekNumberFromDate,
   type Course,
@@ -21,6 +19,12 @@ import {
   type StudyView,
   type WeekStart,
 } from "../lib/study";
+import {
+  copyCoursesForSemester,
+  loadStudyData,
+  saveStudyData,
+  type StudyDataV1,
+} from "../lib/studyStore";
 
 const PREF_KEY = "rootup.study.prefs.v1";
 
@@ -47,27 +51,29 @@ function loadPrefs(): StudyPrefs {
       weekStart: parsed.weekStart === "sunday" ? "sunday" : "monday",
       showAllWeeks: parsed.showAllWeeks !== false,
       semesterId:
-        typeof parsed.semesterId === "string" &&
-        DEMO_SEMESTERS.some((item) => item.id === parsed.semesterId)
-          ? parsed.semesterId
-          : DEMO_SEMESTERS[0].id,
+        typeof parsed.semesterId === "string" ? parsed.semesterId : undefined,
     };
   } catch {
     return DEFAULT_PREFS;
   }
 }
 
-/** 学业页：课程表 + 作业；数据仅存前端内存，偏好记忆用 localStorage。*/
+/** 学业页：学期即课表，数据持久化到 localStorage，偏好记忆用同一存储区。*/
 export function StudyPage({ today = new Date() }: { today?: Date }) {
   const { t } = useTranslation();
   const [prefs] = useState(loadPrefs);
+  const [data, setData] = useState<StudyDataV1>(loadStudyData);
   const [view, setView] = useState<StudyView>(prefs.view);
-  const [courses, setCourses] = useState<Course[]>(DEMO_COURSES);
-  const [homework, setHomework] = useState<Homework[]>(DEMO_HOMEWORK);
   const [weekStart, setWeekStart] = useState<WeekStart>(prefs.weekStart);
   const [showAllWeeks, setShowAllWeeks] = useState(prefs.showAllWeeks);
-  const [semesterId, setSemesterId] = useState(prefs.semesterId);
+  const [semesterId, setSemesterId] = useState<string>(() => {
+    const saved = prefs.semesterId;
+    return saved && data.semesters.some((item) => item.id === saved)
+      ? saved
+      : (data.semesters[0]?.id ?? "");
+  });
   const [weekOverride, setWeekOverride] = useState<number | null>(null);
+  const [semesterManageOpen, setSemesterManageOpen] = useState(false);
   const [courseFormOpen, setCourseFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -82,6 +88,10 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   const idSeq = useRef(0);
 
   useEffect(() => {
+    saveStudyData(data);
+  }, [data]);
+
+  useEffect(() => {
     try {
       localStorage.setItem(
         PREF_KEY,
@@ -92,31 +102,63 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     }
   }, [view, weekStart, showAllWeeks, semesterId]);
 
+  const semester =
+    data.semesters.find((item) => item.id === semesterId) ??
+    data.semesters[0];
+  const courses = data.coursesBySemester[semester?.id ?? ""] ?? [];
+  const homework = data.homeworkBySemester[semester?.id ?? ""] ?? [];
+  const actualWeek = semester
+    ? weekNumberFromDate(semester.startDate, today)
+    : 1;
+  const currentWeek = semester
+    ? clampWeek(weekOverride ?? actualWeek, semester.weekCount)
+    : 1;
+
   const nextId = (prefix: string) =>
     `${prefix}-${Date.now()}-${(idSeq.current += 1)}`;
 
-  const semester =
-    DEMO_SEMESTERS.find((item) => item.id === semesterId) ??
-    DEMO_SEMESTERS[0];
-  const actualWeek = weekNumberFromDate(semester.startDate, today);
-  const currentWeek = clampWeek(weekOverride ?? actualWeek, semester.weekCount);
+  const updateCourses = (updater: (list: Course[]) => Course[]) => {
+    setData((prev) => {
+      const id = semester?.id ?? "";
+      const list = prev.coursesBySemester[id] ?? [];
+      return {
+        ...prev,
+        coursesBySemester: {
+          ...prev.coursesBySemester,
+          [id]: updater(list),
+        },
+      };
+    });
+  };
+
+  const updateHomework = (updater: (list: Homework[]) => Homework[]) => {
+    setData((prev) => {
+      const id = semester?.id ?? "";
+      const list = prev.homeworkBySemester[id] ?? [];
+      return {
+        ...prev,
+        homeworkBySemester: {
+          ...prev.homeworkBySemester,
+          [id]: updater(list),
+        },
+      };
+    });
+  };
 
   const saveCourse = (draft: CourseDraft) => {
-    if (editingCourse) {
-      setCourses((prev) =>
-        prev.map((course) =>
-          course.id === editingCourse.id ? { ...course, ...draft } : course,
-        ),
-      );
-    } else {
-      setCourses((prev) => [...prev, { ...draft, id: nextId("c") }]);
-    }
+    updateCourses((list) =>
+      editingCourse
+        ? list.map((course) =>
+            course.id === editingCourse.id ? { ...course, ...draft } : course,
+          )
+        : [...list, { ...draft, id: nextId("c") }],
+    );
   };
 
   const deleteCourse = (id: string) => {
-    setCourses((prev) => prev.filter((course) => course.id !== id));
-    setHomework((prev) =>
-      prev.map((item) =>
+    updateCourses((list) => list.filter((course) => course.id !== id));
+    updateHomework((list) =>
+      list.map((item) =>
         item.courseId === id ? { ...item, courseId: null } : item,
       ),
     );
@@ -125,20 +167,18 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   };
 
   const saveHomework = (draft: HomeworkDraft) => {
-    if (editingHomework) {
-      setHomework((prev) =>
-        prev.map((item) =>
-          item.id === editingHomework.id ? { ...item, ...draft } : item,
-        ),
-      );
-    } else {
-      setHomework((prev) => [...prev, { ...draft, id: nextId("h") }]);
-    }
+    updateHomework((list) =>
+      editingHomework
+        ? list.map((item) =>
+            item.id === editingHomework.id ? { ...item, ...draft } : item,
+          )
+        : [...list, { ...draft, id: nextId("h") }],
+    );
   };
 
   const toggleHomeworkStatus = (id: string) => {
-    setHomework((prev) =>
-      prev.map((item) => {
+    updateHomework((list) =>
+      list.map((item) => {
         if (item.id !== id || item.status === "archived") return item;
         return {
           ...item,
@@ -149,8 +189,8 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   };
 
   const archiveHomework = (id: string) => {
-    setHomework((prev) =>
-      prev.map((item) =>
+    updateHomework((list) =>
+      list.map((item) =>
         item.id === id && item.status === "done"
           ? { ...item, status: "archived" }
           : item,
@@ -159,7 +199,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   };
 
   const deleteHomework = (id: string) => {
-    setHomework((prev) => prev.filter((item) => item.id !== id));
+    updateHomework((list) => list.filter((item) => item.id !== id));
   };
 
   const openCourseHomework = (courseId: string, homeworkId?: string) => {
@@ -168,20 +208,88 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     setExpandedHomeworkId(homeworkId ?? null);
   };
 
-  const pendingCount = homework.filter(
-    (item) => item.status === "pending",
-  ).length;
-
   const handleSemesterChange = (id: string) => {
     setSemesterId(id);
     setWeekOverride(null);
+    setHomeworkCourseFilter("all");
+    setSelectedCourse(null);
   };
 
   const handleWeekChange = (week: number) => {
+    if (!semester) return;
     setWeekOverride(clampWeek(week, semester.weekCount));
   };
 
   const handleResetWeek = () => setWeekOverride(null);
+
+  const handleSaveSemester = (
+    input: {
+      name: string;
+      startDate: string;
+      endDate?: string;
+      weekCount: number;
+    },
+    editingId?: string,
+    copyFromId?: string,
+  ) => {
+    if (editingId) {
+      setData((prev) => ({
+        ...prev,
+        semesters: prev.semesters.map((item) =>
+          item.id === editingId ? { ...item, ...input } : item,
+        ),
+      }));
+      return;
+    }
+    const id = `sem-${Date.now()}-${(idSeq.current += 1)}`;
+    setData((prev) => ({
+      ...prev,
+      semesters: [...prev.semesters, { id, ...input }],
+      coursesBySemester: {
+        ...prev.coursesBySemester,
+        [id]: copyFromId
+          ? copyCoursesForSemester(prev.coursesBySemester[copyFromId] ?? [])
+          : [],
+      },
+      homeworkBySemester: {
+        ...prev.homeworkBySemester,
+        [id]: [],
+      },
+    }));
+    setSemesterId(id);
+  };
+
+  const handleDeleteSemester = (id: string) => {
+    const remaining = data.semesters.filter((item) => item.id !== id);
+    setData((prev) => {
+      const coursesBySemester = { ...prev.coursesBySemester };
+      const homeworkBySemester = { ...prev.homeworkBySemester };
+      delete coursesBySemester[id];
+      delete homeworkBySemester[id];
+      return {
+        ...prev,
+        semesters: prev.semesters.filter((item) => item.id !== id),
+        coursesBySemester,
+        homeworkBySemester,
+      };
+    });
+    if (semesterId === id) {
+      setSemesterId(remaining[0]?.id ?? "");
+      setHomeworkCourseFilter("all");
+      setSelectedCourse(null);
+    }
+  };
+
+  const courseCounts = Object.fromEntries(
+    data.semesters.map((item) => [
+      item.id,
+      (data.coursesBySemester[item.id] ?? []).length,
+    ]),
+  );
+
+  const pendingCount = homework.filter(
+    (item) => item.status === "pending",
+  ).length;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -217,9 +325,10 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         <CourseScheduleView
           courses={courses}
           homework={homework}
-          semesters={DEMO_SEMESTERS}
+          semesters={data.semesters}
           semester={semester}
           onSemesterChange={handleSemesterChange}
+          onManageSemesters={() => setSemesterManageOpen(true)}
           weekStart={weekStart}
           onWeekStartChange={setWeekStart}
           showAllWeeks={showAllWeeks}
@@ -295,9 +404,17 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         initial={editingHomework}
         courses={courses}
         today={today}
-        semesterStart={semester.startDate}
+        semesterStart={semester?.startDate}
         onSave={saveHomework}
         onClose={() => setHomeworkFormOpen(false)}
+      />
+      <SemesterManageDialog
+        open={semesterManageOpen}
+        semesters={data.semesters}
+        courseCounts={courseCounts}
+        onSave={handleSaveSemester}
+        onDelete={handleDeleteSemester}
+        onClose={() => setSemesterManageOpen(false)}
       />
     </div>
   );

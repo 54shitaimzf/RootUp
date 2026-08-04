@@ -219,6 +219,7 @@ describe("视图空态", () => {
     semesters: DEMO_SEMESTERS,
     semester: DEMO_SEMESTERS[0],
     onSemesterChange: () => {},
+    onManageSemesters: () => {},
     weekStart: "monday" as const,
     onWeekStartChange: () => {},
     showAllWeeks: true,
@@ -622,5 +623,17 @@ describe("视图空态", () => {
     expect(
       screen.getByText("2026-08-03 ~ 2026-12-20 · 共 20 周"),
     ).toBeInTheDocument();
+  });
+
+  it("工具栏显示学期管理入口与普通学期名", () => {
+    render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[0]]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "管理学期" })).toBeInTheDocument();
+    expect(screen.getByText("2026 秋季学期")).toBeInTheDocument();
   });
 });
