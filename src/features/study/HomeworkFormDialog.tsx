@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../components/Button";
+import { DialogFooter } from "../../components/DialogFooter";
+import { Field } from "../../components/Field";
 import { InlineNotice } from "../../components/InlineNotice";
 import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
+import { SectionLabel } from "../../components/SectionLabel";
 import { Select } from "../../components/Select";
 import type { Course, Homework, HomeworkDraft } from "../../lib/study";
+
+const NOTE_MAX = 200;
+const DETAILS_MAX = 5000;
 
 function toLocalDateTimeInput(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -30,6 +36,7 @@ export function HomeworkFormDialog({
   const [courseId, setCourseId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [note, setNote] = useState("");
+  const [details, setDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,11 +47,13 @@ export function HomeworkFormDialog({
       setCourseId(initial.courseId ?? "");
       setDueAt(initial.dueAt.slice(0, 16));
       setNote(initial.note);
+      setDetails(initial.details);
     } else {
       setTitle("");
       setCourseId("");
       setDueAt(toLocalDateTimeInput(new Date(Date.now() + 7 * 86_400_000)));
       setNote("");
+      setDetails("");
     }
   }, [open, initial]);
 
@@ -54,7 +63,8 @@ export function HomeworkFormDialog({
       !trimmedTitle ||
       trimmedTitle.length > 60 ||
       !dueAt ||
-      note.length > 200
+      note.length > NOTE_MAX ||
+      details.length > DETAILS_MAX
     ) {
       setError(t("study.homeworkFormInvalid"));
       return;
@@ -64,6 +74,7 @@ export function HomeworkFormDialog({
       courseId: courseId === "" ? null : courseId,
       title: trimmedTitle,
       note: note.trim(),
+      details: details.trim(),
       dueAt: `${dueAt}:00`,
       status: initial?.status ?? "pending",
     });
@@ -77,73 +88,105 @@ export function HomeworkFormDialog({
       onClose={onClose}
       width="max-w-md"
       footer={
-        <div className="flex gap-2">
-          <Button variant="ghost" size="md" onClick={onClose}>
-            {t("settings.cancel")}
-          </Button>
+        <DialogFooter>
           <Button variant="primary" size="md" onClick={handleSave}>
             {t("settings.save")}
           </Button>
-        </div>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            {t("settings.cancel")}
+          </Button>
+        </DialogFooter>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-5">
         {error && <InlineNotice variant="error">{error}</InlineNotice>}
-        <label className="block">
-          <span className="text-xs font-medium text-secondary">
-            {t("study.homeworkTitle")}
-          </span>
-          <Input
-            size="sm"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={t("study.homeworkTitlePlaceholder")}
-            className="mt-1"
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs font-medium text-secondary">
-              {t("study.courseOptional")}
-            </span>
-            <Select
-              value={courseId}
-              onChange={(event) => setCourseId(event.target.value)}
-              className="mt-1"
+        <section>
+          <SectionLabel>{t("study.sectionBasic")}</SectionLabel>
+          <div className="mt-3 space-y-3">
+            <Field label={t("study.homeworkTitle")} htmlFor="homework-title">
+              <Input
+                id="homework-title"
+                size="sm"
+                value={title}
+                maxLength={60}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder={t("study.homeworkTitlePlaceholder")}
+              />
+            </Field>
+            <Field
+              label={t("study.courseOptional")}
+              htmlFor="homework-course"
             >
-              <option value="">{t("study.noCourse")}</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-secondary">
-              {t("study.dueAt")}
-            </span>
-            <Input
-              size="sm"
-              type="datetime-local"
-              value={dueAt}
-              onChange={(event) => setDueAt(event.target.value)}
-              className="mt-1"
-            />
-          </label>
-        </div>
-        <label className="block">
-          <span className="text-xs font-medium text-secondary">
-            {t("study.note")}
-          </span>
-          <textarea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder={t("study.notePlaceholder")}
-            rows={2}
-            className="mt-1 min-w-0 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
-          />
-        </label>
+              <Select
+                id="homework-course"
+                value={courseId}
+                onChange={(event) => setCourseId(event.target.value)}
+              >
+                <option value="">{t("study.noCourse")}</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        </section>
+
+        <section>
+          <SectionLabel>{t("study.dueAt")}</SectionLabel>
+          <div className="mt-3">
+            <Field label={t("study.dueAt")} htmlFor="homework-due">
+              <Input
+                id="homework-due"
+                size="sm"
+                type="datetime-local"
+                value={dueAt}
+                onChange={(event) => setDueAt(event.target.value)}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section>
+          <SectionLabel>{t("study.sectionHomeworkDetails")}</SectionLabel>
+          <div className="mt-3 space-y-3">
+            <Field
+              label={t("study.note")}
+              hint={t("study.noteHint")}
+              htmlFor="homework-note"
+            >
+              <Input
+                id="homework-note"
+                size="sm"
+                value={note}
+                maxLength={NOTE_MAX}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={t("study.notePlaceholder")}
+              />
+              <div className="mt-1 text-right text-[10px] text-muted">
+                {t("study.noteCounter", { count: note.length })}
+              </div>
+            </Field>
+            <Field
+              label={t("study.details")}
+              hint={t("study.detailsHint")}
+              htmlFor="homework-details"
+            >
+              <textarea
+                id="homework-details"
+                value={details}
+                maxLength={DETAILS_MAX}
+                onChange={(event) => setDetails(event.target.value)}
+                rows={5}
+                className="min-w-0 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+              />
+              <div className="mt-1 text-right text-[10px] text-muted">
+                {t("study.detailsCounter", { count: details.length })}
+              </div>
+            </Field>
+          </div>
+        </section>
       </div>
     </Modal>
   );

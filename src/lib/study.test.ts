@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DEMO_COURSES,
   DEMO_HOMEWORK,
+  autoAssignCourseColor,
   axisRange,
+  calendarDaysUntil,
   compareHomework,
   coursePosition,
   daysUntilDue,
@@ -13,6 +15,7 @@ import {
   isValidWeekRange,
   jsDayToStudyDay,
   minToTime,
+  overdueDays,
   parseWeekRange,
   sessionActiveInWeek,
   splitOverlaps,
@@ -152,12 +155,49 @@ describe("时间格式", () => {
   });
 });
 
+describe("自动配色", () => {
+  it("空列表返回色板第一个颜色", () => {
+    expect(autoAssignCourseColor([])).toBe("slate");
+  });
+
+  it("优先选择未被使用的颜色", () => {
+    expect(autoAssignCourseColor(["slate", "sky"])).toBe("violet");
+  });
+
+  it("全部使用过时选择使用最少的颜色", () => {
+    const all = [
+      "slate", "slate", "sky", "violet", "rose", "amber",
+      "orange", "emerald", "blue", "teal", "lime", "cyan", "fuchsia",
+    ] as const;
+    expect(autoAssignCourseColor([...all])).toBe("sky");
+  });
+});
+
+describe("作业时间文案数据", () => {
+  it("逾期天数按自然日计算且最少为 1", () => {
+    const now = new Date("2026-08-04T12:00:00");
+    expect(overdueDays("2026-08-02T23:59:00", now)).toBe(2);
+    expect(overdueDays("2026-08-04T09:00:00", now)).toBe(1);
+    expect(overdueDays("2026-08-03T23:00:00", now)).toBe(1);
+    expect(overdueDays("2026-08-01T00:00:00", now)).toBe(3);
+  });
+
+  it("剩余天数按自然日差计算", () => {
+    const now = new Date("2026-08-04T12:00:00");
+    expect(calendarDaysUntil("2026-08-06T18:00:00", now)).toBe(2);
+    expect(calendarDaysUntil("2026-08-05T09:00:00", now)).toBe(1);
+    expect(calendarDaysUntil("2026-08-04T09:00:00", now)).toBe(0);
+    expect(calendarDaysUntil("2026-08-03T23:00:00", now)).toBe(-1);
+  });
+});
+
 describe("作业排序与筛选", () => {
   const pendingSoon = {
     id: "a",
     courseId: null,
     title: "A",
     note: "",
+    details: "",
     dueAt: "2026-08-06T18:00:00",
     status: "pending" as const,
   };

@@ -95,15 +95,56 @@ describe("StudyPage", () => {
     expect(screen.getByText("新作业")).toBeInTheDocument();
   });
 
-  it("勾选完成并可归档", () => {
+  it("勾选完成需确认，确认后可归档", () => {
     renderStudy();
     fireEvent.click(screen.getByRole("button", { name: "作业" }));
     const row = screen.getByText("程序设计 实验报告").closest("li")!;
     const checkbox = within(row).getByRole("checkbox");
     fireEvent.click(checkbox);
+    expect(
+      screen.getByText("确认将“程序设计 实验报告”标记为已完成？"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "标记完成" }));
     expect(checkbox).toBeChecked();
     fireEvent.click(within(row).getByRole("button", { name: "归档" }));
     expect(within(row).getByRole("checkbox")).toBeDisabled();
+  });
+
+  it("恢复待办直接生效且不弹确认", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    const row = screen.getByText("线性代数 习题 2").closest("li")!;
+    const checkbox = within(row).getByRole("checkbox");
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(
+      screen.queryByText(/标记为已完成/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("详情可展开显示完整内容", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    const row = screen.getByText("高等数学 作业 3").closest("li")!;
+    expect(
+      within(row).queryByText(/完整推导过程/),
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "查看详情" }));
+    expect(
+      within(row).getByText(/要求写出完整推导过程/),
+    ).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "收起详情" }));
+    expect(
+      within(row).queryByText(/要求写出完整推导过程/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("截止文案显示逾期天数与剩余天数", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    expect(screen.getByText(/已逾期 2 天 · 2026-08-02 23:59/)).toBeInTheDocument();
+    expect(screen.getByText(/2 天后截止 · 2026-08-06 18:00/)).toBeInTheDocument();
   });
 
   it("删除作业需确认", () => {

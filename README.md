@@ -24,7 +24,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity 项目，自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
 - 新手引导与帮助中心：首次启动欢迎弹窗、侧栏全局帮助入口（新手入门 / 搜索与高级用法）、IDE 选择与官方下载指导、检测到代码项目但无 IDE 时按需引导
 - 首个公开发布：NSIS 安装包（per-user、免管理员、中英语言选择）、品牌图标全套、安装包自动验证
-- 开发中（v0.8.0-dev）：学业页 UI 第一版——课程表（时间轴周视图，支持单双周 / 指定周次、周起始日切换）与作业（截止排序、状态 / 课程筛选）；数据持久化、截止提醒与课程关键词联动后续接入
+- 开发中（v0.8.0-dev）：学业页——课程表（时间轴周视图、日期与“今天”标识、当前时间线、单双周 / 指定周次、周起始日切换）与作业（截止排序、状态 / 课程筛选、短备注 + 可展开详情、逾期/剩余天数、标记完成确认）；全应用按钮遵循 Windows“是左否右”；数据持久化、截止提醒与课程关键词联动后续接入
 
 ### 搜索语法
 
@@ -110,7 +110,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Configurable rules: ignore rules and classification mapping with three presets (default / developer / creative); takes effect after restart
 - Label management: custom display names, icons and a preset palette for labels; built-in categories stay read-only
 - Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
-- In development (v0.8.0-dev): Study page UI v1 — a timeline weekly schedule (odd/even/custom weeks, Monday/Sunday week start) plus homework tracking with deadline sorting and status/course filters; persistence, reminders and course-keyword classification come next
+- In development (v0.8.0-dev): Study page — timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation); buttons follow the Windows yes-left/no-right convention; persistence, reminders and course-keyword classification come next
 
 ### Search Syntax
 

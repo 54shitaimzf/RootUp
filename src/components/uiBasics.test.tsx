@@ -6,6 +6,9 @@ import { InlineNotice } from "./InlineNotice";
 import { EmptyState } from "./EmptyState";
 import { PageHeader } from "./PageHeader";
 import { SyntaxTable } from "./SyntaxTable";
+import { Field } from "./Field";
+import { ColorPicker } from "./ColorPicker";
+import { DialogFooter } from "./DialogFooter";
 
 describe("共享基础组件", () => {
   it("Input 渲染占位符与尺寸类", () => {
@@ -54,5 +57,33 @@ describe("共享基础组件", () => {
     render(<SyntaxTable />);
     expect(screen.getByText("type")).toBeInTheDocument();
     expect(screen.getByText(/按文件类型筛选/)).toBeInTheDocument();
+  });
+
+  it("Field 渲染标签与提示", () => {
+    render(
+      <Field label="名称" hint="选填" htmlFor="f1">
+        <input id="f1" />
+      </Field>,
+    );
+    expect(screen.getByLabelText("名称")).toBeInTheDocument();
+    expect(screen.getByText("选填")).toBeInTheDocument();
+  });
+
+  it("ColorPicker 支持自动选项与色板选择", () => {
+    const { container } = render(
+      <ColorPicker
+        value="auto"
+        onChange={() => {}}
+        allowAuto
+        autoLabel="自动"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "自动" })).toBeInTheDocument();
+    expect(container.querySelectorAll("button").length).toBeGreaterThan(1);
+  });
+
+  it("DialogFooter 渲染子元素", () => {
+    render(<DialogFooter>底部</DialogFooter>);
+    expect(screen.getByText("底部")).toBeInTheDocument();
   });
 });

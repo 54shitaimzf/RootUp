@@ -91,11 +91,11 @@ export function OnboardingDialog({
       width="max-w-md"
       footer={
         <>
-          <Button variant="ghost" size="md" onClick={done}>
-            {t("help.skip")}
-          </Button>
           <Button variant="primary" size="md" onClick={done}>
             {t("help.start")}
+          </Button>
+          <Button variant="ghost" size="md" onClick={done}>
+            {t("help.skip")}
           </Button>
         </>
       }

@@ -128,7 +128,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 **设置页交互**：设置页以索引行承载低频高级配置——规则方案（套用/保存）、忽略规则、分类映射各占一行，编辑分别进入独立弹窗；分类映射弹窗只展示「内置 + 覆盖」合并后的生效视图（`src/lib/effectiveMap.ts` 纯函数负责合并与单扩展名拆分/合并规则），点击任意扩展名可立即改类别或恢复默认，弹窗草稿与方案快照互不混用。
 
-**配置蓝图（迭代 B）**：归档目标结构、扫描选项（递归/隐藏文件/最大大小）、AI 分类开关、皮肤等字段待功能落地时按版本化约定新增，不提前预留空字段。学业数据（课程表 / 作业）计划以独立数据模块承载（`core/study.rs` + 索引库新表或独立数据文件），不写入 settings.json，避免配置与业务数据耦合。
+**配置蓝图（迭代 B）**：归档目标结构、扫描选项（递归/隐藏文件/最大大小）、AI 分类开关、皮肤等字段待功能落地时按版本化约定新增，不提前预留空字段。学业数据（课程表 / 作业）计划以独立数据模块承载（`core/study.rs` + 索引库新表或独立数据文件），不写入 settings.json，避免配置与业务数据耦合。作业区分短备注 `note`（≤200，行内显示）与长详情 `details`（≤5000，可展开），`details` 为后续 AI 详情摘要预留输入字段。
 
 `core` 层为纯 Rust 数据结构，不依赖 Tauri 类型，便于后续扩展字段与单元测试。
 
@@ -201,7 +201,8 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **日志约定**：`filter: 切换 kind=... key=... active=...`、`autocomplete: 插入 kind=... key=... token=...`、`filter: 习惯数据损坏已回退`，供冒烟与排查。
 - **转义候选**：Windows 文件名不允许冒号，真实文件名不会与 `type:`/`label:` 等语法 token 冲突；未来如需搜索含冒号字符串，在 `parse_query` 增加 `\` 转义（如 `\label:高数` 视为纯文本），本次不实现。
 - **弹层样式约定**：锚定/悬浮层（搜索帮助、自动补全下拉、分类映射编辑浮层等）与居中 Modal（设置弹窗、确认弹窗、关闭确认弹窗）统一使用 `floating-panel`——无硬边框，细 ring + `--shadow-float` 双层投影 + 背景模糊 + 半透明底，深浅主题由 `.dark .floating-panel` 适配；`--shadow-float` 为普通 CSS 变量，皮肤可运行时覆盖。锚定/悬浮层追加 `pop-in` 淡入上移动画（约 120ms），居中 Modal 保留遮罩与标题/底部分隔线以维持长内容可读性。新增弹层一律复用该约定，禁止手写边框/投影变体。
-- **文本层级与弹窗高度约定**：文本三级语义为 `--text-strong`（页面/弹窗标题）、`--text-secondary`（区块标题，配 `SectionLabel`）、`--text-muted`（说明/计数），工具类 `.text-strong / .text-secondary / .text-muted` 为唯一样式来源，皮肤可运行时覆盖。`Modal` 支持可选 `contentHeight`（内容区 `flex-none` + 固定高度 + 内部滚动）；仅内容可能随交互变化高度或必然超屏的弹窗启用（当前仅分类映射传 `h-[65vh]`），其余弹窗保持自适应，禁止为小弹窗固定高度。
+- **文本层级与弹窗高度约定**：文本三级语义为 `--text-strong`（页面/弹窗标题）、`--text-secondary`（区块标题，配 `SectionLabel`）、`--text-muted`（说明/计数），工具类 `.text-strong / .text-secondary / .text-muted` 为唯一样式来源，皮肤可运行时覆盖。`Modal` 标题统一 `text-lg`，支持可选 `contentHeight`（内容区 `flex-none` + 固定高度 + 内部滚动）；仅内容可能随交互变化高度或必然超屏的弹窗启用（当前仅分类映射传 `h-[65vh]`），其余弹窗保持自适应，禁止为小弹窗固定高度。
+- **按钮顺序约定（Windows 是左否右）**：弹窗底部主操作（保存/确认/删除）在左、取消在最右，统一经 `DialogFooter` 渲染；破坏性操作（如课程表单的“删除课程”）独立置于最左。全应用只允许这一种顺序，新增弹窗禁止手写其它排列。
 - **测试策略与设施**：纯逻辑（lib/、core/、infra/）用 vitest / cargo test 覆盖；组件与 hooks 用 `@testing-library/react` + jsdom 覆盖交互边界（键盘协议、弹窗开关、分页合并、事件状态机），mock 约定为 `vi.mock("../lib/tauri")` 与 `vi.mock("@tauri-apps/api/event")`，测试设施全部位于 devDependencies，不进入生产产物。新增组件测试照此扩展，禁止跳过关键交互边界。
 - **日志与校验约定**：前端行为日志统一 `ui: ` 前缀（如 `ui: 刷新`、`ui: 加载更多 offset=N`、`ui: 清空搜索`、`ui: 取消扫描`），后端子系统沿用各自前缀；`settings: 加载` 由 `get_settings` 输出，冒烟脚本据此断言。`scripts/check-arch.ps1` 校验 `pages → features → components/hooks → lib` 单向依赖（同层仅允许 features/components/hooks/lib 互引），以 `npm run check:arch` 运行并在 CI 强制。
 - **AddDirOutcome 契约**：`add_watched_dir` 返回 `{ message, dir }`，其中 `dir` 为规范化后的路径；前端必须用返回值同步列表，不得回显用户输入原文（避免大小写/斜杠不一致）。
@@ -213,7 +214,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **多语言**：在 `src/i18n/locales/` 新增语言文件，并在 `core/settings.rs` 的校验常量中登记语言代码。
 - **主题**：三态（跟随系统/浅/深）由 `theme/ThemeProvider.tsx` 管理，`matchMedia` 监听系统变化。
 - **皮肤**：皮肤 = 一套令牌 + 全局变量 + 组件变体的整套覆盖。默认皮肤由三部分组成：`theme/tokens.css` 的 `@theme` 品牌令牌（颜色/圆角/阴影）、`styles/global.css` 的全局 CSS 变量（滚动条色、`--shadow-float`、文本三级变量）、共享组件变体（`Button` 的 variant / `Banner` 的 variant / `Chip` 的 variant / `IconButton` 的 tone）。新增皮肤时整体替换/叠加即可，组件逻辑零改动；v1 仅提供 default。
-- **共享交互组件**：`components/Button.tsx`（primary/secondary/danger/amber/ghost × xs/sm/md，样式等价映射见组件内注释与 README）、`components/Banner.tsx`（brand/warn/error，可选关闭）、`components/IconButton.tsx`（xs/sm/md × neutral/danger/brand/inherit，统一图标按钮与 × 悬停反馈）、`components/Chip.tsx`（sm=h-6 / md=h-7 × neutral/active/brand/selectable，支持 icon/badge/onRemove/onClick，文件页与设置弹窗共用）、`components/SectionLabel.tsx`（sm/xs 两级区块标题）、`components/ConfirmDialog.tsx`（基于 Modal 的确认弹窗）、`components/ConfirmButton.tsx`（两步确认状态封装）。所有新页面优先复用，禁止复制手写变体。
+- **共享交互组件**：`components/Button.tsx`（primary/secondary/danger/amber/ghost × xs/sm/md，样式等价映射见组件内注释与 README）、`components/Banner.tsx`（brand/warn/error，可选关闭）、`components/IconButton.tsx`（xs/sm/md × neutral/danger/brand/inherit，统一图标按钮与 × 悬停反馈）、`components/Chip.tsx`（sm=h-6 / md=h-7 × neutral/active/brand/selectable，支持 icon/badge/onRemove/onClick，文件页与设置弹窗共用）、`components/SectionLabel.tsx`（sm/xs 两级区块标题）、`components/ConfirmDialog.tsx`（基于 Modal 的确认弹窗）、`components/ConfirmButton.tsx`（两步确认状态封装）、`components/Field.tsx`（标签 + 提示 + 控件）、`components/ColorPicker.tsx`（12 色板 + 可选“自动”，标签/课程共用）、`components/DialogFooter.tsx`（弹窗底部按钮容器）。所有新页面优先复用，禁止复制手写变体。
 - **基础表单与状态组件**：`Input`（sm/md，统一边框/聚焦/深浅色）、`Select`、`InlineNotice`（success/error/info）、`EmptyState`、`PageHeader`、`SyntaxTable`（语法行单一来源）均为共享组件；新增输入/提示/空态/页头一律复用，禁止手写等价样式。
 - **帮助中心与新手引导**：`HelpCenterProvider` 全局装配（侧栏入口 + 首次欢迎 + 分组帮助弹窗）；首次欢迎用 localStorage `rootup.onboarding.v1` 一次性标记，帮助中心可重看；IDE 指导数据在 `lib/ideGuide.ts`（仅官方链接）；后端 `list_detected_tools` 返回已检测工具 key，`open_url` 仅允许 https 且命中 `core/tools.rs` 白名单域名（`ALLOWED_DOWNLOAD_DOMAINS`），非法 URL 拒绝并记日志。
 - **打包与发布约定**：`tauri.conf.json` 启用 NSIS（`installMode: currentUser`、中英语言选择、开始菜单 RootUp），图标由 `npm run tauri icon resources/icons/rootup-sprout.svg` 生成全套；发布前必须 `npm run check:version` 全绿（规则见"版本号规则与发布纪律"）；发布验证统一走 `scripts/verify-installer.ps1`（静默安装 → 冒烟 → 卸载），日常 CI 为 `ci.yml`（构建 + smoke + 架构校验），发布为 `release.yml`（打 `v*` tag 构建安装包 → 验证 → 上传 GitHub Release）；不签名、不启用 updater，SmartScreen 提示写入发布说明。

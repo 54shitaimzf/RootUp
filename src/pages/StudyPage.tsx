@@ -172,6 +172,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
       <CourseFormDialog
         open={courseFormOpen}
         initial={editingCourse}
+        existingColors={courses.map((course) => course.color)}
         onSave={saveCourse}
         onDelete={deleteCourse}
         onClose={() => setCourseFormOpen(false)}

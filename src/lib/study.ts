@@ -1,4 +1,4 @@
-import type { LabelColorKey } from "./labelDefs";
+import { LABEL_COLOR_KEYS, type LabelColorKey } from "./labelDefs";
 
 /** 学业页类型与纯函数：下一轮后端按此结构 1:1 落地。 */
 
@@ -29,7 +29,10 @@ export interface Homework {
   id: string;
   courseId: string | null;
   title: string;
+  /** 短备注：行内显示，≤200 字 */
   note: string;
+  /** 长详情：可完整记录题目/要求，≤5000 字；后续 AI 摘要的输入字段 */
+  details: string;
   dueAt: string;
   status: HomeworkStatus;
 }
@@ -205,6 +208,46 @@ export function daysUntilDue(dueAt: string, now: Date): number {
   return Math.ceil((new Date(dueAt).getTime() - now.getTime()) / 86_400_000);
 }
 
+/** 按自然日差计算剩余天数（今天=0、明天=1、昨天=-1）。 */
+export function calendarDaysUntil(dueAt: string, now: Date): number {
+  const due = new Date(dueAt);
+  const startDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((startDue.getTime() - startNow.getTime()) / 86_400_000);
+}
+
+/** 按自然日差计算“已逾期 N 天”，最少为 1。 */
+export function overdueDays(dueAt: string, now: Date): number {
+  const due = new Date(dueAt);
+  const startDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round(
+    (startNow.getTime() - startDue.getTime()) / 86_400_000,
+  );
+  return Math.max(1, diff);
+}
+
+/** 自动配色：按色板顺序选择“最少被使用”的颜色，平局取更靠前者。 */
+export function autoAssignCourseColor(
+  existingColors: LabelColorKey[],
+): LabelColorKey {
+  const counts = new Map<LabelColorKey, number>();
+  for (const key of LABEL_COLOR_KEYS) counts.set(key, 0);
+  for (const color of existingColors) {
+    if (counts.has(color)) counts.set(color, (counts.get(color) ?? 0) + 1);
+  }
+  let best: LabelColorKey = LABEL_COLOR_KEYS[0];
+  let bestCount = Infinity;
+  for (const key of LABEL_COLOR_KEYS) {
+    const count = counts.get(key) ?? 0;
+    if (count < bestCount) {
+      best = key;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 const STATUS_RANK: Record<HomeworkStatus, number> = {
   pending: 0,
   done: 1,
@@ -277,7 +320,9 @@ export const DEMO_HOMEWORK: Homework[] = [
     id: "h-demo-1",
     courseId: "c-demo-1",
     title: "高等数学 作业 3",
-    note: "第 3 章习题 1–8",
+    note: "第 3 章习题 1–8，周二前交",
+    details:
+      "完成第 3 章习题 1–8，重点：极限与连续。\n要求写出完整推导过程，拍照或扫描后提交到课程平台。",
     dueAt: "2026-08-02T23:59:00",
     status: "pending",
   },
@@ -286,6 +331,7 @@ export const DEMO_HOMEWORK: Homework[] = [
     courseId: "c-demo-2",
     title: "程序设计 实验报告",
     note: "提交到课程平台",
+    details: "",
     dueAt: "2026-08-06T18:00:00",
     status: "pending",
   },
@@ -294,6 +340,7 @@ export const DEMO_HOMEWORK: Homework[] = [
     courseId: null,
     title: "自学笔记整理",
     note: "",
+    details: "",
     dueAt: "2026-08-09T12:00:00",
     status: "pending",
   },
@@ -302,6 +349,7 @@ export const DEMO_HOMEWORK: Homework[] = [
     courseId: "c-demo-3",
     title: "线性代数 习题 2",
     note: "",
+    details: "",
     dueAt: "2026-08-01T23:59:00",
     status: "done",
   },

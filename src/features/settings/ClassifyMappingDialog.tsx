@@ -129,11 +129,11 @@ export function ClassifyMappingDialog({
       contentHeight="h-[65vh]"
       footer={
         <>
-          <Button variant="ghost" size="md" onClick={onClose}>
-            {t("settings.cancel")}
-          </Button>
           <Button variant="primary" size="md" onClick={() => void save()}>
             {t("settings.save")}
+          </Button>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            {t("settings.cancel")}
           </Button>
         </>
       }
@@ -267,15 +267,15 @@ export function ClassifyMappingDialog({
                 <span />
               )}
               <div className="flex gap-2">
+                <Button variant="primary" size="sm" onClick={applyEdit}>
+                  {t("settings.save")}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setEditing(null)}
                 >
                   {t("settings.cancel")}
-                </Button>
-                <Button variant="primary" size="sm" onClick={applyEdit}>
-                  {t("settings.save")}
                 </Button>
               </div>
             </div>

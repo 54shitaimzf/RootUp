@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../components/Button";
+import { ColorPicker } from "../../components/ColorPicker";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { DialogFooter } from "../../components/DialogFooter";
+import { Field } from "../../components/Field";
 import { InlineNotice } from "../../components/InlineNotice";
 import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
+import { SectionLabel } from "../../components/SectionLabel";
 import { Select } from "../../components/Select";
+import type { LabelColorKey } from "../../lib/labelDefs";
 import {
-  DEFAULT_LABEL_COLOR,
-  LABEL_COLOR_KEYS,
-  LABEL_COLORS,
-  type LabelColorKey,
-} from "../../lib/labelDefs";
-import {
+  autoAssignCourseColor,
   isValidWeekRange,
   minToTime,
   timeToMin,
@@ -40,7 +40,7 @@ interface FormState {
   endTime: string;
   weekRule: WeekRule;
   weekRange: string;
-  color: LabelColorKey;
+  color: LabelColorKey | "auto";
 }
 
 const EMPTY_FORM: FormState = {
@@ -52,18 +52,20 @@ const EMPTY_FORM: FormState = {
   endTime: "09:40",
   weekRule: "all",
   weekRange: "",
-  color: DEFAULT_LABEL_COLOR,
+  color: "auto",
 };
 
 export function CourseFormDialog({
   open,
   initial,
+  existingColors = [],
   onSave,
   onDelete,
   onClose,
 }: {
   open: boolean;
   initial: Course | null;
+  existingColors?: LabelColorKey[];
   onSave: (draft: CourseDraft) => void;
   onDelete?: (id: string) => void;
   onClose: () => void;
@@ -126,7 +128,10 @@ export function CourseFormDialog({
       weekRule: form.weekRule,
       weekRange:
         form.weekRule === "range" ? form.weekRange.trim() : undefined,
-      color: form.color,
+      color:
+        form.color === "auto"
+          ? autoAssignCourseColor(existingColors)
+          : form.color,
     });
     onClose();
   };
@@ -140,176 +145,160 @@ export function CourseFormDialog({
         width="max-w-md"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
-            {initial && onDelete ? (
-              <Button
-                variant="danger"
-                size="md"
-                onClick={() => setConfirmDelete(true)}
-              >
-                {t("study.deleteCourse")}
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <Button variant="ghost" size="md" onClick={onClose}>
-                {t("settings.cancel")}
-              </Button>
+            <div>
+              {initial && onDelete && (
+                <Button
+                  variant="danger"
+                  size="md"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  {t("study.deleteCourse")}
+                </Button>
+              )}
+            </div>
+            <DialogFooter>
               <Button variant="primary" size="md" onClick={handleSave}>
                 {t("settings.save")}
               </Button>
-            </div>
+              <Button variant="ghost" size="md" onClick={onClose}>
+                {t("settings.cancel")}
+              </Button>
+            </DialogFooter>
           </div>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-5">
           {error && <InlineNotice variant="error">{error}</InlineNotice>}
-          <label className="block">
-            <span className="text-xs font-medium text-secondary">
-              {t("study.courseName")}
-            </span>
-            <Input
-              size="sm"
-              value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
-              placeholder={t("study.courseNamePlaceholder")}
-              className="mt-1"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-medium text-secondary">
-                {t("study.teacher")}
-              </span>
-              <Input
-                size="sm"
-                value={form.teacher}
-                onChange={(event) =>
-                  setForm({ ...form, teacher: event.target.value })
-                }
-                placeholder={t("study.teacherPlaceholder")}
-                className="mt-1"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-secondary">
-                {t("study.location")}
-              </span>
-              <Input
-                size="sm"
-                value={form.location}
-                onChange={(event) =>
-                  setForm({ ...form, location: event.target.value })
-                }
-                placeholder={t("study.locationPlaceholder")}
-                className="mt-1"
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <label className="block">
-              <span className="text-xs font-medium text-secondary">
-                {t("study.day")}
-              </span>
-              <Select
-                value={form.day}
-                onChange={(event) => setForm({ ...form, day: event.target.value })}
-                className="mt-1"
-              >
-                {DAY_KEYS.map((key, index) => (
-                  <option key={key} value={String(index + 1)}>
-                    {t(`study.${key}`)}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-secondary">
-                {t("study.startTime")}
-              </span>
-              <Input
-                size="sm"
-                type="time"
-                value={form.startTime}
-                onChange={(event) =>
-                  setForm({ ...form, startTime: event.target.value })
-                }
-                className="mt-1"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-secondary">
-                {t("study.endTime")}
-              </span>
-              <Input
-                size="sm"
-                type="time"
-                value={form.endTime}
-                onChange={(event) =>
-                  setForm({ ...form, endTime: event.target.value })
-                }
-                className="mt-1"
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-medium text-secondary">
-                {t("study.weekRule")}
-              </span>
-              <Select
-                value={form.weekRule}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    weekRule: event.target.value as WeekRule,
-                  })
-                }
-                className="mt-1"
-              >
-                <option value="all">{t("study.weekRuleAll")}</option>
-                <option value="odd">{t("study.weekRuleOdd")}</option>
-                <option value="even">{t("study.weekRuleEven")}</option>
-                <option value="range">{t("study.weekRuleRange")}</option>
-              </Select>
-            </label>
-            {form.weekRule === "range" && (
-              <label className="block">
-                <span className="text-xs font-medium text-secondary">
-                  {t("study.weekRangePlaceholder")}
-                </span>
+          <section>
+            <SectionLabel>{t("study.sectionBasic")}</SectionLabel>
+            <div className="mt-3 space-y-3">
+              <Field label={t("study.courseName")} htmlFor="course-name">
                 <Input
+                  id="course-name"
+                  size="sm"
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm({ ...form, name: event.target.value })
+                  }
+                  placeholder={t("study.courseNamePlaceholder")}
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t("study.teacher")} htmlFor="course-teacher">
+                  <Input
+                    id="course-teacher"
+                    size="sm"
+                    value={form.teacher}
+                    onChange={(event) =>
+                      setForm({ ...form, teacher: event.target.value })
+                    }
+                    placeholder={t("study.teacherPlaceholder")}
+                  />
+                </Field>
+                <Field label={t("study.location")} htmlFor="course-location">
+                  <Input
+                    id="course-location"
+                    size="sm"
+                    value={form.location}
+                    onChange={(event) =>
+                      setForm({ ...form, location: event.target.value })
+                    }
+                    placeholder={t("study.locationPlaceholder")}
+                  />
+                </Field>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>{t("study.sectionTimeWeeks")}</SectionLabel>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <Field label={t("study.day")} htmlFor="course-day">
+                <Select
+                  id="course-day"
+                  value={form.day}
+                  onChange={(event) =>
+                    setForm({ ...form, day: event.target.value })
+                  }
+                >
+                  {DAY_KEYS.map((key, index) => (
+                    <option key={key} value={String(index + 1)}>
+                      {t(`study.${key}`)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={t("study.startTime")} htmlFor="course-start">
+                <Input
+                  id="course-start"
+                  size="sm"
+                  type="time"
+                  value={form.startTime}
+                  onChange={(event) =>
+                    setForm({ ...form, startTime: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label={t("study.endTime")} htmlFor="course-end">
+                <Input
+                  id="course-end"
+                  size="sm"
+                  type="time"
+                  value={form.endTime}
+                  onChange={(event) =>
+                    setForm({ ...form, endTime: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <Field label={t("study.weekRule")} htmlFor="course-week-rule">
+                <Select
+                  id="course-week-rule"
+                  value={form.weekRule}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      weekRule: event.target.value as WeekRule,
+                    })
+                  }
+                >
+                  <option value="all">{t("study.weekRuleAll")}</option>
+                  <option value="odd">{t("study.weekRuleOdd")}</option>
+                  <option value="even">{t("study.weekRuleEven")}</option>
+                  <option value="range">{t("study.weekRuleRange")}</option>
+                </Select>
+              </Field>
+              <Field
+                label={t("study.weekRangePlaceholder")}
+                hint={t("study.weekRangeHint")}
+                htmlFor="course-week-range"
+              >
+                <Input
+                  id="course-week-range"
                   size="sm"
                   value={form.weekRange}
+                  disabled={form.weekRule !== "range"}
                   onChange={(event) =>
                     setForm({ ...form, weekRange: event.target.value })
                   }
                   placeholder={t("study.weekRangePlaceholder")}
-                  className="mt-1"
                 />
-              </label>
-            )}
-          </div>
-          <div>
-            <span className="text-xs font-medium text-secondary">
-              {t("study.color")}
-            </span>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {LABEL_COLOR_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={form.color === key}
-                  onClick={() => setForm({ ...form, color: key })}
-                  className={`h-6 w-6 rounded-full ${LABEL_COLORS[key].dot} transition-transform ${
-                    form.color === key
-                      ? "ring-2 ring-brand-600 ring-offset-2 dark:ring-offset-slate-900"
-                      : "hover:scale-110"
-                  }`}
-                />
-              ))}
+              </Field>
             </div>
-          </div>
+          </section>
+
+          <section>
+            <SectionLabel>{t("study.sectionColor")}</SectionLabel>
+            <div className="mt-3">
+              <ColorPicker
+                allowAuto
+                autoLabel={t("study.colorAuto")}
+                value={form.color}
+                onChange={(color) => setForm({ ...form, color })}
+              />
+            </div>
+          </section>
         </div>
       </Modal>
       {initial && onDelete && (

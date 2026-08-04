@@ -7,13 +7,14 @@ import {
   DEFAULT_LABEL_COLOR,
   DEFAULT_LABEL_ICON,
   LABEL_COLORS,
-  LABEL_COLOR_KEYS,
   LABEL_ICONS,
   labelColorKey,
   labelIconKey,
+  type LabelColorKey,
 } from "../../lib/labelDefs";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
+import { ColorPicker } from "../../components/ColorPicker";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { FilterIcon } from "../../components/FilterIcon";
 import { IconButton } from "../../components/IconButton";
@@ -48,7 +49,7 @@ export function LabelManageDialog({
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const [icon, setIcon] = useState(DEFAULT_LABEL_ICON);
-  const [color, setColor] = useState(DEFAULT_LABEL_COLOR);
+  const [color, setColor] = useState<LabelColorKey>(DEFAULT_LABEL_COLOR);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LabelDef | null>(null);
@@ -88,7 +89,7 @@ export function LabelManageDialog({
     setName(def.name);
     setKey(def.key);
     setIcon(def.icon);
-    setColor(def.color);
+    setColor(labelColorKey(def.color));
     setError(null);
   };
 
@@ -162,9 +163,6 @@ export function LabelManageDialog({
         footer={
           formOpen ? (
             <>
-              <Button variant="ghost" size="md" onClick={resetForm}>
-                {t("settings.cancel")}
-              </Button>
               <Button
                 variant="primary"
                 size="md"
@@ -172,6 +170,9 @@ export function LabelManageDialog({
                 onClick={() => void save()}
               >
                 {t("settings.save")}
+              </Button>
+              <Button variant="ghost" size="md" onClick={resetForm}>
+                {t("settings.cancel")}
               </Button>
             </>
           ) : (
@@ -309,20 +310,14 @@ export function LabelManageDialog({
               </div>
               <div>
                 <SectionLabel size="xs">{t("settings.labelColor")}</SectionLabel>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {LABEL_COLOR_KEYS.map((colorKey) => (
-                    <button
-                      key={colorKey}
-                      type="button"
-                      aria-label={colorKey}
-                      onClick={() => setColor(colorKey)}
-                      className={`size-7 rounded-full transition-transform ${
-                        color === colorKey
-                          ? "ring-2 ring-brand-600 ring-offset-2 dark:ring-offset-slate-900"
-                          : ""
-                      } ${LABEL_COLORS[colorKey].dot}`}
-                    />
-                  ))}
+                <div className="mt-1.5">
+                  <ColorPicker
+                    size="md"
+                    value={color}
+                    onChange={(value) => {
+                      if (value !== "auto") setColor(value);
+                    }}
+                  />
                 </div>
               </div>
             </div>

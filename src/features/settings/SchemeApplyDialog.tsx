@@ -53,9 +53,6 @@ export function SchemeApplyDialog({
       width="max-w-md"
       footer={
         <>
-          <Button variant="ghost" size="md" onClick={onClose}>
-            {t("settings.cancel")}
-          </Button>
           <ConfirmButton
             label={t("settings.applySelected")}
             pendingLabel={t("settings.confirmApplySelected")}
@@ -69,6 +66,9 @@ export function SchemeApplyDialog({
               onClose();
             }}
           />
+          <Button variant="ghost" size="md" onClick={onClose}>
+            {t("settings.cancel")}
+          </Button>
         </>
       }
     >

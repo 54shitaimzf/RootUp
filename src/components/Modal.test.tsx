@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Modal } from "./Modal";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 describe("Modal", () => {
   it("渲染标题、内容与关闭按钮", () => {
@@ -56,5 +57,23 @@ describe("Modal", () => {
       </Modal>,
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("ConfirmDialog 遵循 Windows 是左否右（确认在左、取消在右）", () => {
+    render(
+      <ConfirmDialog
+        open
+        title="确认"
+        description="确定？"
+        confirmLabel="确认删除"
+        danger
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    const buttons = screen.getAllByRole("button");
+    const names = buttons.map((button) => button.textContent);
+    expect(names.indexOf("确认删除")).toBeGreaterThanOrEqual(0);
+    expect(names.indexOf("取消")).toBeGreaterThan(names.indexOf("确认删除"));
   });
 });

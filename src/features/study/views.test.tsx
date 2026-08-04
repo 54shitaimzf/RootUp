@@ -47,6 +47,38 @@ describe("CourseFormDialog", () => {
     );
   });
 
+  it("新建默认自动配色，按最少使用解析具体颜色", () => {
+    const onSave = vi.fn();
+    render(
+      <CourseFormDialog
+        open
+        initial={null}
+        existingColors={["slate", "sky"]}
+        onSave={onSave}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
+      target: { value: "大学英语" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ color: "violet" }),
+    );
+  });
+
+  it("非指定周次时周次范围输入禁用", () => {
+    render(
+      <CourseFormDialog
+        open
+        initial={null}
+        onSave={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByPlaceholderText("如：2-16 或 1,3,5-8")).toBeDisabled();
+  });
+
   it("指定周次非法时提示错误", () => {
     render(
       <CourseFormDialog
@@ -104,6 +136,20 @@ describe("HomeworkFormDialog", () => {
         status: "pending",
       }),
     );
+  });
+
+  it("备注与详情字段带长度上限", () => {
+    render(
+      <HomeworkFormDialog
+        open
+        initial={null}
+        courses={DEMO_COURSES}
+        onSave={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText("备注")).toHaveAttribute("maxlength", "200");
+    expect(screen.getByLabelText("详情")).toHaveAttribute("maxlength", "5000");
   });
 });
 

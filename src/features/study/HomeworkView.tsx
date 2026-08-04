@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -8,13 +15,12 @@ import { EmptyState } from "../../components/EmptyState";
 import { IconButton } from "../../components/IconButton";
 import { LABEL_COLORS } from "../../lib/labelDefs";
 import {
-  daysUntilDue,
   filterHomework,
-  isOverdue,
   type Course,
   type Homework,
   type HomeworkStatusFilter,
 } from "../../lib/study";
+import { DueText } from "./DueText";
 
 const STATUS_FILTERS: { value: HomeworkStatusFilter; labelKey: string }[] = [
   { value: "all", labelKey: "study.statusAll" },
@@ -50,26 +56,24 @@ export function HomeworkView({
   const [statusFilter, setStatusFilter] =
     useState<HomeworkStatusFilter>("all");
   const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null);
+  const [doneTarget, setDoneTarget] = useState<Homework | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const items = filterHomework(homework, {
     status: statusFilter,
     courseId: courseFilter,
   });
 
-  const dueLabel = (item: Homework) => {
-    const absolute = item.dueAt.slice(0, 16).replace("T", " ");
-    if (item.status !== "pending") return absolute;
-    if (isOverdue(item, today)) {
-      return (
-        <span className="font-medium text-red-500">
-          {t("study.overdue")} · {absolute}
-        </span>
-      );
-    }
-    const days = daysUntilDue(item.dueAt, today);
-    if (days === 0) return `${t("study.dueToday")} · ${absolute}`;
-    if (days === 1) return `${t("study.dueTomorrow")} · ${absolute}`;
-    return `${t("study.daysLeft", { days })} · ${absolute}`;
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const courseChip = (item: Homework) => {
@@ -160,6 +164,7 @@ export function HomeworkView({
           {items.map((item) => {
             const done = item.status === "done";
             const archived = item.status === "archived";
+            const expanded = expandedIds.has(item.id);
             return (
               <li
                 key={item.id}
@@ -169,7 +174,13 @@ export function HomeworkView({
                   type="checkbox"
                   checked={done}
                   disabled={archived}
-                  onChange={() => onToggleStatus(item.id)}
+                  onChange={() => {
+                    if (item.status === "pending") {
+                      setDoneTarget(item);
+                    } else {
+                      onToggleStatus(item.id);
+                    }
+                  }}
                   aria-label={item.title}
                   className="size-4 shrink-0 accent-brand-600"
                 />
@@ -186,7 +197,9 @@ export function HomeworkView({
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                     <span>{courseChip(item)}</span>
                     <span>·</span>
-                    <span>{dueLabel(item)}</span>
+                    <span>
+                      <DueText homework={item} today={today} />
+                    </span>
                     {item.note && (
                       <>
                         <span>·</span>
@@ -194,8 +207,25 @@ export function HomeworkView({
                       </>
                     )}
                   </div>
+                  {expanded && item.details && (
+                    <div className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs text-secondary dark:bg-slate-800">
+                      {item.details}
+                    </div>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  {item.details && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={expanded ? ChevronUp : ChevronDown}
+                      onClick={() => toggleExpanded(item.id)}
+                    >
+                      {expanded
+                        ? t("study.hideDetails")
+                        : t("study.showDetails")}
+                    </Button>
+                  )}
                   {item.status === "done" && (
                     <Button
                       variant="secondary"
@@ -227,6 +257,19 @@ export function HomeworkView({
         </ul>
       )}
 
+      <ConfirmDialog
+        open={doneTarget !== null}
+        title={t("study.markDone")}
+        description={t("study.markDoneConfirm", {
+          title: doneTarget?.title ?? "",
+        })}
+        confirmLabel={t("study.markDone")}
+        onConfirm={() => {
+          if (doneTarget) onToggleStatus(doneTarget.id);
+          setDoneTarget(null);
+        }}
+        onCancel={() => setDoneTarget(null)}
+      />
       <ConfirmDialog
         open={deleteTarget !== null}
         title={t("study.deleteHomework")}

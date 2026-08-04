@@ -29,15 +29,15 @@ export function ConfirmDialog({
       width="max-w-sm"
       footer={
         <>
-          <Button variant="ghost" size="md" onClick={onCancel}>
-            {t("settings.cancel")}
-          </Button>
           <Button
             variant={danger ? "danger" : "primary"}
             size="md"
             onClick={onConfirm}
           >
             {confirmLabel}
+          </Button>
+          <Button variant="ghost" size="md" onClick={onCancel}>
+            {t("settings.cancel")}
           </Button>
         </>
       }

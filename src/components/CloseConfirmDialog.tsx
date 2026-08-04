@@ -36,9 +36,6 @@ export function CloseConfirmDialog() {
       width="max-w-sm"
       footer={
         <>
-          <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
-            {t("close.cancel")}
-          </Button>
           <Button
             variant="primary"
             size="md"
@@ -48,6 +45,9 @@ export function CloseConfirmDialog() {
           </Button>
           <Button variant="secondary" size="md" onClick={() => void quitApp()}>
             {t("close.quit")}
+          </Button>
+          <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
+            {t("close.cancel")}
           </Button>
         </>
       }

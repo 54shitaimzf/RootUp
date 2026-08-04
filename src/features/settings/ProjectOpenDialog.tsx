@@ -112,11 +112,11 @@ export function ProjectOpenDialog({
       width="max-w-lg"
       footer={
         <>
-          <Button variant="ghost" size="md" onClick={onClose}>
-            {t("settings.cancel")}
-          </Button>
           <Button variant="primary" size="md" onClick={() => void save()}>
             {t("settings.save")}
+          </Button>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            {t("settings.cancel")}
           </Button>
         </>
       }
