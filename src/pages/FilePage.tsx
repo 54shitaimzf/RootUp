@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Code2, ExternalLink, LocateFixed } from "lucide-react";
-import { FileTypeIcon } from "../components/FileTypeIcon";
+import { Archive, CheckSquare, Code2, ExternalLink, LocateFixed } from "lucide-react";
+import { CATEGORY_ICON, FileTypeIcon } from "../components/FileTypeIcon";
 import { FilterBar } from "../components/FilterBar";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
+import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
 import { useFilterHabits } from "../hooks/useFilterHabits";
@@ -29,6 +31,8 @@ import {
   type TagValue,
 } from "../lib/autocomplete";
 import {
+  archiveFiles,
+  archiveFiltered,
   listCategories,
   listLabels,
   listWatchedDirs,
@@ -36,6 +40,7 @@ import {
   openFile,
   openProjectFromFile,
   revealInExplorer,
+  undoArchive,
 } from "../lib/tauri";
 
 const PAGE_SIZE = 50;
@@ -57,8 +62,11 @@ export function FilePage({
   scan: ScanController;
 }) {
   const { t } = useTranslation();
+  const { settings } = useSettings();
   const { habits, touch } = useFilterHabits();
   const labelDefs = useLabelDefs();
+  const archiveRoot = settings?.archive_root?.trim() ?? "";
+  const autoArchive = settings?.auto_archive ?? false;
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
@@ -71,6 +79,18 @@ export function FilePage({
   const [refreshKey, setRefreshKey] = useState(0);
   const [showLoadingBar, setShowLoadingBar] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [batchMode, setBatchMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [archiveTarget, setArchiveTarget] = useState<{
+    mode: "selected" | "filtered";
+    count: number;
+  } | null>(null);
+  const [archiveNotice, setArchiveNotice] = useState<{
+    batchId: number;
+    count: number;
+  } | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [autoHintHidden, setAutoHintHidden] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -189,6 +209,98 @@ export function FilePage({
     }
   };
 
+  const refreshList = () => setRefreshKey((key) => key + 1);
+
+  const handleArchiveOne = async (path: string) => {
+    try {
+      const outcome = await archiveFiles([path]);
+      setArchiveNotice({ batchId: outcome.batchId ?? 0, count: outcome.archived });
+      setArchiveError(null);
+      refreshList();
+      void logEvent("info", `ui: 归档文件 path=${path}`);
+    } catch (err) {
+      setArchiveError(String(err));
+    }
+  };
+
+  const handleArchiveSelected = async () => {
+    if (selected.size === 0) return;
+    const paths = items.filter((file) => selected.has(file.path)).map((file) => file.path);
+    try {
+      const outcome = await archiveFiles(paths);
+      setArchiveNotice({ batchId: outcome.batchId ?? 0, count: outcome.archived });
+      setArchiveError(outcome.failed[0]?.error ?? null);
+      setSelected(new Set());
+      setBatchMode(false);
+      refreshList();
+      void logEvent("info", `ui: 归档所选 count=${outcome.archived}`);
+    } catch (err) {
+      setArchiveError(String(err));
+    }
+  };
+
+  const handleArchiveFiltered = async () => {
+    try {
+      const outcome = await archiveFiltered(queryString);
+      setArchiveNotice({ batchId: outcome.batchId ?? 0, count: outcome.archived });
+      setArchiveError(outcome.failed[0]?.error ?? null);
+      setSelected(new Set());
+      setBatchMode(false);
+      refreshList();
+      void logEvent("info", `ui: 归档筛选 count=${outcome.archived}`);
+    } catch (err) {
+      setArchiveError(String(err));
+    }
+  };
+
+  const handleUndoArchive = async (batchId: number) => {
+    try {
+      const outcome = await undoArchive(batchId);
+      setArchiveNotice(null);
+      setArchiveError(outcome.failed[0]?.error ?? null);
+      refreshList();
+      void logEvent("info", `ui: 撤销归档 batch=${batchId}`);
+    } catch (err) {
+      setArchiveError(String(err));
+    }
+  };
+
+  const confirmArchive = () => {
+    if (!archiveTarget) return;
+    if (archiveTarget.mode === "selected") {
+      void handleArchiveSelected();
+    } else {
+      void handleArchiveFiltered();
+    }
+    setArchiveTarget(null);
+  };
+
+  const filterActive =
+    query.trim() !== "" || types.length > 0 || states.length > 0 || labels.length > 0;
+  const unarchivedCount = items.filter((file) => file.state === "indexed").length;
+  const archivePreview = (path: string, labels: string) => {
+    const name = path.split("/").pop() ?? path;
+    const first = labels.split(",")[0]?.trim() ?? "";
+    const dir = first && first in CATEGORY_ICON ? first : "other";
+    return `${archiveRoot}/${dir}/${name}`;
+  };
+  const archiveDescription = archiveTarget
+    ? archiveTarget.mode === "selected"
+      ? t("files.archiveConfirmSelectedDesc", {
+          count: archiveTarget.count,
+          root: archiveRoot,
+          preview: items
+            .filter((file) => selected.has(file.path))
+            .slice(0, 3)
+            .map((file) => archivePreview(file.path, file.labels))
+            .join("\n"),
+        })
+      : t("files.archiveConfirmFilteredDesc", {
+          count: archiveTarget.count,
+          root: archiveRoot,
+        })
+    : "";
+
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader
@@ -299,6 +411,103 @@ export function FilePage({
         </Banner>
       )}
 
+      {autoArchive && archiveRoot && !autoHintHidden && (
+        <Banner
+          variant="info"
+          className="mt-4"
+          onClose={() => setAutoHintHidden(true)}
+        >
+          {t("files.autoArchiveOn")}
+        </Banner>
+      )}
+      {archiveNotice && (
+        <Banner
+          variant="brand"
+          className="mt-4"
+          onClose={() => setArchiveNotice(null)}
+          actions={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleUndoArchive(archiveNotice.batchId)}
+            >
+              {t("files.undoArchive")}
+            </Button>
+          }
+        >
+          {t("files.archivedNotice", { count: archiveNotice.count })}
+        </Banner>
+      )}
+      {archiveError && (
+        <Banner
+          variant="error"
+          className="mt-4"
+          onClose={() => setArchiveError(null)}
+        >
+          <span className="block truncate">{archiveError}</span>
+        </Banner>
+      )}
+
+      {archiveRoot && (unarchivedCount > 0 || batchMode) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {!batchMode && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={CheckSquare}
+              onClick={() => setBatchMode(true)}
+            >
+              {t("files.batchMode")}
+            </Button>
+          )}
+          {filterActive && (
+            <Button
+              variant="danger"
+              size="sm"
+              icon={Archive}
+              onClick={() =>
+                setArchiveTarget({
+                  mode: "filtered",
+                  count: Math.min(total, 200),
+                })
+              }
+            >
+              {t("files.archiveFiltered", {
+                count: total > 200 ? "200+" : total,
+              })}
+            </Button>
+          )}
+          {batchMode && (
+            <>
+              <span className="text-xs text-muted">
+                {t("files.batchSelected", { count: selected.size })}
+              </span>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={Archive}
+                disabled={selected.size === 0}
+                onClick={() =>
+                  setArchiveTarget({ mode: "selected", count: selected.size })
+                }
+              >
+                {t("files.archiveSelected")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setBatchMode(false);
+                  setSelected(new Set());
+                }}
+              >
+                {t("files.cancelSelection")}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="mt-4 min-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
         {showLoadingBar && items.length > 0 && (
           <div className="h-px bg-brand-500/20" />
@@ -334,6 +543,25 @@ export function FilePage({
                     className="group flex items-center gap-3 px-4 py-2.5 text-sm"
                     title={file.path}
                   >
+                    {batchMode && (
+                      <input
+                        type="checkbox"
+                        aria-label={t("files.selectFile")}
+                        checked={selected.has(file.path)}
+                        onChange={(event) => {
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (event.target.checked) {
+                              next.add(file.path);
+                            } else {
+                              next.delete(file.path);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="size-4 shrink-0 accent-brand-600"
+                      />
+                    )}
                     <FileTypeIcon
                       category={fileLabels[0] ?? "other"}
                       title={fileLabels[0] ?? "other"}
@@ -375,6 +603,15 @@ export function FilePage({
                       {formatTimestamp(file.modified)}
                     </span>
                     <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      {file.state === "indexed" && archiveRoot && (
+                        <IconButton
+                          label={t("files.archive")}
+                          icon={Archive}
+                          tone="neutral"
+                          size="sm"
+                          onClick={() => void handleArchiveOne(file.path)}
+                        />
+                      )}
                       <IconButton
                         label={t("projects.open")}
                         icon={ExternalLink}
@@ -429,6 +666,17 @@ export function FilePage({
           </>
         )}
       </div>
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        title={t("files.archiveConfirmTitle")}
+        description={archiveDescription}
+        confirmLabel={t("files.archiveConfirm", {
+          count: archiveTarget?.count ?? 0,
+        })}
+        danger
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveTarget(null)}
+      />
     </div>
   );
 }

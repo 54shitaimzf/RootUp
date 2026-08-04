@@ -32,6 +32,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { IgnoreRulesDialog } from "../features/settings/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../features/settings/ClassifyMappingDialog";
 import { LabelManageDialog } from "../features/settings/LabelManageDialog";
+import { ArchiveSettingsDialog } from "../features/settings/ArchiveSettingsDialog";
 import { SchemeDialog } from "../features/settings/SchemeDialog";
 import { SchemeApplyDialog } from "../features/settings/SchemeApplyDialog";
 import {
@@ -142,6 +143,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [labelOpen, setLabelOpen] = useState(false);
   const [schemeOpen, setSchemeOpen] = useState(false);
   const [projectOpenOpen, setProjectOpenOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [customLabels, setCustomLabels] = useState<LabelDef[]>([]);
 
   useEffect(() => {
@@ -270,6 +272,15 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       custom_open_commands: draft.customOpenCommands,
     });
     setNotice(t("settings.openToolsSaved"));
+  };
+
+  const saveArchiveConfig = async (draft: {
+    archive_root: string;
+    auto_archive: boolean;
+  }) => {
+    if (!settings) return;
+    await replace({ ...settings, ...draft });
+    setNotice(t("settings.archiveSaved"));
   };
 
   if (!settings) {
@@ -459,6 +470,16 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             })}
             onClick={() => setProjectOpenOpen(true)}
           />
+          <Row
+            title={t("settings.archiveRow")}
+            summary={t("settings.archiveRowSummary", {
+              root: settings.archive_root.trim() || t("settings.archiveRootNone"),
+              auto: settings.auto_archive
+                ? t("settings.archiveAutoOn")
+                : t("settings.archiveAutoOff"),
+            })}
+            onClick={() => setArchiveOpen(true)}
+          />
         </div>
       </section>
 
@@ -609,6 +630,13 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         }}
         onSave={saveOpenConfig}
         onClose={() => setProjectOpenOpen(false)}
+      />
+      <ArchiveSettingsDialog
+        open={archiveOpen}
+        root={settings.archive_root}
+        autoArchive={settings.auto_archive}
+        onSave={saveArchiveConfig}
+        onClose={() => setArchiveOpen(false)}
       />
     </div>
   );

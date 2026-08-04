@@ -16,9 +16,13 @@ vi.mock("../lib/tauri", () => ({
     project_dirs: ["E:/manual"],
     preferred_ide: "auto",
     custom_open_commands: [],
+    archive_root: "",
+    auto_archive: false,
   },
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
+  archiveProject: vi.fn(),
+  undoArchive: vi.fn(),
   listProjects: vi.fn(),
   listDetectedTools: vi.fn(),
   addProjectDir: vi.fn(),
@@ -35,6 +39,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import {
   addProjectDir,
+  archiveProject,
   createProjectShortcut,
   getSettings,
   listProjects,
@@ -42,6 +47,7 @@ import {
   openProject,
   removeProjectDir,
   saveSettings,
+  undoArchive,
 } from "../lib/tauri";
 import { listen } from "@tauri-apps/api/event";
 
@@ -69,6 +75,8 @@ describe("ProjectsPage", () => {
       project_dirs: ["E:/manual"],
       preferred_ide: "auto",
       custom_open_commands: [],
+      archive_root: "",
+      auto_archive: false,
     });
     vi.mocked(saveSettings).mockResolvedValue(undefined);
     vi.mocked(listProjects).mockResolvedValue([
@@ -85,6 +93,16 @@ describe("ProjectsPage", () => {
       path: "C:/Users/t/Desktop/rust-app.lnk",
       name: "rust-app",
       kind: "rust",
+    });
+    vi.mocked(archiveProject).mockResolvedValue({
+      batchId: 10,
+      archived: 1,
+      failed: [],
+    });
+    vi.mocked(undoArchive).mockResolvedValue({
+      batchId: 10,
+      archived: 1,
+      failed: [],
     });
     vi.mocked(listen).mockImplementation((_event, _callback) =>
       Promise.resolve(() => {}),
@@ -111,6 +129,32 @@ describe("ProjectsPage", () => {
     );
     fireEvent.click(await screen.findByText("去设置页添加监控目录"));
     expect(onNavigate).toHaveBeenCalledWith("settings");
+  });
+
+  it("配置归档根后项目可归档并撤销", async () => {
+    vi.mocked(getSettings).mockResolvedValue({
+      version: 2,
+      theme: "system",
+      language: "zh-CN",
+      watched_dirs: [],
+      ignore_rules: { extensions: [], prefixes: [], exact_names: [] },
+      classify_overrides: [],
+      project_dirs: ["E:/manual"],
+      preferred_ide: "auto",
+      custom_open_commands: [],
+      archive_root: "C:/Archive",
+      auto_archive: false,
+    });
+    renderPage();
+    await screen.findByText("rust-app");
+    fireEvent.click(screen.getAllByLabelText("归档")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "归档项目" }));
+    await waitFor(() =>
+      expect(archiveProject).toHaveBeenCalledWith("C:/proj/rust-app"),
+    );
+    expect(await screen.findByText(/已归档 1 个项目/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    await waitFor(() => expect(undoArchive).toHaveBeenCalledWith(10));
   });
 
   it("添加项目目录并刷新", async () => {

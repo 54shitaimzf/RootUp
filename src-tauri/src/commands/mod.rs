@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod files;
 pub mod habits;
 pub mod labels;

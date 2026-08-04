@@ -8,7 +8,7 @@ use crate::core::events::{
 };
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::{FileRecord, IndexStore};
-use crate::core::path::normalize_path;
+use crate::core::path::{normalize_path, under_any};
 use crate::core::scan::record_from_scan;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -42,15 +42,36 @@ pub struct EventProcessor {
     batch: Vec<FileRecord>,
     batch_started: Option<Instant>,
     on_batch: Box<dyn Fn(Vec<FileRecord>) + Send + Sync>,
+    skip_roots: Arc<Mutex<Vec<String>>>,
 }
 
 impl EventProcessor {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(
         store: Arc<Mutex<dyn IndexStore>>,
         classifier: Arc<dyn Classifier>,
         matcher: IgnoreMatcher,
         params: StabilityParams,
         on_batch: impl Fn(Vec<FileRecord>) + Send + Sync + 'static,
+    ) -> Self {
+        Self::with_skip_roots(
+            store,
+            classifier,
+            matcher,
+            params,
+            on_batch,
+            Arc::new(Mutex::new(Vec::new())),
+        )
+    }
+
+    /// 带跳过集构造（监听服务在启动前注入单元根 + 归档根）。
+    pub fn with_skip_roots(
+        store: Arc<Mutex<dyn IndexStore>>,
+        classifier: Arc<dyn Classifier>,
+        matcher: IgnoreMatcher,
+        params: StabilityParams,
+        on_batch: impl Fn(Vec<FileRecord>) + Send + Sync + 'static,
+        skip_roots: Arc<Mutex<Vec<String>>>,
     ) -> Self {
         Self {
             store,
@@ -61,11 +82,21 @@ impl EventProcessor {
             batch: Vec::new(),
             batch_started: None,
             on_batch: Box::new(on_batch),
+            skip_roots,
         }
     }
 
     /// 处理一条归一化事件（可能创建/更新/删除待确认条目）。
     pub fn handle_event(&mut self, event: &NormalizedEvent) {
+        let path_str = normalize_path(&event.path.to_string_lossy());
+        let skipped = self
+            .skip_roots
+            .lock()
+            .map(|roots| under_any(&path_str, &roots))
+            .unwrap_or(false);
+        if skipped {
+            return;
+        }
         let file_name = event
             .path
             .file_name()
@@ -94,7 +125,6 @@ impl EventProcessor {
             }
             FileEventKind::Removed => {
                 self.pending.remove(&event.path);
-                let path_str = normalize_path(&event.path.to_string_lossy());
                 let removed_record = {
                     let mut store = match self.store.lock() {
                         Ok(s) => s,
@@ -240,6 +270,7 @@ pub struct WatchService {
     running: Arc<AtomicBool>,
     rx: Option<Receiver<NormalizedEvent>>,
     handle: Option<JoinHandle<()>>,
+    skip_roots: Arc<Mutex<Vec<String>>>,
 }
 
 impl WatchService {
@@ -282,7 +313,15 @@ impl WatchService {
             running: Arc::new(AtomicBool::new(false)),
             rx: Some(rx),
             handle: None,
+            skip_roots: Arc::new(Mutex::new(Vec::new())),
         })
+    }
+
+    /// 更新跳过集（单元根 + 归档根），处理线程即时生效。
+    pub fn update_skip_roots(&self, roots: Vec<String>) {
+        if let Ok(mut guard) = self.skip_roots.lock() {
+            *guard = roots;
+        }
     }
 
     /// 启动处理线程（幂等；stop 后可再次 start）。
@@ -290,7 +329,7 @@ impl WatchService {
         if self.handle.is_some() {
             return;
         }
-        let processor = Arc::new(Mutex::new(EventProcessor::new(
+        let processor = Arc::new(Mutex::new(EventProcessor::with_skip_roots(
             self.store.clone(),
             self.classifier.clone(),
             self.matcher.clone(),
@@ -299,6 +338,7 @@ impl WatchService {
                 let on_batch = self.on_batch.clone();
                 move |records| on_batch(records)
             },
+            self.skip_roots.clone(),
         )));
         let running = self.running.clone();
         let rx = self.rx.take();
@@ -575,6 +615,30 @@ mod tests {
             "等待批次冲刷超时"
         );
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn skip_roots_ignore_events_below_root() {
+        let store: Arc<Mutex<dyn IndexStore>> = Arc::new(Mutex::new(
+            SqliteIndexStore::open(":memory:").expect("内存库打开失败"),
+        ));
+        let skip = Arc::new(Mutex::new(vec!["C:/Archive".to_string()]));
+        let mut processor = EventProcessor::with_skip_roots(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+            skip,
+        );
+        processor.handle_event(&NormalizedEvent {
+            path: PathBuf::from("C:/Archive/doc/a.pdf"),
+            kind: FileEventKind::Created,
+            is_dir: false,
+        });
+        processor.tick();
+        assert!(processor.pending.is_empty());
+        assert_eq!(store.lock().unwrap().count().unwrap(), 0);
     }
 
     #[test]

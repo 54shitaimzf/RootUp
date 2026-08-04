@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 
+use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::query::{parse_query, FileQuery, QueryPage};
 
 /// 文件索引记录（与数据库表 `files` 对应）。
@@ -71,6 +72,31 @@ pub trait IndexStore: Send + Sync {
     /// 库中现存标签 key 列表（去重排序）。
     fn list_labels(&self) -> Result<Vec<String>, String>;
     fn mark_deleted(&mut self, path: &str) -> Result<(), String>;
+    /// 事务内把一条记录的路径迁移到新路径并改状态（归档/撤销用）。
+    fn move_record(&mut self, from: &str, to: &str, state: &str) -> Result<(), String>;
+    /// 把任一 root（含子路径）下非 deleted 的历史记录标为 deleted，幂等。
+    fn mark_under_roots_deleted(&mut self, roots: &[String]) -> Result<i64, String>;
+    /// 写入一条归档操作，返回自增 id。
+    fn insert_archive_op(&mut self, op: &ArchiveOp) -> Result<i64, String>;
+    /// 最近批次列表（按创建时间倒序）。
+    fn list_archive_batches(&self, limit: i64) -> Result<Vec<ArchiveBatch>, String>;
+    /// 某批次全部操作（含已撤销）。
+    fn ops_for_batch(&self, batch_id: i64) -> Result<Vec<ArchiveOp>, String>;
+    /// 标记指定操作已撤销。
+    fn mark_ops_undone(&mut self, ids: &[i64]) -> Result<(), String>;
+    /// 只保留最近 keep 个批次（旧记录删除）。
+    fn prune_archive_ops(&mut self, keep: i64) -> Result<(), String>;
+    /// 登记/更新快捷方式归属（lnk 唯一）。
+    fn upsert_shortcut(
+        &mut self,
+        lnk_path: &str,
+        target_path: &str,
+        created_at: i64,
+    ) -> Result<(), String>;
+    /// 目标路径位于 root（含子路径）下的快捷方式记录。
+    fn shortcuts_under(&self, root: &str) -> Result<Vec<ShortcutRecord>, String>;
+    /// 更新一条快捷方式的目标路径。
+    fn update_shortcut_target(&mut self, lnk_path: &str, target_path: &str) -> Result<(), String>;
     #[cfg_attr(not(test), allow(dead_code))]
     fn count(&self) -> Result<i64, String>;
 }

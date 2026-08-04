@@ -1,3 +1,4 @@
+use crate::commands::archive as archive_commands;
 use crate::commands::files as files_commands;
 use crate::commands::habits as habits_commands;
 use crate::commands::labels as labels_commands;
@@ -5,12 +6,16 @@ use crate::commands::projects as projects_commands;
 use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
 use crate::commands::window as window_commands;
+use crate::core::archive::category_dir;
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
 use crate::core::events::StabilityParams;
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::IndexStore;
+use crate::core::path::normalize_path;
+use crate::core::project::managed_unit_roots;
 use crate::core::scan::{ScanEvent, ScanEventSink, ScanParams};
 use crate::core::watched::dedupe_watched;
+use crate::infra::archive_service::ArchiveService;
 use crate::infra::index_store::SqliteIndexStore;
 use crate::infra::logging::FileLogger;
 use crate::infra::scanner::ScanService;
@@ -30,6 +35,43 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 /// 这会让"后台运行（关闭即销毁）"失效。因此事件循环中默认阻止退出，
 /// 仅当用户明确选择退出（托盘菜单 / 确认弹窗）并先置位此标志时才放行。
 pub struct QuitFlag(pub Arc<AtomicBool>);
+
+/// 重算系统托管区（单元根 + 归档根）并同步到监听/扫描/自动归档服务，
+/// 同时把历史已索引的托管区文件一次性标为 deleted（幂等）。
+pub fn refresh_managed_state(app: &AppHandle) -> Result<(), String> {
+    let settings = storage::load_settings(app);
+    let mut roots = managed_unit_roots(&settings.watched_dirs, &settings.project_dirs);
+    if !settings.archive_root.is_empty() {
+        roots.push(normalize_path(&settings.archive_root));
+    }
+    if let Some(service) = app.try_state::<Mutex<crate::infra::watcher::WatchService>>() {
+        service
+            .lock()
+            .map_err(|e| e.to_string())?
+            .update_skip_roots(roots.clone());
+    }
+    if let Some(service) = app.try_state::<Mutex<crate::infra::scanner::ScanService>>() {
+        service
+            .lock()
+            .map_err(|e| e.to_string())?
+            .update_skip_roots(roots.clone());
+    }
+    if let Some(service) = app.try_state::<Mutex<ArchiveService>>() {
+        service
+            .lock()
+            .map_err(|e| e.to_string())?
+            .update(settings.archive_root.clone(), settings.auto_archive);
+    }
+    let store = app.state::<Arc<Mutex<dyn IndexStore>>>();
+    let removed = store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .mark_under_roots_deleted(&roots)?;
+    if removed > 0 {
+        log::info!("unit: 排除 roots={} count={removed}", roots.len());
+    }
+    Ok(())
+}
 
 /// 解析 `--open-project <path>` 启动参数并执行打开（单实例与首次启动共用）。
 fn open_project_from_args(app: &AppHandle, args: &[String]) {
@@ -80,6 +122,11 @@ pub fn run() {
         // 设置持久化存储
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
+            archive_commands::archive_files,
+            archive_commands::archive_filtered,
+            archive_commands::archive_project,
+            archive_commands::undo_archive,
+            archive_commands::list_archive_batches,
             settings_commands::get_settings,
             settings_commands::set_settings,
             settings_commands::reset_settings,
@@ -195,16 +242,56 @@ pub fn run() {
                         as Box<dyn crate::core::classify::Classifier>,
                 ]));
             let emit_handle = app.handle().clone();
+            let skip_roots: Vec<String> = {
+                let mut roots = managed_unit_roots(&settings.watched_dirs, &settings.project_dirs);
+                if !settings.archive_root.is_empty() {
+                    roots.push(normalize_path(&settings.archive_root));
+                }
+                roots
+            };
+            let removed = store
+                .lock()
+                .map_err(|e| e.to_string())?
+                .mark_under_roots_deleted(&skip_roots)?;
+            if removed > 0 {
+                log::info!("unit: 排除 roots={} count={removed}", skip_roots.len());
+            }
+            let app_for_auto = app.handle().clone();
             let mut service = WatchService::new(
                 store.clone(),
                 classifier.clone(),
                 ignore_matcher.clone(),
                 StabilityParams::default(),
                 move |records| {
-                    let _ = emit_handle.emit("files-changed", records);
+                    let _ = emit_handle.emit("files-changed", records.clone());
+                    let settings = storage::load_settings(&app_for_auto);
+                    if settings.auto_archive && !settings.archive_root.is_empty() {
+                        let service_state = app_for_auto.state::<Mutex<ArchiveService>>();
+                        let service_guard = service_state.lock();
+                        if let Ok(service) = service_guard {
+                            for record in records {
+                                if record.state == "indexed"
+                                    && category_dir(&record.labels) != "other"
+                                {
+                                    service.enqueue(record.path);
+                                }
+                            }
+                        }
+                    }
                 },
             )
             .map_err(|e| format!("监听服务创建失败: {e}"))?;
+            service.update_skip_roots(skip_roots.clone());
+            let archive_service = ArchiveService::new(
+                store.clone(),
+                settings.archive_root.clone(),
+                settings.auto_archive,
+            );
+            app.manage(Mutex::new(archive_service));
+            app.state::<Mutex<ArchiveService>>()
+                .lock()
+                .map_err(|e| e.to_string())?
+                .start();
             for dir in &settings.watched_dirs {
                 if let Err(e) = service.add_dir(dir) {
                     log::warn!("watch: 无法监听 {dir}: {e}");
@@ -228,6 +315,7 @@ pub fn run() {
             let scan_service = app.state::<Mutex<ScanService>>();
             {
                 let scan_service = scan_service.lock().map_err(|e| e.to_string())?;
+                scan_service.update_skip_roots(skip_roots);
                 for dir in &settings.watched_dirs {
                     scan_service.enqueue(dir.clone());
                 }
@@ -237,6 +325,8 @@ pub fn run() {
             log::info!("扫描服务已启动");
 
             tray::init(app)?;
+
+            refresh_managed_state(app.handle())?;
 
             // 首次启动携带 --open-project 时，在服务就绪后执行打开
             let args: Vec<String> = std::env::args().collect();

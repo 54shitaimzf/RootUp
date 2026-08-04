@@ -27,6 +27,8 @@ export interface Settings {
   project_dirs: string[];
   preferred_ide: string;
   custom_open_commands: CustomOpenCommand[];
+  archive_root: string;
+  auto_archive: boolean;
 }
 
 /** 用户自定义打开命令（tool 为空 = 通用最后兜底） */
@@ -107,7 +109,32 @@ export const defaultSettings: Settings = {
   project_dirs: [],
   preferred_ide: "auto",
   custom_open_commands: [],
+  archive_root: "",
+  auto_archive: false,
 };
+
+/** 与 Rust 侧 core::archive::ArchiveBatch 对应 */
+export interface ArchiveBatch {
+  batchId: number;
+  kind: "file" | "project";
+  count: number;
+  createdAt: number;
+  undone: boolean;
+  sampleDest: string;
+}
+
+/** 与 Rust 侧 core::archive::ArchiveFailure 对应 */
+export interface ArchiveFailure {
+  path: string;
+  error: string;
+}
+
+/** 与 Rust 侧 core::archive::ArchiveOutcome 对应 */
+export interface ArchiveOutcome {
+  batchId: number | null;
+  archived: number;
+  failed: ArchiveFailure[];
+}
 
 /** 内置扩展名 → 类别映射条目（设置页只读展示） */
 export interface ClassifyDefaultEntry {
@@ -269,6 +296,26 @@ export function saveLabelDef(def: LabelDef): Promise<LabelDef> {
 
 export function deleteLabelDef(key: string): Promise<void> {
   return invoke<void>("delete_label_def", { key });
+}
+
+export function archiveFiles(paths: string[]): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("archive_files", { paths });
+}
+
+export function archiveFiltered(query: string): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("archive_filtered", { query });
+}
+
+export function archiveProject(path: string): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("archive_project", { path });
+}
+
+export function undoArchive(batchId: number): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("undo_archive", { batchId });
+}
+
+export function listArchiveBatches(limit: number): Promise<ArchiveBatch[]> {
+  return invoke<ArchiveBatch[]>("list_archive_batches", { limit });
 }
 
 /** 内置扩展名映射表（只读，单一来源在后端） */

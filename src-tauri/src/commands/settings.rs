@@ -1,3 +1,4 @@
+use crate::core::path::{normalize_path, path_key};
 use crate::core::settings::{reset_to_default, Settings};
 use crate::infra::storage;
 use tauri::AppHandle;
@@ -19,6 +20,14 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     if !settings.is_valid() {
         return Err("无效的设置值".to_string());
     }
+    if !settings.archive_root.trim().is_empty()
+        && settings
+            .watched_dirs
+            .iter()
+            .any(|d| path_key(d) == path_key(&normalize_path(&settings.archive_root)))
+    {
+        return Err("归档根目录不能与监控目录相同".to_string());
+    }
     log::info!(
         "settings: 更新 theme={} language={} rules={} overrides={}",
         settings.theme,
@@ -26,7 +35,9 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
         settings.ignore_rules.extensions.len(),
         settings.classify_overrides.len()
     );
-    storage::save_settings(&app, &settings)
+    storage::save_settings(&app, &settings)?;
+    crate::app::refresh_managed_state(&app)?;
+    Ok(())
 }
 
 /// 恢复默认设置（保留监控目录），返回新设置供前端同步。
@@ -35,6 +46,7 @@ pub fn reset_settings(app: AppHandle) -> Result<Settings, String> {
     let current = storage::load_settings(&app);
     let reset = reset_to_default(&current);
     storage::save_settings(&app, &reset)?;
+    crate::app::refresh_managed_state(&app)?;
     log::info!(
         "settings: 恢复默认（保留监控目录 {} 个）",
         reset.watched_dirs.len()

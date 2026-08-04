@@ -1,4 +1,5 @@
 //! 项目、智能打开与桌面快捷方式命令。
+use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{
     detect_project_kind, discover_projects, find_project_root, FeatureDetector, ProjectInfo,
@@ -9,10 +10,12 @@ use crate::core::tools::{self, extension_of};
 use crate::infra::app_finder::{
     build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv, SystemRunner,
 };
+use crate::infra::archive_engine::now_millis;
 use crate::infra::shortcut;
 use crate::infra::storage;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
@@ -120,6 +123,7 @@ pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
     }
     settings.project_dirs.push(dir.clone());
     storage::save_settings(&app, &settings)?;
+    crate::app::refresh_managed_state(&app)?;
     log::info!("project: 添加 {dir}");
     Ok(())
 }
@@ -132,6 +136,7 @@ pub fn remove_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
         .project_dirs
         .retain(|d| path_key(d) != path_key(&dir));
     storage::save_settings(&app, &settings)?;
+    crate::app::refresh_managed_state(&app)?;
     log::info!("project: 移除 {dir}");
     Ok(())
 }
@@ -298,6 +303,12 @@ pub fn create_project_shortcut(app: AppHandle, path: String) -> Result<ShortcutO
         .map_err(|e| e.to_string())?
         .join("shortcut-icons");
     let lnk = shortcut::create_project_shortcut(&info, &exe, &desktop, &icon_dir)?;
+    let store = app.state::<Arc<Mutex<dyn IndexStore>>>();
+    store.lock().map_err(|e| e.to_string())?.upsert_shortcut(
+        &lnk.to_string_lossy(),
+        &info.path,
+        now_millis(),
+    )?;
     log::info!("shortcut: 创建 name={} target={}", info.name, info.path);
     Ok(ShortcutOutcome {
         path: lnk.to_string_lossy().to_string(),

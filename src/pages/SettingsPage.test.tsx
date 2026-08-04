@@ -17,6 +17,8 @@ vi.mock("../lib/tauri", () => ({
     project_dirs: [],
     preferred_ide: "auto",
     custom_open_commands: [],
+    archive_root: "",
+    auto_archive: false,
   },
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
@@ -28,6 +30,8 @@ vi.mock("../lib/tauri", () => ({
   listLabelDefs: vi.fn(),
   listClassifyDefaults: vi.fn(),
   listSchemes: vi.fn(),
+  listArchiveBatches: vi.fn(),
+  undoArchive: vi.fn(),
   listWatchedDirs: vi.fn(),
   logEvent: vi.fn(),
 }));
@@ -39,10 +43,12 @@ import {
   listCategories,
   listLabelDefs,
   listClassifyDefaults,
+  listArchiveBatches,
   listSchemes,
   listWatchedDirs,
   resetSettings,
   saveSettings,
+  undoArchive,
 } from "../lib/tauri";
 
 const SETTINGS: Settings = {
@@ -55,6 +61,8 @@ const SETTINGS: Settings = {
   project_dirs: [],
   preferred_ide: "auto",
   custom_open_commands: [],
+  archive_root: "",
+  auto_archive: false,
 };
 
 function scan(): ScanController {
@@ -89,6 +97,12 @@ describe("SettingsPage", () => {
     vi.mocked(listLabelDefs).mockResolvedValue([]);
     vi.mocked(listClassifyDefaults).mockResolvedValue([]);
     vi.mocked(listSchemes).mockResolvedValue([]);
+    vi.mocked(listArchiveBatches).mockResolvedValue([]);
+    vi.mocked(undoArchive).mockResolvedValue({
+      batchId: 1,
+      archived: 1,
+      failed: [],
+    });
   });
 
   it("渲染规则三行入口", async () => {
@@ -114,6 +128,27 @@ describe("SettingsPage", () => {
     expect(
       screen.getByRole("dialog", { name: "编辑分类映射" }),
     ).toBeInTheDocument();
+  });
+
+  it("归档设置弹窗可保存归档根与自动归档开关", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByText("归档设置"));
+    expect(
+      screen.getByRole("dialog", { name: "归档设置" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("如：D:\\Archive"), {
+      target: { value: "C:/Archive" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "开启自动归档" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          archive_root: "C:/Archive",
+          auto_archive: true,
+        }),
+      );
+    });
   });
 
   it("应用方案与保存方案弹窗可打开", async () => {

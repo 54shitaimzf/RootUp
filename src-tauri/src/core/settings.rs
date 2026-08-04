@@ -38,7 +38,7 @@ pub const MAX_CUSTOM_OPEN_COMMANDS: usize = 10;
 /// - 新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`，
 ///   旧版本配置文件永远可被新版本读取；
 /// - 结构性升级在 [`Settings::migrate`] 中按版本号逐级迁移。
-pub const CURRENT_VERSION: u32 = 1;
+pub const CURRENT_VERSION: u32 = 2;
 
 /// 用户分类覆盖规则上限。
 pub const MAX_CLASSIFY_RULES: usize = 100;
@@ -95,6 +95,10 @@ pub struct Settings {
     pub preferred_ide: String,
     /// 用户自定义打开命令（最高优先）
     pub custom_open_commands: Vec<CustomOpenCommand>,
+    /// 归档根目录（空 = 未配置）
+    pub archive_root: String,
+    /// 自动归档开关（仅新稳定文件 + 分类明确非 other）
+    pub auto_archive: bool,
 }
 
 impl Default for Settings {
@@ -117,6 +121,8 @@ impl Default for Settings {
             project_dirs: Vec::new(),
             preferred_ide: PREFERRED_IDE_AUTO.to_string(),
             custom_open_commands: Vec::new(),
+            archive_root: String::new(),
+            auto_archive: false,
         }
     }
 }
@@ -125,7 +131,8 @@ impl Settings {
     /// 版本升级（逐级迁移）；当前 v1 为幂等空迁移。
     pub fn migrate(&mut self) {
         while self.version < CURRENT_VERSION {
-            // 未来版本在此追加逐级迁移（如 1 -> 2 的字段转换）
+            // 1 -> 2：新增 archive_root / auto_archive，缺失字段由 serde default 填充，
+            // 无需数据转换，仅提升版本号。
             self.version = CURRENT_VERSION;
         }
     }
@@ -143,6 +150,7 @@ impl Settings {
                 .custom_open_commands
                 .iter()
                 .all(CustomOpenCommand::is_valid)
+            && self.archive_root.len() <= 1024
             && valid_non_empty(&self.project_dirs)
     }
 }
@@ -258,6 +266,48 @@ mod tests {
         let mut s = Settings::default();
         s.migrate();
         assert_eq!(s.version, CURRENT_VERSION);
+    }
+
+    #[test]
+    fn archive_fields_default_off_and_migrate_v1_to_v2() {
+        let s = Settings::default();
+        assert_eq!(s.version, 2);
+        assert_eq!(s.archive_root, "");
+        assert!(!s.auto_archive);
+
+        let json = r#"{
+            "version": 1,
+            "theme": "system",
+            "language": "zh-CN",
+            "watched_dirs": ["C:/Watch"],
+            "ignore_rules": {"extensions": [], "prefixes": [], "exact_names": []},
+            "classify_overrides": [],
+            "project_dirs": [],
+            "preferred_ide": "auto",
+            "custom_open_commands": []
+        }"#;
+        let mut settings: Settings = serde_json::from_str(json).unwrap();
+        settings.migrate();
+        assert_eq!(settings.version, 2);
+        assert_eq!(settings.archive_root, "");
+        assert!(!settings.auto_archive);
+        assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn reset_keeps_dirs_but_clears_archive_config() {
+        let current = Settings {
+            watched_dirs: vec!["C:/Watch".into()],
+            project_dirs: vec!["C:/Proj".into()],
+            archive_root: "C:/Archive".into(),
+            auto_archive: true,
+            ..Default::default()
+        };
+        let reset = reset_to_default(&current);
+        assert_eq!(reset.watched_dirs, vec!["C:/Watch"]);
+        assert_eq!(reset.project_dirs, vec!["C:/Proj"]);
+        assert_eq!(reset.archive_root, "");
+        assert!(!reset.auto_archive);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 use crate::core::classify::Classifier;
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::{FileRecord, IndexStore};
-use crate::core::path::{normalize_path, path_key};
+use crate::core::path::{normalize_path, path_key, under_any};
 use crate::core::scan::{
     diff_missing, record_from_scan, ScanEvent, ScanEventSink, ScanParams, ScanProgress, ScanSummary,
 };
@@ -44,6 +44,7 @@ pub struct ScanService {
     sink: Arc<dyn ScanEventSink>,
     shared: Arc<Shared>,
     thread: Mutex<Option<JoinHandle<()>>>,
+    skip_roots: Arc<Mutex<Vec<String>>>,
 }
 
 impl ScanService {
@@ -66,6 +67,14 @@ impl ScanService {
                 cancel: AtomicBool::new(false),
             }),
             thread: Mutex::new(None),
+            skip_roots: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// 更新跳过集（单元根 + 归档根），扫描线程即时生效。
+    pub fn update_skip_roots(&self, roots: Vec<String>) {
+        if let Ok(mut guard) = self.skip_roots.lock() {
+            *guard = roots;
         }
     }
 
@@ -81,6 +90,7 @@ impl ScanService {
             params: self.params.clone(),
             sink: self.sink.clone(),
             shared: self.shared.clone(),
+            skip_roots: self.skip_roots.clone(),
         };
         let handle = std::thread::Builder::new()
             .name("rootup-scanner".into())
@@ -156,6 +166,7 @@ struct ScanLoop {
     params: ScanParams,
     sink: Arc<dyn ScanEventSink>,
     shared: Arc<Shared>,
+    skip_roots: Arc<Mutex<Vec<String>>>,
 }
 
 impl ScanLoop {
@@ -236,7 +247,16 @@ impl ScanLoop {
                     return true;
                 }
                 let name = entry.file_name().to_string_lossy();
-                !self.matcher.is_ignored(&name)
+                if self.matcher.is_ignored(&name) {
+                    return false;
+                }
+                let path = normalize_path(&entry.path().to_string_lossy());
+                let skipped = self
+                    .skip_roots
+                    .lock()
+                    .map(|roots| under_any(&path, &roots))
+                    .unwrap_or(false);
+                !skipped
             });
 
         for entry in walker {
@@ -487,6 +507,13 @@ mod tests {
     }
 
     fn make_loop(store: Arc<Mutex<dyn IndexStore>>) -> (ScanLoop, Arc<Mutex<Vec<ScanEvent>>>) {
+        make_loop_with_roots(store, Arc::new(Mutex::new(Vec::new())))
+    }
+
+    fn make_loop_with_roots(
+        store: Arc<Mutex<dyn IndexStore>>,
+        skip_roots: Arc<Mutex<Vec<String>>>,
+    ) -> (ScanLoop, Arc<Mutex<Vec<ScanEvent>>>) {
         let events = Arc::new(Mutex::new(Vec::new()));
         let loop_body = ScanLoop {
             store,
@@ -494,6 +521,7 @@ mod tests {
             matcher: IgnoreMatcher::new(),
             params: test_params(),
             sink: Arc::new(CollectSink(events.clone())),
+            skip_roots,
             shared: Arc::new(Shared {
                 queue: Mutex::new(VecDeque::new()),
                 status: Mutex::new(ScanStatus::default()),
@@ -724,6 +752,22 @@ mod tests {
         let (loop_body, _events) = make_loop(store.clone());
         loop_body.scan_dir(&dir_n);
 
+        assert_eq!(store.lock().unwrap().count().unwrap(), 1);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn skip_roots_exclude_subtree_from_scan() {
+        let dir = temp_dir("skip");
+        fs::create_dir_all(dir.join("proj/src")).unwrap();
+        fs::write(dir.join("proj/src/main.rs"), b"x").unwrap();
+        fs::write(dir.join("note.md"), b"x").unwrap();
+        let dir_n = dir.to_string_lossy().replace('\\', "/");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let roots = Arc::new(Mutex::new(vec![format!("{dir_n}/proj")]));
+        let (loop_body, _events) = make_loop_with_roots(store.clone(), roots);
+        loop_body.scan_dir(&dir_n);
         assert_eq!(store.lock().unwrap().count().unwrap(), 1);
         fs::remove_dir_all(&dir).unwrap();
     }

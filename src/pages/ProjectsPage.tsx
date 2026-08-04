@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import {
+  Archive,
   Code2,
   FolderOpen,
   Link2,
@@ -13,6 +14,7 @@ import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
 import {
   addProjectDir,
+  archiveProject,
   createProjectShortcut,
   listDetectedTools,
   listProjects,
@@ -20,6 +22,7 @@ import {
   openProject,
   removeProjectDir,
   revealInExplorer,
+  undoArchive,
   type OpenOutcome,
   type ProjectInfo,
 } from "../lib/tauri";
@@ -27,6 +30,7 @@ import { PROJECT_KIND_LABEL_KEY, ProjectKindBadge } from "../components/ProjectK
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmButton } from "../components/ConfirmButton";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { Input } from "../components/Input";
@@ -49,6 +53,12 @@ export function ProjectsPage({
   const [newDir, setNewDir] = useState("");
   const [detectedTools, setDetectedTools] = useState<string[] | null>(null);
   const [hideIdeHint, setHideIdeHint] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<ProjectInfo | null>(null);
+  const [archiveNotice, setArchiveNotice] = useState<{
+    batchId: number;
+    count: number;
+  } | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   const manualDirs = new Set(settings?.project_dirs ?? []);
 
@@ -145,6 +155,30 @@ export function ProjectsPage({
     }
   };
 
+  const handleArchive = async (project: ProjectInfo) => {
+    try {
+      const outcome = await archiveProject(project.path);
+      setArchiveNotice({ batchId: outcome.batchId ?? 0, count: outcome.archived });
+      setArchiveError(null);
+      await load();
+      void logEvent("info", `ui: 归档项目 path=${project.path}`);
+    } catch (err) {
+      setArchiveError(String(err));
+    }
+  };
+
+  const handleUndoArchive = async (batchId: number) => {
+    try {
+      const outcome = await undoArchive(batchId);
+      setArchiveNotice(null);
+      setArchiveError(outcome.failed[0]?.error ?? null);
+      await load();
+      void logEvent("info", `ui: 撤销归档项目 batch=${batchId}`);
+    } catch (err) {
+      setArchiveError(String(err));
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader
@@ -174,6 +208,33 @@ export function ProjectsPage({
       {error && (
         <Banner variant="error" className="mt-4">
           <span className="block truncate">{error}</span>
+        </Banner>
+      )}
+      {archiveNotice && (
+        <Banner
+          variant="brand"
+          className="mt-4"
+          onClose={() => setArchiveNotice(null)}
+          actions={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleUndoArchive(archiveNotice.batchId)}
+            >
+              {t("files.undoArchive")}
+            </Button>
+          }
+        >
+          {t("projects.archivedNotice", { count: archiveNotice.count })}
+        </Banner>
+      )}
+      {archiveError && (
+        <Banner
+          variant="error"
+          className="mt-4"
+          onClose={() => setArchiveError(null)}
+        >
+          <span className="block truncate">{archiveError}</span>
         </Banner>
       )}
 
@@ -298,6 +359,14 @@ export function ProjectsPage({
                       tone="neutral"
                       onClick={() => void handleShortcut(project)}
                     />
+                    {settings?.archive_root?.trim() && (
+                      <IconButton
+                        label={t("projects.archive")}
+                        icon={Archive}
+                        tone="neutral"
+                        onClick={() => setArchiveTarget(project)}
+                      />
+                    )}
                     {isManual && (
                       <ConfirmButton
                         label={<Trash2 className="size-3.5" />}
@@ -315,6 +384,25 @@ export function ProjectsPage({
           })
         )}
       </div>
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        title={t("projects.archiveConfirmTitle")}
+        description={
+          archiveTarget
+            ? t("projects.archiveConfirmDesc", {
+                name: archiveTarget.name,
+                dest: `${settings?.archive_root?.trim() ?? ""}/项目/${archiveTarget.name}`,
+              })
+            : ""
+        }
+        confirmLabel={t("projects.archiveConfirm")}
+        danger
+        onConfirm={() => {
+          if (archiveTarget) void handleArchive(archiveTarget);
+          setArchiveTarget(null);
+        }}
+        onCancel={() => setArchiveTarget(null)}
+      />
     </div>
   );
 }

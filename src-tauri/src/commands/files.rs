@@ -78,6 +78,7 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
 
     settings.watched_dirs.push(dir.clone());
     storage::save_settings(&app, &settings)?;
+    crate::app::refresh_managed_state(&app)?;
 
     let service = app.state::<Mutex<WatchService>>();
     service.lock().map_err(|e| e.to_string())?.add_dir(&dir)?;
@@ -100,6 +101,7 @@ pub fn remove_watched_dir(app: AppHandle, dir: String) -> Result<(), String> {
         .watched_dirs
         .retain(|d| path_key(d) != path_key(&dir));
     storage::save_settings(&app, &settings)?;
+    crate::app::refresh_managed_state(&app)?;
 
     let service = app.state::<Mutex<WatchService>>();
     if let Ok(service) = service.lock() {

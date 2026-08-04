@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
-export type BannerVariant = "brand" | "warn" | "error";
+export type BannerVariant = "brand" | "warn" | "error" | "info";
 
 const VARIANT_CLASSES: Record<BannerVariant, string> = {
   brand:
@@ -10,6 +10,7 @@ const VARIANT_CLASSES: Record<BannerVariant, string> = {
   warn: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-400",
   error:
     "border-red-200 bg-red-50 text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-400",
+  info: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-300",
 };
 
 /** 统一横幅：brand / warn / error，可选关闭按钮；间距由调用方 className 控制。 */

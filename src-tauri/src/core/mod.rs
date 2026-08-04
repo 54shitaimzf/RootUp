@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod classify;
 pub mod events;
 pub mod habits;

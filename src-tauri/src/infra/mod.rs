@@ -1,4 +1,6 @@
 pub mod app_finder;
+pub mod archive_engine;
+pub mod archive_service;
 pub mod habit_store;
 pub mod index_store;
 pub mod label_store;

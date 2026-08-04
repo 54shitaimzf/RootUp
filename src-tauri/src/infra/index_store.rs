@@ -1,13 +1,15 @@
 //! 文件索引的 SQLite 实现。
 
+use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::events::FileState;
 use crate::core::index::{FileRecord, IndexStore};
 use crate::core::query::{FileQuery, QueryPage};
 use rusqlite::types::Value;
-use rusqlite::{params, params_from_iter, Connection, Row};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS files (
@@ -23,6 +25,26 @@ CREATE TABLE IF NOT EXISTS files (
 );
 "#;
 
+const ARCHIVE_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS archive_ops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    source TEXT NOT NULL,
+    dest TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    undone_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_archive_ops_batch ON archive_ops(batch_id);
+CREATE INDEX IF NOT EXISTS idx_archive_ops_created ON archive_ops(created_at);
+CREATE TABLE IF NOT EXISTS shortcuts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lnk_path TEXT NOT NULL UNIQUE,
+    target_path TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+"#;
+
 /// 版本化迁移：v1 为初始 schema。后续加表/字段一律在此追加迁移分支。
 fn migrate(conn: &mut Connection) -> Result<(), String> {
     let version: i64 = conn
@@ -35,7 +57,22 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
+    if version < 2 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch(ARCHIVE_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 2)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
     Ok(())
+}
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn row_to_record(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
@@ -356,6 +393,195 @@ impl IndexStore for SqliteIndexStore {
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())
+    }
+
+    fn move_record(&mut self, from: &str, to: &str, state: &str) -> Result<(), String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let exists = tx
+            .query_row("SELECT 1 FROM files WHERE path = ?1", params![from], |_| {
+                Ok(true)
+            })
+            .optional()
+            .map_err(|e| e.to_string())?
+            .unwrap_or(false);
+        if !exists {
+            return Err(format!("记录不存在: {from}"));
+        }
+        let name = Path::new(to)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| to.to_string());
+        tx.execute(
+            "UPDATE files SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
+            params![to, name, state, from],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn mark_under_roots_deleted(&mut self, roots: &[String]) -> Result<i64, String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let mut changed = 0_i64;
+        for root in roots {
+            let pattern = format!("{}/%", escape_like(root));
+            changed += tx
+                .execute(
+                    "UPDATE files SET state = ?1 WHERE state != ?1 AND (path = ?2 OR path LIKE ?3 ESCAPE '\\')",
+                    params![FileState::Deleted.as_str(), root, pattern],
+                )
+                .map_err(|e| e.to_string())? as i64;
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(changed)
+    }
+
+    fn insert_archive_op(&mut self, op: &ArchiveOp) -> Result<i64, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO archive_ops (batch_id, kind, source, dest, created_at, undone_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                op.batch_id,
+                op.kind,
+                op.source,
+                op.dest,
+                op.created_at,
+                op.undone_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    fn list_archive_batches(&self, limit: i64) -> Result<Vec<ArchiveBatch>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT batch_id, MIN(kind), COUNT(*), MIN(created_at), MAX(dest), \
+                 SUM(CASE WHEN undone_at IS NULL THEN 1 ELSE 0 END) \
+                 FROM archive_ops GROUP BY batch_id ORDER BY MIN(created_at) DESC LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![limit], |row| {
+                let pending: i64 = row.get(5)?;
+                Ok(ArchiveBatch {
+                    batch_id: row.get(0)?,
+                    kind: row.get(1)?,
+                    count: row.get(2)?,
+                    created_at: row.get(3)?,
+                    undone: pending == 0,
+                    sample_dest: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    fn ops_for_batch(&self, batch_id: i64) -> Result<Vec<ArchiveOp>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, batch_id, kind, source, dest, created_at, undone_at \
+                 FROM archive_ops WHERE batch_id = ?1 ORDER BY id",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![batch_id], |row| {
+                Ok(ArchiveOp {
+                    id: row.get(0)?,
+                    batch_id: row.get(1)?,
+                    kind: row.get(2)?,
+                    source: row.get(3)?,
+                    dest: row.get(4)?,
+                    created_at: row.get(5)?,
+                    undone_at: row.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    fn mark_ops_undone(&mut self, ids: &[i64]) -> Result<(), String> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("?{}", i + 2)).collect();
+        let sql = format!(
+            "UPDATE archive_ops SET undone_at = ?1 \
+             WHERE undone_at IS NULL AND id IN ({})",
+            placeholders.join(",")
+        );
+        let mut values: Vec<Value> = vec![Value::Integer(now_millis())];
+        values.extend(ids.iter().map(|id| Value::Integer(*id)));
+        conn.execute(&sql, params_from_iter(values.iter()))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn prune_archive_ops(&mut self, keep: i64) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM archive_ops WHERE batch_id NOT IN (\
+             SELECT batch_id FROM archive_ops GROUP BY batch_id \
+             ORDER BY MIN(created_at) DESC LIMIT ?1)",
+            params![keep],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn upsert_shortcut(
+        &mut self,
+        lnk_path: &str,
+        target_path: &str,
+        created_at: i64,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO shortcuts (lnk_path, target_path, created_at) VALUES (?1, ?2, ?3) \
+             ON CONFLICT(lnk_path) DO UPDATE SET target_path = excluded.target_path",
+            params![lnk_path, target_path, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn shortcuts_under(&self, root: &str) -> Result<Vec<ShortcutRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let pattern = format!("{}/%", escape_like(root));
+        let mut stmt = conn
+            .prepare(
+                "SELECT lnk_path, target_path FROM shortcuts \
+                 WHERE target_path = ?1 OR target_path LIKE ?2 ESCAPE '\\'",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![root, pattern], |row| {
+                Ok(ShortcutRecord {
+                    lnk_path: row.get(0)?,
+                    target_path: row.get(1)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    fn update_shortcut_target(&mut self, lnk_path: &str, target_path: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE shortcuts SET target_path = ?1 WHERE lnk_path = ?2",
+            params![target_path, lnk_path],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
 
@@ -751,7 +977,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 1);
+            assert_eq!(version, 2);
         }
         // 重复打开幂等，不报错
         {
@@ -760,8 +986,124 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 1);
+            assert_eq!(version, 2);
         }
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn move_record_updates_path_and_state() {
+        let mut s = store();
+        s.upsert(&record("C:/Downloads/a.pdf", 100, 1000)).unwrap();
+        s.move_record(
+            "C:/Downloads/a.pdf",
+            "C:/Archive/document/a.pdf",
+            "archived",
+        )
+        .unwrap();
+        assert!(s.get_by_path("C:/Downloads/a.pdf").unwrap().is_none());
+        let moved = s.get_by_path("C:/Archive/document/a.pdf").unwrap().unwrap();
+        assert_eq!(moved.state, "archived");
+        assert_eq!(moved.name, "a.pdf");
+        assert!(s.move_record("C:/none", "C:/x", "indexed").is_err());
+    }
+
+    #[test]
+    fn mark_under_roots_deleted_is_idempotent() {
+        let mut s = store();
+        s.upsert(&record("C:/Watch/proj/src/main.rs", 1, 1))
+            .unwrap();
+        s.upsert(&record("C:/Watch/doc/note.md", 1, 1)).unwrap();
+        s.upsert(&record("C:/Archive/doc/a.pdf", 1, 1)).unwrap();
+        let roots = vec!["C:/Watch/proj".to_string(), "C:/Archive".to_string()];
+        let first = s.mark_under_roots_deleted(&roots).unwrap();
+        assert_eq!(first, 2);
+        let second = s.mark_under_roots_deleted(&roots).unwrap();
+        assert_eq!(second, 0);
+        assert_eq!(
+            s.get_by_path("C:/Watch/proj/src/main.rs")
+                .unwrap()
+                .unwrap()
+                .state,
+            "deleted"
+        );
+        assert_eq!(
+            s.get_by_path("C:/Watch/doc/note.md")
+                .unwrap()
+                .unwrap()
+                .state,
+            "indexed"
+        );
+    }
+
+    #[test]
+    fn archive_ops_roundtrip_and_prune() {
+        let mut s = store();
+        let op1 = ArchiveOp {
+            id: 0,
+            batch_id: 100,
+            kind: "file".into(),
+            source: "C:/a.pdf".into(),
+            dest: "C:/Archive/doc/a.pdf".into(),
+            created_at: 1,
+            undone_at: None,
+        };
+        let op2 = ArchiveOp {
+            id: 0,
+            batch_id: 100,
+            kind: "file".into(),
+            source: "C:/b.pdf".into(),
+            dest: "C:/Archive/doc/b.pdf".into(),
+            created_at: 2,
+            undone_at: None,
+        };
+        let op3 = ArchiveOp {
+            id: 0,
+            batch_id: 200,
+            kind: "project".into(),
+            source: "C:/proj".into(),
+            dest: "C:/Archive/项目/proj".into(),
+            created_at: 3,
+            undone_at: None,
+        };
+        s.insert_archive_op(&op1).unwrap();
+        s.insert_archive_op(&op2).unwrap();
+        s.insert_archive_op(&op3).unwrap();
+
+        let batches = s.list_archive_batches(10).unwrap();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].batch_id, 200);
+        assert!(!batches[0].undone);
+        assert_eq!(batches[0].count, 1);
+        assert_eq!(batches[1].count, 2);
+
+        let ops = s.ops_for_batch(100).unwrap();
+        assert_eq!(ops.len(), 2);
+        let ids: Vec<i64> = ops.iter().map(|o| o.id).collect();
+        s.mark_ops_undone(&ids).unwrap();
+        let after = s.list_archive_batches(10).unwrap();
+        assert!(after.iter().find(|b| b.batch_id == 100).unwrap().undone);
+
+        s.prune_archive_ops(1).unwrap();
+        let remaining = s.list_archive_batches(10).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].batch_id, 200);
+    }
+
+    #[test]
+    fn shortcut_registry_roundtrip() {
+        let mut s = store();
+        s.upsert_shortcut("C:/Desktop/proj.lnk", "C:/proj", 1)
+            .unwrap();
+        s.upsert_shortcut("C:/Desktop/proj.lnk", "C:/Archive/项目/proj", 2)
+            .unwrap();
+        let links = s.shortcuts_under("C:/proj").unwrap();
+        assert!(links.is_empty());
+        let links = s.shortcuts_under("C:/Archive/项目").unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].lnk_path, "C:/Desktop/proj.lnk");
+        s.update_shortcut_target("C:/Desktop/proj.lnk", "C:/proj")
+            .unwrap();
+        assert_eq!(s.shortcuts_under("C:/proj").unwrap().len(), 1);
     }
 }

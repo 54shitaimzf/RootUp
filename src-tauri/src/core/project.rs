@@ -209,6 +209,20 @@ pub fn discover_projects(
     out
 }
 
+/// 单元根 = 手动项目目录 + 监控目录中发现的直接子项目（规范化、去重）。
+/// 单元根内部的单个文件不进文件页索引（扫描/监听跳过）。
+pub fn managed_unit_roots(watched: &[String], manual: &[String]) -> Vec<String> {
+    let detector = FeatureDetector;
+    let mut roots: Vec<String> = discover_projects(watched, manual, &detector)
+        .into_iter()
+        .map(|p| normalize_path(&p.path))
+        .collect();
+    roots.extend(manual.iter().map(|d| normalize_path(d)));
+    roots.sort();
+    roots.dedup_by(|a, b| path_key(a) == path_key(b));
+    roots
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

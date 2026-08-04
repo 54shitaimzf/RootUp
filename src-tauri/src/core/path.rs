@@ -53,6 +53,15 @@ pub fn is_subpath(child: &str, parent: &str) -> bool {
     child_parts[..parent_parts.len()] == parent_parts[..]
 }
 
+/// `path` 是否位于任一 `roots` 之下（含自身），用于跳过集判定。
+pub fn under_any(path: &str, roots: &[String]) -> bool {
+    let key = path_key(path);
+    roots.iter().any(|root| {
+        let root_key = path_key(root);
+        key == root_key || is_subpath(path, root)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +96,17 @@ mod tests {
         assert!(!is_subpath("C:/Users/X", "C:/Users/X/Y"));
         assert!(!is_subpath("C:/Users/X", "/C:/Users/X"));
         assert!(!is_subpath("", "/a"));
+    }
+
+    #[test]
+    fn under_any_matches_self_and_children() {
+        let roots = vec!["C:/Archive".to_string()];
+        assert!(under_any("C:/Archive", &roots));
+        assert!(under_any("C:/Archive/Doc/a.pdf", &roots));
+        assert!(under_any("c:/archive/doc", &roots));
+        assert!(!under_any("C:/Archive2", &roots));
+        assert!(!under_any("C:/Other/a.pdf", &roots));
+        assert!(!under_any("", &roots));
     }
 
     #[test]

@@ -133,6 +133,38 @@ pub fn create_project_shortcut(
     Ok(lnk_path)
 }
 
+/// 按已知 lnk 路径重建快捷方式（归档移动/撤销后目标路径联动）。
+pub fn rewrite_project_shortcut_at(
+    lnk_path: &Path,
+    target: &str,
+    kind: ProjectKind,
+    rootup_exe: &Path,
+    icon_dir: &Path,
+) -> Result<(), String> {
+    if !rootup_exe.is_file() {
+        return Err("找不到 RootUp 程序文件".to_string());
+    }
+    ensure_shortcut_icons(icon_dir)?;
+    if lnk_path.exists() {
+        fs::remove_file(lnk_path).map_err(|e| format!("删除旧快捷方式失败: {e}"))?;
+    }
+    let mut link = ShellLink::new(rootup_exe).map_err(|e| format!("创建快捷方式失败: {e}"))?;
+    link.set_arguments(Some(format!("--open-project \"{target}\"")));
+    link.set_icon_location(Some(
+        icon_dir
+            .join(shortcut_icon_name(kind))
+            .to_string_lossy()
+            .to_string(),
+    ));
+    link.header_mut()
+        .update_link_flags(LinkFlags::HAS_ARGUMENTS, true);
+    link.header_mut()
+        .update_link_flags(LinkFlags::HAS_ICON_LOCATION, true);
+    link.create_lnk(lnk_path)
+        .map_err(|e| format!("写入快捷方式失败: {e}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,6 +240,34 @@ mod tests {
             &root.join("icons")
         )
         .is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rewrite_project_shortcut_at_recreates_lnk() {
+        let root = temp_root("rewrite");
+        let exe = fake_exe(&root);
+        let desktop = root.join("desktop");
+        let icons = root.join("icons");
+        fs::create_dir_all(&desktop).unwrap();
+
+        let project = ProjectInfo {
+            path: "C:/proj/rust-app".into(),
+            name: "rust-app".into(),
+            kind: ProjectKind::Rust,
+        };
+        let lnk = create_project_shortcut(&project, &exe, &desktop, &icons).unwrap();
+        assert!(lnk.exists());
+
+        rewrite_project_shortcut_at(
+            &lnk,
+            "C:/Archive/项目/rust-app",
+            ProjectKind::Rust,
+            &exe,
+            &icons,
+        )
+        .unwrap();
+        assert!(lnk.exists());
         let _ = fs::remove_dir_all(&root);
     }
 }
