@@ -39,7 +39,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 规划能力
 
-作业截止提醒、AI 分类与项目识别增强（接口已预留）、快捷路径等，详见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+已固定版本规划：v0.8.1 学业提醒与设置稳固（作业截止提醒、语言下拉、关闭默认行为持久化）、v0.8.2 灵动视觉与反馈（动效令牌、反馈动画、提示增强）、v0.8.3 文件治理闭环（智能解压、项目生命周期、分类变更日志）、v0.9.0 AI 能力。详见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ### 技术栈
 
@@ -123,7 +123,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 
 ### Planned Features
 
-Homework deadline reminders, AI classification and project detection (interface reserved), smart shortcuts. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Fixed version roadmap: v0.8.1 study reminders & settings polish (deadline reminders, language dropdown, persistent close behavior), v0.8.2 lively visuals & feedback (motion tokens, feedback animations, hint improvements), v0.8.3 file-governance loop (smart extraction, project lifecycle, classification change log), v0.9.0 AI capabilities. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Tech Stack
 
