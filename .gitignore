@@ -20,6 +20,8 @@ dist-ssr
 
 # Smoke test report (generated locally)
 scripts/smoke-summary.log
+# Installer verification report (generated locally)
+scripts/installer-verify.log
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
