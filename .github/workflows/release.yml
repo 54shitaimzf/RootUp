@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build bundled installer
+        run: npm run tauri build
+
+      - name: Locate installer
+        id: installer
+        shell: powershell
+        run: |
+          $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis\*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { Write-Error "NSIS installer not found"; exit 1 }
+          "installer_path=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Verify installer
+        shell: powershell
+        run: scripts/verify-installer.ps1 -InstallerPath "${{ steps.installer.outputs.installer_path }}"
+
+      - name: Extract changelog for tag
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart("v")
+          $content = Get-Content "CHANGELOG.md" -Raw -Encoding UTF8
+          $pattern = "(?ms)^## \[$([regex]::Escape($version))\].*?(?=^## \[|\z)"
+          $match = [regex]::Match($content, $pattern)
+          if ($match.Success) {
+            $match.Value.Trim() | Set-Content -Path "release-body.md" -Encoding UTF8
+          } else {
+            "Release $tag" | Set-Content -Path "release-body.md" -Encoding UTF8
+          }
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.installer.outputs.installer_path }}
+          body_path: release-body.md
