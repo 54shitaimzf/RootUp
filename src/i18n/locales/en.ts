@@ -138,6 +138,8 @@ export default {
     date: "Date",
     time: "Time",
     statusOverdue: "Overdue",
+    stackCount: "{{count}} courses",
+    collapseStack: "Collapse",
     homeworkEmpty: "No homework yet",
     homeworkEmptyDesc: "Add homework and it will be listed by deadline here.",
     noMatchingHomework: "No homework matches these filters.",

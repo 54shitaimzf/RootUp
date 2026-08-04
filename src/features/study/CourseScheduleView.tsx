@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { ChevronUp, Layers, Plus } from "lucide-react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { SegmentedControl } from "../../components/SegmentedControl";
@@ -180,6 +180,9 @@ export function CourseScheduleView({
   const { t, i18n } = useTranslation();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [slotCourses, setSlotCourses] = useState<Course[] | null>(null);
+  const [expandedStacks, setExpandedStacks] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
 
@@ -223,6 +226,18 @@ export function CourseScheduleView({
 
   const homeworkCountOf = (courseId: string) =>
     homework.filter((item) => item.courseId === courseId).length;
+
+  const toggleStack = (key: string) => {
+    setExpandedStacks((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="mt-5">
@@ -397,7 +412,7 @@ export function CourseScheduleView({
                       );
                       return (
                         <Fragment key={`${block.startMin}-${block.endMin}`}>
-                          {block.columns.map((column) => {
+                          {block.columns.map((column, columnIndex) => {
                             const sameTime =
                               column.courses.length > 1 &&
                               column.courses.every(
@@ -414,28 +429,156 @@ export function CourseScheduleView({
                                   STACK_GAP * (column.courses.length - 1)) /
                                   column.courses.length,
                               );
-                              return column.courses.map((course, rowIndex) => (
-                                <CourseCard
-                                  key={course.id}
-                                  course={course}
-                                  lang={lang}
-                                  left={column.left}
-                                  width={column.width}
-                                  topPx={
-                                    blockTopPx +
-                                    rowIndex * (rowHeightPx + STACK_GAP)
-                                  }
-                                  heightPx={rowHeightPx}
-                                  conflict={block.conflict}
-                                  badge={weekBadge(course)}
-                                  homeworkCount={homeworkCountOf(course.id)}
-                                  homeworkLabel={t("study.homeworkCount", {
-                                    count: homeworkCountOf(course.id),
-                                  })}
-                                  onOpenDetail={onOpenDetail}
-                                  onOpenCourseHomework={onOpenCourseHomework}
-                                />
-                              ));
+                              const stackKey = `${day}-${block.startMin}-${block.endMin}-${columnIndex}`;
+                              const expanded = expandedStacks.has(stackKey);
+                              if (!expanded) {
+                                const top = column.courses[0];
+                                const depth = column.courses.length;
+                                const density = courseCardDensity(blockHeightPx);
+                                return (
+                                  <div
+                                    key={stackKey}
+                                    role="button"
+                                    tabIndex={0}
+                                    data-testid={`course-stack-${top.id}`}
+                                    aria-expanded={false}
+                                    onClick={() => toggleStack(stackKey)}
+                                    onKeyDown={(event) => {
+                                      if (isComposing(event)) return;
+                                      if (
+                                        event.key === "Enter" ||
+                                        event.key === " "
+                                      ) {
+                                        event.preventDefault();
+                                        toggleStack(stackKey);
+                                      }
+                                    }}
+                                    className="absolute"
+                                    style={{
+                                      left: `${column.left}%`,
+                                      width: `${column.width}%`,
+                                      top: blockTopPx,
+                                      height: blockHeightPx,
+                                    }}
+                                  >
+                                    {Array.from(
+                                      { length: Math.min(2, depth - 1) },
+                                      (_, index) => (
+                                        <div
+                                          key={index}
+                                          aria-hidden
+                                          className="absolute inset-0 rounded-sm bg-white ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-slate-700"
+                                          style={{
+                                            transform: `translate(${(index + 1) * 4}px, ${(index + 1) * 4}px)`,
+                                          }}
+                                        />
+                                      ),
+                                    )}
+                                    <div className="absolute inset-0 overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700">
+                                      <span
+                                        className={`absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-xs ${LABEL_COLORS[top.color].dot}`}
+                                      />
+                                      <div
+                                        className={`relative px-2.5 pl-3 ${
+                                          density === "compact"
+                                            ? "py-0.5"
+                                            : "py-1.5"
+                                        }`}
+                                      >
+                                        {density === "compact" ? (
+                                          <div className="flex items-baseline gap-1">
+                                            <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-strong">
+                                              {top.name}
+                                            </span>
+                                            <span className="shrink-0 text-[9px] tabular-nums text-muted">
+                                              {formatClockRange(
+                                                top.startMin,
+                                                top.endMin,
+                                                lang,
+                                              )}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <div
+                                              className={`text-xs font-semibold text-strong ${
+                                                density === "full"
+                                                  ? "line-clamp-2"
+                                                  : "truncate"
+                                              }`}
+                                            >
+                                              {top.name}
+                                            </div>
+                                            <div className="truncate text-[10px] tabular-nums text-muted">
+                                              {formatClockRange(
+                                                top.startMin,
+                                                top.endMin,
+                                                lang,
+                                              )}
+                                            </div>
+                                            {weekBadge(top) && (
+                                              <div className="mt-0.5">
+                                                <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
+                                                  {weekBadge(top)}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                      <span className="absolute right-1 top-1 z-10 inline-flex items-center gap-1 rounded-xs bg-slate-900/70 px-1.5 py-px text-[9px] font-semibold text-white">
+                                        <Layers aria-hidden className="size-3" />
+                                        {t("study.stackCount", { count: depth })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div
+                                  key={stackKey}
+                                  className="absolute"
+                                  style={{
+                                    left: `${column.left}%`,
+                                    width: `${column.width}%`,
+                                    top: blockTopPx,
+                                    height: blockHeightPx,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    aria-label={t("study.collapseStack")}
+                                    onClick={() => toggleStack(stackKey)}
+                                    className="absolute right-1 top-0.5 z-20 rounded-xs bg-slate-900/60 px-1.5 py-px text-[9px] font-semibold text-white transition-colors hover:bg-slate-900"
+                                  >
+                                    <ChevronUp aria-hidden className="size-3" />
+                                  </button>
+                                  {column.courses.map((course, rowIndex) => (
+                                    <CourseCard
+                                      key={course.id}
+                                      course={course}
+                                      lang={lang}
+                                      left={0}
+                                      width={100}
+                                      topPx={
+                                        blockTopPx +
+                                        rowIndex * (rowHeightPx + STACK_GAP)
+                                      }
+                                      heightPx={rowHeightPx}
+                                      conflict={block.conflict}
+                                      badge={weekBadge(course)}
+                                      homeworkCount={homeworkCountOf(course.id)}
+                                      homeworkLabel={t("study.homeworkCount", {
+                                        count: homeworkCountOf(course.id),
+                                      })}
+                                      onOpenDetail={onOpenDetail}
+                                      onOpenCourseHomework={
+                                        onOpenCourseHomework
+                                      }
+                                    />
+                                  ))}
+                                </div>
+                              );
                             }
                             return column.courses.map(
                               (course, courseIndex) => {

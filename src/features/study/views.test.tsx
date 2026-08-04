@@ -353,7 +353,7 @@ describe("视图空态", () => {
     expect(firstHeaderCell.getAttribute("data-testid")).toBe("day-header-1");
   });
 
-  it("错周同槽课程渲染为堆叠行而非左右分栏", () => {
+  it("错周同槽课程折叠为堆叠卡，点击展开为行", () => {
     const odd = {
       ...DEMO_COURSES[0],
       id: "odd",
@@ -371,12 +371,18 @@ describe("视图空态", () => {
         {...commonProps}
       />,
     );
+    expect(screen.queryByText("单周")).not.toBeInTheDocument();
+    const stack = screen.getByRole("button", { name: /共 2 门/ });
+    expect(stack).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(stack);
     expect(screen.getByText("单周")).toBeInTheDocument();
     expect(screen.getByText("双周")).toBeInTheDocument();
     const oddCard = screen
       .getByTestId("course-card-odd")
       .closest('[role="button"]') as HTMLElement;
     expect(oddCard.className).toContain("ring-slate-200/70");
+    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.queryByText("单周")).not.toBeInTheDocument();
   });
 
   it("四门同周重叠只显示两列并折叠为 +N", () => {
