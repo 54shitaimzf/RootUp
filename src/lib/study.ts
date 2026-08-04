@@ -6,7 +6,7 @@ export type WeekRule = "all" | "odd" | "even" | "range";
 export type HomeworkStatus = "pending" | "done" | "archived";
 export type StudyView = "schedule" | "homework";
 export type WeekStart = "monday" | "sunday";
-export type HomeworkStatusFilter = "all" | HomeworkStatus;
+export type HomeworkStatusFilter = "all" | "active" | HomeworkStatus;
 
 export interface Course {
   id: string;
@@ -558,7 +558,13 @@ export function filterHomework(
   },
 ): Homework[] {
   return list
-    .filter((item) => options.status === "all" || item.status === options.status)
+    .filter((item) => {
+      if (options.status === "all") return true;
+      if (options.status === "active") {
+        return item.status === "pending" || item.status === "done";
+      }
+      return item.status === options.status;
+    })
     .filter((item) => {
       if (options.courseId === "all") return true;
       if (options.courseId === "none") return item.courseId === null;

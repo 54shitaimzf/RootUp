@@ -536,6 +536,7 @@ describe("作业排序与筛选", () => {
       archived,
     ];
     expect(filterHomework(list, { status: "done", courseId: "all" })).toHaveLength(1);
+    expect(filterHomework(list, { status: "active", courseId: "all" })).toHaveLength(3);
     expect(filterHomework(list, { status: "all", courseId: "c1" }).map((x) => x.id)).toEqual(["b", "c", "d"]);
     expect(filterHomework(list, { status: "all", courseId: "none" }).map((x) => x.id)).toEqual(["a"]);
     expect(filterHomework(list, { status: "all", courseId: "all" })).toHaveLength(4);

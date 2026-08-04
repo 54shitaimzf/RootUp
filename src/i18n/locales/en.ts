@@ -93,6 +93,7 @@ export default {
     note: "Notes",
     notePlaceholder: "Optional, up to 200 chars",
     statusAll: "All",
+    statusActive: "Active",
     statusPending: "To do",
     statusDone: "Done",
     statusArchived: "Archived",

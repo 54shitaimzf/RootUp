@@ -90,6 +90,7 @@ export default {
     note: "备注",
     notePlaceholder: "选填，最多 200 字",
     statusAll: "全部",
+    statusActive: "活跃",
     statusPending: "待办",
     statusDone: "已完成",
     statusArchived: "已归档",

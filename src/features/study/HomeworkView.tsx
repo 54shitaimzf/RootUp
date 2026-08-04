@@ -23,10 +23,11 @@ import {
 import { DueText } from "./DueText";
 
 const STATUS_FILTERS: { value: HomeworkStatusFilter; labelKey: string }[] = [
-  { value: "all", labelKey: "study.statusAll" },
+  { value: "active", labelKey: "study.statusActive" },
   { value: "pending", labelKey: "study.statusPending" },
   { value: "done", labelKey: "study.statusDone" },
   { value: "archived", labelKey: "study.statusArchived" },
+  { value: "all", labelKey: "study.statusAll" },
 ];
 
 export function HomeworkView({
@@ -56,7 +57,7 @@ export function HomeworkView({
 }) {
   const { t } = useTranslation();
   const [statusFilter, setStatusFilter] =
-    useState<HomeworkStatusFilter>("all");
+    useState<HomeworkStatusFilter>("active");
   const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null);
   const [doneTarget, setDoneTarget] = useState<Homework | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());

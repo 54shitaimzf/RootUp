@@ -229,7 +229,12 @@ describe("StudyPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "标记完成" }));
     expect(checkbox).toBeChecked();
     fireEvent.click(within(row).getByRole("button", { name: "归档" }));
-    const archivedCheckbox = within(row).getByRole("checkbox");
+    expect(
+      screen.queryByText("程序设计 实验报告"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "已归档" }));
+    const archivedRow = screen.getByText("程序设计 实验报告").closest("li")!;
+    const archivedCheckbox = within(archivedRow).getByRole("checkbox");
     expect(archivedCheckbox).toBeDisabled();
     expect(archivedCheckbox).toBeChecked();
   });
@@ -534,5 +539,41 @@ describe("StudyPage", () => {
     expect(checkbox).toBeDisabled();
     expect(checkbox).toBeChecked();
     expect(within(row).getByText("已归档作业")).toHaveClass("line-through");
+  });
+
+  it("默认只显示活跃作业，已归档与全部筛选在最后", () => {
+    const data = createSeedStudyData();
+    data.homeworkBySemester["fall-2026"] = [
+      {
+        id: "p",
+        courseId: null,
+        title: "活跃作业",
+        note: "",
+        details: "",
+        dueAt: "2026-08-10T23:59:00",
+        status: "pending",
+      },
+      {
+        id: "a",
+        courseId: null,
+        title: "归档作业",
+        note: "",
+        details: "",
+        dueAt: "2026-07-01T23:59:00",
+        status: "archived",
+      },
+    ];
+    render(<StudyPage today={TODAY} initialData={data} />);
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    expect(screen.getByText("活跃作业")).toBeInTheDocument();
+    expect(screen.queryByText("归档作业")).not.toBeInTheDocument();
+    const chips = screen.getAllByRole("button", {
+      name: /^(活跃|待办|已完成|已归档|全部)$/,
+    });
+    const chipNames = chips.map((chip) => chip.textContent);
+    expect(chipNames[chipNames.length - 2]).toBe("已归档");
+    expect(chipNames[chipNames.length - 1]).toBe("全部");
+    fireEvent.click(screen.getByRole("button", { name: "已归档" }));
+    expect(screen.getByText("归档作业")).toBeInTheDocument();
   });
 });
