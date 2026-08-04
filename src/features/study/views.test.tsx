@@ -384,15 +384,19 @@ describe("视图空态", () => {
         onOpenDetail={onOpenDetail}
       />,
     );
-    expect(screen.queryByText("单周")).not.toBeInTheDocument();
     const stack = screen.getByRole("button", { name: /共 2 门/ });
+    expect(screen.getByText("单周")).toBeInTheDocument();
+    expect(screen.queryByText("双周")).not.toBeInTheDocument();
     expect(stack).toHaveAttribute("aria-expanded", "false");
     expect(stack.className).not.toContain("overflow-hidden");
     expect(stack.style.zIndex).toBe("");
+    expect(stack.querySelectorAll('[data-testid="stack-edge"]')).toHaveLength(
+      1,
+    );
     expect(stack.querySelector(".lucide-layers")).not.toBeNull();
     expect(within(stack).getByText("2")).toBeInTheDocument();
     fireEvent.click(stack);
-    expect(screen.queryByTestId("course-stack-even")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("course-stack-odd")).not.toBeInTheDocument();
     const evenCard = screen.getByTestId("spread-card-even");
     const oddCard = screen.getByTestId("spread-card-odd");
     expect(evenCard.className).toContain("fixed");
@@ -408,13 +412,13 @@ describe("视图空态", () => {
     );
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByTestId("spread-card-even")).not.toBeInTheDocument();
-    expect(screen.getByTestId("course-stack-even")).toBeInTheDocument();
+    expect(screen.getByTestId("course-stack-odd")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
     fireEvent.click(
       document.querySelector(".fixed.inset-0.z-40") as HTMLElement,
     );
-    expect(screen.queryByTestId("spread-card-even")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("spread-card-odd")).not.toBeInTheDocument();
   });
 
   it("长标题课程卡在课表中截断", () => {

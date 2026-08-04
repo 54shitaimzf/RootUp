@@ -40,16 +40,17 @@ describe("StudyPage", () => {
       screen.getByRole("heading", { name: "学业" }),
     ).toBeInTheDocument();
     expect(screen.getByText("高等数学")).toBeInTheDocument();
-    expect(screen.getByText("程序设计")).toBeInTheDocument();
+    expect(screen.getByText("大学物理")).toBeInTheDocument();
     expect(screen.getByText("线性代数")).toBeInTheDocument();
     expect(
       screen.getByText(
         "数据结构与算法分析（含实验）——面向工程实践的综合课程设计",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("大学物理")).not.toBeInTheDocument();
+    expect(screen.queryByText("程序设计")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
     expect(screen.getByText("大学物理")).toBeInTheDocument();
+    expect(screen.getByText("程序设计")).toBeInTheDocument();
     expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();
     expect(
       (screen.getByLabelText("学期") as HTMLSelectElement).value,

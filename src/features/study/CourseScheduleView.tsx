@@ -213,8 +213,6 @@ export function CourseScheduleView({
   const [stackOverlay, setStackOverlay] = useState<{
     key: string;
     courses: Course[];
-    cx: number;
-    cy: number;
   } | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -271,20 +269,11 @@ export function CourseScheduleView({
     homework.filter((item) => item.courseId === courseId).length;
 
   const openStackOverlay = (
-    event: { currentTarget: HTMLElement },
+    _event: { currentTarget: HTMLElement },
     key: string,
     courses: Course[],
   ) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const cx = Math.min(
-      Math.max(rect.left + rect.width / 2, 220),
-      window.innerWidth - 220,
-    );
-    const cy = Math.min(
-      Math.max(rect.top + rect.height / 2, 160),
-      window.innerHeight - 160,
-    );
-    setStackOverlay({ key, courses, cx, cy });
+    setStackOverlay({ key, courses });
   };
 
   return (
@@ -522,7 +511,8 @@ export function CourseScheduleView({
                                   course.endMin === column.courses[0].endMin,
                               );
                             if (sameTime) {
-                              const top = column.courses[0];
+                              const top =
+                                column.courses[column.courses.length - 1];
                               const depth = column.courses.length;
                               const density = courseCardDensity(blockHeightPx);
                               const stackKey = `${day}-${block.startMin}-${block.endMin}-${columnIndex}`;
@@ -567,14 +557,15 @@ export function CourseScheduleView({
                                   }}
                                 >
                                   {Array.from(
-                                    { length: Math.min(2, depth - 1) },
+                                    { length: Math.min(1, depth - 1) },
                                     (_, index) => (
                                       <div
                                         key={index}
+                                        data-testid="stack-edge"
                                         aria-hidden
                                         className="absolute inset-0 rounded-sm bg-white ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-slate-700"
                                         style={{
-                                          transform: `translate(${(index + 1) * 4}px, ${(index + 1) * 4}px)`,
+                                          transform: `translate(${(index + 1) * 3}px, ${(index + 1) * 3}px)`,
                                         }}
                                       />
                                     ),
@@ -704,7 +695,7 @@ export function CourseScheduleView({
       {stackOverlay && (
         <>
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-40 bg-slate-900/15"
             aria-hidden
             onClick={() => setStackOverlay(null)}
           />
@@ -721,17 +712,11 @@ export function CourseScheduleView({
             const totalH = rows * CARD_H + (rows - 1) * GAP;
             const startX = Math.max(
               8,
-              Math.min(
-                stackOverlay.cx - totalW / 2,
-                window.innerWidth - totalW - 8,
-              ),
+              Math.floor((window.innerWidth - totalW) / 2),
             );
             const startY = Math.max(
               8,
-              Math.min(
-                stackOverlay.cy - totalH / 2,
-                window.innerHeight - totalH - 8,
-              ),
+              Math.floor((window.innerHeight - totalH) / 2),
             );
             const positionOf = (index: number) => ({
               left: startX + (index % cols) * (CARD_W + GAP),
@@ -766,7 +751,7 @@ export function CourseScheduleView({
                         onOpenDetail(course);
                         setStackOverlay(null);
                       }}
-                      className="deal-in fixed z-50 flex flex-col rounded-lg border border-slate-200 bg-white p-3 text-left shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-pop dark:border-slate-700 dark:bg-slate-800"
+                      className="deal-in fixed z-50 flex flex-col rounded-lg border border-slate-200 bg-white p-3 text-left shadow-pop ring-1 ring-slate-200/60 transition-all hover:-translate-y-1 hover:scale-[1.02] hover:shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:ring-slate-700"
                       style={dealStyle}
                     >
                       <span className="flex items-start gap-2">
