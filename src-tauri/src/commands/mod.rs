@@ -5,4 +5,5 @@ pub mod labels;
 pub mod projects;
 pub mod schemes;
 pub mod settings;
+pub mod study;
 pub mod window;

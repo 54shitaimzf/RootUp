@@ -180,6 +180,34 @@ impl IndexStore for SqliteIndexStore {
             .map_err(|e| e.to_string())
     }
 
+    fn all_records(&self) -> Result<Vec<FileRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT * FROM files
+                WHERE state != ?1
+                ORDER BY id
+                "#,
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![FileState::Deleted.as_str()], row_to_record)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    fn update_labels(&mut self, path: &str, labels: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE files SET labels = ?1 WHERE path = ?2",
+            params![labels, path],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn query(&self, query: &FileQuery) -> Result<QueryPage, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let limit = if query.limit <= 0 {
@@ -685,6 +713,27 @@ mod tests {
             s.get_by_path("C:/gone.txt").unwrap().unwrap().state,
             "deleted"
         );
+    }
+
+    #[test]
+    fn all_records_excludes_deleted_and_update_labels_preserves_meta() {
+        let mut s = store();
+        let mut r = record("C:/Math/高等数学笔记.pdf", 100, 1000);
+        r.labels = "document".into();
+        s.upsert(&r).unwrap();
+        s.upsert(&record("C:/gone.txt", 1, 1)).unwrap();
+        s.mark_deleted("C:/gone.txt").unwrap();
+
+        let all = s.all_records().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].labels, "document");
+
+        s.update_labels("C:/Math/高等数学笔记.pdf", "document,course-c-demo-1")
+            .unwrap();
+        let got = s.get_by_path("C:/Math/高等数学笔记.pdf").unwrap().unwrap();
+        assert_eq!(got.labels, "document,course-c-demo-1");
+        assert_eq!(got.first_seen, 1000);
+        assert_eq!(got.modified, 1000);
     }
 
     #[test]

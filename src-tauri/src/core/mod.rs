@@ -12,5 +12,7 @@ pub mod query;
 pub mod scan;
 pub mod schemes;
 pub mod settings;
+pub mod study;
+pub mod study_classify;
 pub mod tools;
 pub mod watched;

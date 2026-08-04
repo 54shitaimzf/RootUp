@@ -53,6 +53,10 @@ pub trait IndexStore: Send + Sync {
     /// 最近优先列表（limit/offset 分页）。
     #[allow(dead_code)]
     fn list(&self, limit: i64, offset: i64) -> Result<Vec<FileRecord>, String>;
+    /// 全量记录（定向重分类用，排除 deleted）。
+    fn all_records(&self) -> Result<Vec<FileRecord>, String>;
+    /// 仅更新 labels 列（保留 first_seen/modified）。
+    fn update_labels(&mut self, path: &str, labels: &str) -> Result<(), String>;
     /// 按名称/路径模糊搜索。
     #[allow(dead_code)]
     fn search(&self, text: &str, limit: i64) -> Result<Vec<FileRecord>, String> {

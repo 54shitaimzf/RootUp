@@ -9,6 +9,7 @@ pub mod scanner;
 pub mod scheme_store;
 pub mod shortcut;
 pub mod storage;
+pub mod study_store;
 pub mod tray;
 pub mod watcher;
 pub mod window;

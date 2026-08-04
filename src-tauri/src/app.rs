@@ -5,6 +5,7 @@ use crate::commands::labels as labels_commands;
 use crate::commands::projects as projects_commands;
 use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
+use crate::commands::study as study_commands;
 use crate::commands::window as window_commands;
 use crate::core::archive::category_dir;
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
@@ -14,12 +15,14 @@ use crate::core::index::IndexStore;
 use crate::core::path::normalize_path;
 use crate::core::project::managed_unit_roots;
 use crate::core::scan::{ScanEvent, ScanEventSink, ScanParams};
+use crate::core::study_classify::{SharedStudyClassifier, StudyClassifier};
 use crate::core::watched::dedupe_watched;
 use crate::infra::archive_service::ArchiveService;
 use crate::infra::index_store::SqliteIndexStore;
 use crate::infra::logging::FileLogger;
 use crate::infra::scanner::ScanService;
 use crate::infra::storage;
+use crate::infra::study_store::{JsonStudyStore, StudyStore};
 use crate::infra::tray;
 use crate::infra::watcher::WatchService;
 use crate::infra::window as window_lifecycle;
@@ -130,6 +133,10 @@ pub fn run() {
             settings_commands::get_settings,
             settings_commands::set_settings,
             settings_commands::reset_settings,
+            study_commands::get_study_data,
+            study_commands::save_study_data,
+            study_commands::study_store_exists,
+            study_commands::reapply_study_labels,
             schemes_commands::list_schemes,
             schemes_commands::save_scheme,
             schemes_commands::rename_scheme,
@@ -199,6 +206,14 @@ pub fn run() {
             app.manage(store.clone());
             log::info!("索引库就绪: {:?}", data_dir.join("rootup.db"));
 
+            // 学业数据与课程分类器：保存后刷新同一份共享状态
+            let study_store = JsonStudyStore::new(data_dir.join("study.json"));
+            let study_data = study_store.load();
+            let mut study_classifier = StudyClassifier::new();
+            study_classifier.refresh(&study_data);
+            let study_classifier = Arc::new(Mutex::new(study_classifier));
+            app.manage(study_classifier.clone());
+
             // 监控目录：启动自愈（规范化 + 防重叠修正），修正结果写回设置
             let mut settings = storage::load_settings(app.handle());
             let (fixed_dirs, fixes) = dedupe_watched(&settings.watched_dirs);
@@ -236,11 +251,11 @@ pub fn run() {
                 .iter()
                 .map(|rule| (rule.extensions.clone(), rule.category.clone()))
                 .collect();
-            let classifier =
-                Arc::new(ClassifierChain::new(vec![
-                    Box::new(ExtensionClassifier::with_overrides(&overrides))
-                        as Box<dyn crate::core::classify::Classifier>,
-                ]));
+            let classifier = Arc::new(ClassifierChain::new(vec![
+                Box::new(ExtensionClassifier::with_overrides(&overrides))
+                    as Box<dyn crate::core::classify::Classifier>,
+                Box::new(SharedStudyClassifier(study_classifier)),
+            ]));
             let emit_handle = app.handle().clone();
             let skip_roots: Vec<String> = {
                 let mut roots = managed_unit_roots(&settings.watched_dirs, &settings.project_dirs);
