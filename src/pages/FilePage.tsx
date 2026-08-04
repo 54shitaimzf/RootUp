@@ -6,7 +6,9 @@ import { FilterBar } from "../components/FilterBar";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
+import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
+import { PageHeader } from "../components/PageHeader";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
 import { useFilterHabits } from "../hooks/useFilterHabits";
@@ -186,10 +188,10 @@ export function FilePage({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-2xl font-semibold">{t("pages.files.title")}</h1>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        {t("pages.files.description")}
-      </p>
+      <PageHeader
+        title={t("pages.files.title")}
+        description={t("pages.files.description")}
+      />
 
       <SearchAutocomplete
         text={query}
@@ -301,21 +303,20 @@ export function FilePage({
             {t("files.loading")}
           </div>
         ) : watchedCount === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            <p>{t("files.empty")}</p>
-            <Button
-              variant="primary"
-              size="md"
-              className="mt-3"
-              onClick={() => onNavigate("settings")}
-            >
-              {t("files.goSettings")}
-            </Button>
-          </div>
+          <EmptyState
+            title={t("files.empty")}
+            action={
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => onNavigate("settings")}
+              >
+                {t("files.goSettings")}
+              </Button>
+            }
+          />
         ) : items.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            {t("files.noResults")}
-          </div>
+          <EmptyState title={t("files.noResults")} />
         ) : (
           <>
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">

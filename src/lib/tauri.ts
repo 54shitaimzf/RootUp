@@ -324,3 +324,11 @@ export function revealInExplorer(path: string): Promise<void> {
 export function createProjectShortcut(path: string): Promise<ShortcutOutcome> {
   return invoke<ShortcutOutcome>("create_project_shortcut", { path });
 }
+
+export function listDetectedTools(): Promise<string[]> {
+  return invoke<string[]>("list_detected_tools");
+}
+
+export function openUrl(url: string): Promise<void> {
+  return invoke<void>("open_url", { url });
+}

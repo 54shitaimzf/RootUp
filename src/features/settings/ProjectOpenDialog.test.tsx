@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectOpenDialog, type OpenConfig } from "./ProjectOpenDialog";
 
+vi.mock("../../lib/tauri", () => ({
+  listDetectedTools: vi.fn(),
+}));
+
+import { listDetectedTools } from "../../lib/tauri";
+
 const INITIAL: OpenConfig = {
   preferredIde: "auto",
   customOpenCommands: [],
@@ -9,6 +15,7 @@ const INITIAL: OpenConfig = {
 
 describe("ProjectOpenDialog", () => {
   it("渲染首选 IDE 下拉并保存", async () => {
+    vi.mocked(listDetectedTools).mockResolvedValue(["vscode"]);
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onClose = vi.fn();
     render(

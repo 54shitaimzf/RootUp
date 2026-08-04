@@ -110,6 +110,8 @@ pub fn run() {
             projects_commands::open_file,
             projects_commands::reveal_in_explorer,
             projects_commands::create_project_shortcut,
+            projects_commands::list_detected_tools,
+            projects_commands::open_url,
             window_commands::hide_to_tray,
             window_commands::quit_app,
         ])

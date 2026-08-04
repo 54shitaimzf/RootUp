@@ -340,6 +340,18 @@ pub fn find_app(
     None
 }
 
+/// 探测当前环境已安装的全部工具 key（按 TOOL_KEYS 顺序）。
+pub fn detect_installed_tools(
+    custom: &[CustomOpenCommand],
+    env: &dyn AppEnv,
+) -> Vec<&'static str> {
+    tools::TOOL_KEYS
+        .iter()
+        .filter(|tool| find_app(tool, custom, env).is_some())
+        .copied()
+        .collect()
+}
+
 /// 路径段 glob 匹配：支持整段 `*` 或 `前缀*后缀`；无 `*` 时精确相等。
 pub fn segment_matches(name: &str, pattern: &str) -> bool {
     if let Some((prefix, suffix)) = pattern.split_once('*') {
@@ -518,6 +530,27 @@ mod tests {
     fn unknown_tool_yields_none() {
         let env = FakeEnv::new();
         assert!(find_app("nonexistent", &[], &env).is_none());
+    }
+
+    #[test]
+    fn detect_installed_tools_lists_matches() {
+        let mut env = FakeEnv::new();
+        env.path = "C:/tools".into();
+        env.file(PathBuf::from("C:/tools/code.exe"));
+        env.file(PathBuf::from("C:/tools/code"));
+        env.registry
+            .insert("Typora.exe".into(), PathBuf::from("C:/tools/Typora.exe"));
+        env.file(PathBuf::from("C:/tools/Typora.exe"));
+        let detected = detect_installed_tools(&[], &env);
+        assert!(detected.contains(&tools::TOOL_VSCODE));
+        assert!(detected.contains(&tools::TOOL_TYPORA));
+        assert!(!detected.contains(&tools::TOOL_MATLAB));
+    }
+
+    #[test]
+    fn detect_installed_tools_empty_env() {
+        let env = FakeEnv::new();
+        assert!(detect_installed_tools(&[], &env).is_empty());
     }
 
     #[test]

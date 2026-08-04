@@ -39,6 +39,8 @@ import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { IconButton } from "../components/IconButton";
+import { Input } from "../components/Input";
+import { PageHeader } from "../components/PageHeader";
 
 const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.themeSystem" },
@@ -284,12 +286,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-semibold text-strong">
-        {t("pages.settings.title")}
-      </h1>
-      <p className="mt-1 text-sm text-muted">
-        {t("pages.settings.description")}
-      </p>
+      <PageHeader
+        title={t("pages.settings.title")}
+        description={t("pages.settings.description")}
+      />
 
       {scan.status?.active && (
         <Banner variant="brand" className="mt-4">
@@ -330,7 +330,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
           {t("settings.watchedDirsDesc")}
         </p>
         <div className="mt-3 flex gap-2">
-          <input
+          <Input
             type="text"
             value={newDir}
             onChange={(event) => setNewDir(event.target.value)}
@@ -338,7 +338,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               if (event.key === "Enter") void handleAddDir();
             }}
             placeholder={t("settings.dirPlaceholder")}
-            className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+            className="flex-1"
           />
           <Button variant="primary" size="md" onClick={() => void handleAddDir()}>
             {t("settings.addDir")}

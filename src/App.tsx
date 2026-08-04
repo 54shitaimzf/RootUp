@@ -10,6 +10,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { FilePage } from "./pages/FilePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import { HelpCenterProvider } from "./components/HelpCenter";
 
 function renderPage(
   page: PageKey,
@@ -55,7 +56,9 @@ function renderPage(
 export default function App() {
   return (
     <SettingsProvider>
-      <Shell />
+      <HelpCenterProvider>
+        <Shell />
+      </HelpCenterProvider>
     </SettingsProvider>
   );
 }

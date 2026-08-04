@@ -7,7 +7,8 @@ use crate::core::project::{
 use crate::core::settings::PREFERRED_IDE_NONE;
 use crate::core::tools::{self, extension_of};
 use crate::infra::app_finder::{
-    build_open_args, find_app, CommandRunner, SystemAppEnv, SystemRunner,
+    build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv,
+    SystemRunner,
 };
 use crate::infra::shortcut;
 use crate::infra::storage;
@@ -304,4 +305,28 @@ pub fn create_project_shortcut(app: AppHandle, path: String) -> Result<ShortcutO
         name: info.name,
         kind: info.kind.key().to_string(),
     })
+}
+
+/// 当前环境已检测到的工具 key 列表（供引导提示与帮助中心展示）。
+#[tauri::command]
+pub fn list_detected_tools(app: AppHandle) -> Vec<String> {
+    let settings = storage::load_settings(&app);
+    let env = SystemAppEnv;
+    let tools = detect_installed_tools(&settings.custom_open_commands, &env);
+    log::info!("tools: 检测 {} 个", tools.len());
+    tools.iter().map(|tool| (*tool).to_string()).collect()
+}
+
+/// 打开外部链接：仅允许 https 官方白名单域名。
+#[tauri::command]
+pub fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !tools::is_allowed_url(&url) {
+        log::warn!("open: 拒绝非白名单链接 {url}");
+        return Err("不允许打开的链接".into());
+    }
+    app.opener()
+        .open_url(url.clone(), None::<&str>)
+        .map_err(|e| e.to_string())?;
+    log::info!("open: 链接 {url}");
+    Ok(())
 }

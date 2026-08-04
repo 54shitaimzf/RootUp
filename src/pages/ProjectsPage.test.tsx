@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectsPage } from "./ProjectsPage";
 import { SettingsProvider } from "../hooks/useSettings";
+import { HelpCenterProvider } from "../components/HelpCenter";
+import { ONBOARDING_STORAGE_KEY } from "../components/OnboardingDialog";
 
 vi.mock("../lib/tauri", () => ({
   defaultSettings: {
@@ -18,6 +20,7 @@ vi.mock("../lib/tauri", () => ({
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
   listProjects: vi.fn(),
+  listDetectedTools: vi.fn(),
   addProjectDir: vi.fn(),
   removeProjectDir: vi.fn(),
   openProject: vi.fn(),
@@ -35,6 +38,7 @@ import {
   createProjectShortcut,
   getSettings,
   listProjects,
+  listDetectedTools,
   openProject,
   removeProjectDir,
   saveSettings,
@@ -44,7 +48,9 @@ import { listen } from "@tauri-apps/api/event";
 function renderPage() {
   return render(
     <SettingsProvider>
-      <ProjectsPage onNavigate={() => {}} />
+      <HelpCenterProvider>
+        <ProjectsPage onNavigate={() => {}} />
+      </HelpCenterProvider>
     </SettingsProvider>,
   );
 }
@@ -52,6 +58,7 @@ function renderPage() {
 describe("ProjectsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     vi.mocked(getSettings).mockResolvedValue({
       version: 1,
       theme: "system",
@@ -68,6 +75,7 @@ describe("ProjectsPage", () => {
       { path: "C:/proj/rust-app", name: "rust-app", kind: "rust" },
       { path: "E:/manual", name: "manual", kind: "generic" },
     ]);
+    vi.mocked(listDetectedTools).mockResolvedValue(["vscode"]);
     vi.mocked(openProject).mockResolvedValue({
       openedWith: "ide",
       tool: "vscode",
@@ -96,7 +104,9 @@ describe("ProjectsPage", () => {
     const onNavigate = vi.fn();
     render(
       <SettingsProvider>
-        <ProjectsPage onNavigate={onNavigate} />
+        <HelpCenterProvider>
+          <ProjectsPage onNavigate={onNavigate} />
+        </HelpCenterProvider>
       </SettingsProvider>,
     );
     fireEvent.click(await screen.findByText("去设置页添加监控目录"));
@@ -140,5 +150,26 @@ describe("ProjectsPage", () => {
     await waitFor(() =>
       expect(removeProjectDir).toHaveBeenCalledWith("E:/manual"),
     );
+  });
+
+  it("检测到代码项目但无 IDE 时显示引导条", async () => {
+    vi.mocked(listDetectedTools).mockResolvedValue([]);
+    renderPage();
+    expect(
+      await screen.findByText(
+        "检测到代码项目，但未找到可用的 IDE。点此了解如何安装。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("了解如何安装 IDE")).toBeInTheDocument();
+  });
+
+  it("检测到 IDE 时不显示引导条", async () => {
+    renderPage();
+    await screen.findByText("rust-app");
+    expect(
+      screen.queryByText(
+        "检测到代码项目，但未找到可用的 IDE。点此了解如何安装。",
+      ),
+    ).not.toBeInTheDocument();
   });
 });

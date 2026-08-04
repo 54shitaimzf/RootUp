@@ -2,10 +2,14 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 import type { CustomOpenCommand, ProjectKind } from "../../lib/tauri";
+import { listDetectedTools } from "../../lib/tauri";
 import { PREFERRED_IDE_OPTIONS } from "../../lib/projects";
 import { Button } from "../../components/Button";
 import { IconButton } from "../../components/IconButton";
+import { InlineNotice } from "../../components/InlineNotice";
+import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
+import { Select } from "../../components/Select";
 import { SectionLabel } from "../../components/SectionLabel";
 import { ProjectKindBadge } from "../../components/ProjectKindBadge";
 
@@ -44,6 +48,7 @@ export function ProjectOpenDialog({
   const [command, setCommand] = useState("");
   const [tool, setTool] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [detected, setDetected] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -53,6 +58,10 @@ export function ProjectOpenDialog({
       setCommand("");
       setTool("");
       setError(null);
+      setDetected(null);
+      listDetectedTools()
+        .then(setDetected)
+        .catch(() => setDetected([]));
     }
   }, [open, initial]);
 
@@ -114,24 +123,31 @@ export function ProjectOpenDialog({
     >
       <div className="space-y-4">
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-400">
+          <InlineNotice variant="error">
             {error}
-          </p>
+          </InlineNotice>
         )}
 
         <div>
           <SectionLabel>{t("settings.preferredIde")}</SectionLabel>
-          <select
+          <Select
             value={preferredIde}
             onChange={(event) => setPreferredIde(event.target.value)}
-            className="mt-1.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+            className="mt-1.5"
           >
             {PREFERRED_IDE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {t(option.labelKey)}
               </option>
             ))}
-          </select>
+          </Select>
+          {detected && (
+            <InlineNotice variant="info" className="mt-1.5">
+              {detected.length > 0
+                ? t("help.detectedTools", { tools: detected.join("、") })
+                : t("help.detectedToolsNone")}
+            </InlineNotice>
+          )}
         </div>
 
         <div>
@@ -166,27 +182,30 @@ export function ProjectOpenDialog({
             )}
           </div>
           <div className="mt-2 space-y-1.5">
-            <input
+            <Input
+              size="sm"
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder={t("settings.customCommandName")}
-              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+              className="w-full"
             />
-            <input
+            <Input
+              size="sm"
               type="text"
               value={command}
               onChange={(event) => setCommand(event.target.value)}
               placeholder={t("settings.customCommandPath")}
-              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+              className="w-full font-mono"
             />
             <div className="flex gap-2">
-              <input
+              <Input
+                size="sm"
                 type="text"
                 value={tool}
                 onChange={(event) => setTool(event.target.value)}
                 placeholder={t("settings.customCommandTool")}
-                className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+                className="flex-1"
               />
               <Button
                 variant="secondary"

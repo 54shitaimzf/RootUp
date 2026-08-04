@@ -14,18 +14,24 @@ import type { PageKey } from "../lib/nav";
 import {
   addProjectDir,
   createProjectShortcut,
+  listDetectedTools,
   listProjects,
   logEvent,
   openProject,
   removeProjectDir,
   revealInExplorer,
+  type OpenOutcome,
   type ProjectInfo,
 } from "../lib/tauri";
 import { PROJECT_KIND_LABEL_KEY, ProjectKindBadge } from "../components/ProjectKindBadge";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmButton } from "../components/ConfirmButton";
+import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
+import { Input } from "../components/Input";
+import { PageHeader } from "../components/PageHeader";
+import { useHelpCenter } from "../components/HelpCenter";
 
 export function ProjectsPage({
   onNavigate,
@@ -33,12 +39,16 @@ export function ProjectsPage({
   onNavigate: (page: PageKey) => void;
 }) {
   const { t } = useTranslation();
+  const { openHelp } = useHelpCenter();
   const { settings } = useSettings();
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [lastOpen, setLastOpen] = useState<OpenOutcome | null>(null);
   const [newDir, setNewDir] = useState("");
+  const [detectedTools, setDetectedTools] = useState<string[] | null>(null);
+  const [hideIdeHint, setHideIdeHint] = useState(false);
 
   const manualDirs = new Set(settings?.project_dirs ?? []);
 
@@ -57,6 +67,12 @@ export function ProjectsPage({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    listDetectedTools()
+      .then(setDetectedTools)
+      .catch(() => setDetectedTools([]));
+  }, []);
 
   // 快捷方式唤起 RootUp 时自动切到本页并刷新
   useEffect(() => {
@@ -102,6 +118,7 @@ export function ProjectsPage({
   const handleOpen = async (project: ProjectInfo) => {
     try {
       const outcome = await openProject(project.path);
+      setLastOpen(outcome);
       setNotice(outcome.message ?? t("projects.opened"));
       void logEvent("info", `ui: 打开项目 path=${project.path}`);
     } catch (err) {
@@ -130,13 +147,27 @@ export function ProjectsPage({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-2xl font-semibold text-strong">
-        {t("pages.projects.title")}
-      </h1>
-      <p className="mt-1 text-sm text-muted">{t("pages.projects.description")}</p>
+      <PageHeader
+        title={t("pages.projects.title")}
+        description={t("pages.projects.description")}
+      />
 
       {notice && (
-        <Banner variant="brand" className="mt-4">
+        <Banner
+          variant="brand"
+          className="mt-4"
+          actions={
+            lastOpen?.openedWith === "explorer" && !lastOpen.tool ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openHelp("guide")}
+              >
+                {t("projects.ideLearnMore")}
+              </Button>
+            ) : undefined
+          }
+        >
           {notice}
         </Banner>
       )}
@@ -146,8 +177,38 @@ export function ProjectsPage({
         </Banner>
       )}
 
+      {!hideIdeHint &&
+        detectedTools &&
+        detectedTools.length === 0 &&
+        projects.some((project) => project.kind !== "generic") && (
+          <Banner
+            variant="warn"
+            className="mt-4"
+            actions={
+              <>
+                <Button
+                  variant="amber"
+                  size="sm"
+                  onClick={() => openHelp("guide")}
+                >
+                  {t("projects.ideHintAction")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setHideIdeHint(true)}
+                >
+                  {t("projects.dismiss")}
+                </Button>
+              </>
+            }
+          >
+            <span className="min-w-0 flex-1">{t("projects.ideHintTitle")}</span>
+          </Banner>
+        )}
+
       <div className="mt-4 flex gap-2">
-        <input
+        <Input
           type="text"
           value={newDir}
           onChange={(event) => setNewDir(event.target.value)}
@@ -155,7 +216,7 @@ export function ProjectsPage({
             if (event.key === "Enter") void handleAdd();
           }}
           placeholder={t("projects.addPlaceholder")}
-          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition-colors focus:border-brand-500 dark:border-slate-700 dark:bg-slate-800"
+          className="flex-1"
         />
         <Button variant="primary" size="md" icon={Plus} onClick={() => void handleAdd()}>
           {t("projects.add")}
@@ -176,16 +237,19 @@ export function ProjectsPage({
             {t("files.loading")}
           </p>
         ) : projects.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-5 py-10 text-center text-sm text-muted shadow-card dark:border-slate-800 dark:bg-slate-900">
-            <p>{t("projects.empty")}</p>
-            <Button
-              variant="primary"
-              size="md"
-              className="mt-3"
-              onClick={() => onNavigate("settings")}
-            >
-              {t("projects.goSettings")}
-            </Button>
+          <div className="rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+            <EmptyState
+              title={t("projects.empty")}
+              action={
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => onNavigate("settings")}
+                >
+                  {t("projects.goSettings")}
+                </Button>
+              }
+            />
           </div>
         ) : (
           projects.map((project) => {

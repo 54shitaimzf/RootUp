@@ -26,6 +26,55 @@ pub const TOOL_ILLUSTRATOR: &str = "illustrator";
 pub const TOOL_TEXSTUDIO: &str = "texstudio";
 pub const TOOL_TEXWORKS: &str = "texworks";
 
+/// 全部工具 key（检测与文档共用）。
+pub const TOOL_KEYS: &[&str] = &[
+    TOOL_VSCODE,
+    TOOL_CURSOR,
+    TOOL_IDEA,
+    TOOL_PYCHARM,
+    TOOL_RUSTROVER,
+    TOOL_GOLAND,
+    TOOL_UNITY_HUB,
+    TOOL_UNITY_EDITOR,
+    TOOL_TYPORA,
+    TOOL_OBSIDIAN,
+    TOOL_JUPYTER,
+    TOOL_MATLAB,
+    TOOL_ORIGIN,
+    TOOL_MATHEMATICA,
+    TOOL_MULTISIM,
+    TOOL_PROTEUS,
+    TOOL_CAD,
+    TOOL_SOLIDWORKS,
+    TOOL_PHOTOSHOP,
+    TOOL_ILLUSTRATOR,
+    TOOL_TEXSTUDIO,
+    TOOL_TEXWORKS,
+];
+
+/// 打开外部下载链接的官方域名白名单（仅 https）。
+pub const ALLOWED_DOWNLOAD_DOMAINS: &[&str] = &[
+    "code.visualstudio.com",
+    "www.jetbrains.com",
+    "www.jetbrains.com.cn",
+    "cursor.com",
+    "www.cursor.com",
+    "obsidian.md",
+    "typora.io",
+];
+
+/// URL 白名单校验：仅 https 且域名命中白名单（含其子域名）。
+pub fn is_allowed_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.split(':').next().unwrap_or("").to_lowercase();
+    ALLOWED_DOWNLOAD_DOMAINS
+        .iter()
+        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+}
+
 /// 项目类型 → 默认 IDE 候选顺序（`auto` 模式）。
 pub fn ide_candidates_for(kind: ProjectKind) -> &'static [&'static str] {
     match kind {
@@ -142,5 +191,25 @@ mod tests {
         std::fs::create_dir_all(dir.join(".obsidian")).unwrap();
         assert!(is_obsidian_vault(&dir));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn allowed_url_whitelist() {
+        assert!(is_allowed_url("https://code.visualstudio.com/download"));
+        assert!(is_allowed_url("https://www.jetbrains.com/idea/"));
+        assert!(is_allowed_url("https://www.jetbrains.com.cn/pycharm/"));
+        assert!(is_allowed_url("https://cursor.com/"));
+        assert!(is_allowed_url("https://obsidian.md/download"));
+        assert!(is_allowed_url("https://typora.io/"));
+    }
+
+    #[test]
+    fn disallowed_urls_rejected() {
+        assert!(!is_allowed_url("http://code.visualstudio.com"));
+        assert!(!is_allowed_url("https://evil.example.com"));
+        assert!(!is_allowed_url("https://example.com"));
+        assert!(!is_allowed_url("ftp://code.visualstudio.com/x"));
+        assert!(!is_allowed_url("javascript:alert(1)"));
+        assert!(!is_allowed_url("https://code.visualstudio.com.evil.com/"));
     }
 }
