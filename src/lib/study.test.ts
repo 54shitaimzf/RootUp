@@ -506,7 +506,7 @@ describe("作业排序与筛选", () => {
 
 describe("示例数据", () => {
   it("示例课程与作业完整且关联一致", () => {
-    expect(DEMO_COURSES).toHaveLength(3);
+    expect(DEMO_COURSES).toHaveLength(4);
     expect(DEMO_HOMEWORK).toHaveLength(4);
     const courseIds = new Set(DEMO_COURSES.map((course) => course.id));
     for (const item of DEMO_HOMEWORK) {
@@ -514,5 +514,14 @@ describe("示例数据", () => {
         expect(courseIds.has(item.courseId)).toBe(true);
       }
     }
+  });
+
+  it("示例包含同时段错周课程（合法堆叠样例）", () => {
+    const odd = DEMO_COURSES[1];
+    const even = DEMO_COURSES[3];
+    expect(odd.day).toBe(even.day);
+    expect(odd.startMin).toBe(even.startMin);
+    expect(odd.endMin).toBe(even.endMin);
+    expect(weeksOverlap(odd, even)).toBe(false);
   });
 });

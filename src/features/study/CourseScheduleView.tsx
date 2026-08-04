@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { Button } from "../../components/Button";
@@ -180,6 +180,21 @@ export function CourseScheduleView({
   const { t, i18n } = useTranslation();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [slotCourses, setSlotCourses] = useState<Course[] | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => setHeaderHeight(el.offsetHeight);
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(update);
+      observer.observe(el);
+      return () => observer.disconnect();
+    }
+    return undefined;
+  }, [lang]);
 
   const visibleCourses = showAllWeeks
     ? courses
@@ -264,8 +279,25 @@ export function CourseScheduleView({
           />
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-4 flex items-start">
+          <div
+            data-testid="time-axis"
+            className={`relative shrink-0 ${gutterClass}`}
+            style={{ height: gridHeight, marginTop: headerHeight }}
+          >
+            {hourMarks.map((min) => (
+              <span
+                key={min}
+                className="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-muted"
+                style={{ top: `${axisTopPercent(min, axis)}%` }}
+              >
+                {formatClock(min, lang)}
+              </span>
+            ))}
+          </div>
+          <div className="min-w-0 flex-1 overflow-hidden border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
             <div
+              ref={headerRef}
               data-testid="schedule-header"
               className="flex border-b border-slate-200 dark:border-slate-800"
             >
@@ -306,21 +338,6 @@ export function CourseScheduleView({
               })}
             </div>
             <div className="flex">
-              <div
-                data-testid="time-axis"
-                className={`relative shrink-0 ${gutterClass}`}
-                style={{ height: gridHeight }}
-              >
-                {hourMarks.map((min) => (
-                  <span
-                    key={min}
-                    className="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-muted"
-                    style={{ top: `${axisTopPercent(min, axis)}%` }}
-                  >
-                    {formatClock(min, lang)}
-                  </span>
-                ))}
-              </div>
               {days.map((day, index) => {
                 const dayCourses = visibleCourses.filter(
                   (course) => course.day === day,
@@ -390,9 +407,12 @@ export function CourseScheduleView({
                                   course.endMin === column.courses[0].endMin,
                               );
                             if (sameTime) {
+                              const STACK_GAP = 2;
                               const rowHeightPx = Math.max(
                                 MIN_CARD_HEIGHT,
-                                blockHeightPx / column.courses.length,
+                                (blockHeightPx -
+                                  STACK_GAP * (column.courses.length - 1)) /
+                                  column.courses.length,
                               );
                               return column.courses.map((course, rowIndex) => (
                                 <CourseCard
@@ -401,7 +421,10 @@ export function CourseScheduleView({
                                   lang={lang}
                                   left={column.left}
                                   width={column.width}
-                                  topPx={blockTopPx + rowIndex * rowHeightPx}
+                                  topPx={
+                                    blockTopPx +
+                                    rowIndex * (rowHeightPx + STACK_GAP)
+                                  }
                                   heightPx={rowHeightPx}
                                   conflict={block.conflict}
                                   badge={weekBadge(course)}
@@ -470,6 +493,7 @@ export function CourseScheduleView({
               })}
             </div>
           </div>
+        </div>
       )}
 
       <SlotCoursesDialog

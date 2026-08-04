@@ -21,6 +21,7 @@ describe("StudyPage", () => {
     expect(screen.getByText("高等数学")).toBeInTheDocument();
     expect(screen.getByText("程序设计")).toBeInTheDocument();
     expect(screen.getByText("线性代数")).toBeInTheDocument();
+    expect(screen.getByText("大学物理")).toBeInTheDocument();
     expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();
     expect(
       container.querySelector('[data-testid="day-header-1"]'),

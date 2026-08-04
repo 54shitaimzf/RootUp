@@ -543,6 +543,17 @@ export const DEMO_COURSES: Course[] = [
     weekRule: "even",
     color: "emerald",
   },
+  {
+    id: "c-demo-4",
+    name: "大学物理",
+    teacher: "赵老师",
+    location: "理科楼 301",
+    day: 3,
+    startMin: 600,
+    endMin: 700,
+    weekRule: "even",
+    color: "cyan",
+  },
 ];
 
 export const DEMO_HOMEWORK: Homework[] = [
