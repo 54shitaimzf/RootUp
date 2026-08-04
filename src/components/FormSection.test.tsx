@@ -14,8 +14,12 @@ describe("FormSection", () => {
     expect(screen.getByText("提示")).toBeInTheDocument();
     expect(screen.getByText("内容")).toBeInTheDocument();
     const section = container.querySelector("section");
+    expect(section?.className).toContain("border-t");
+    expect(section?.className).toContain("first:border-t-0");
     expect(section?.className).toContain("pt-4");
     expect(section?.className).toContain("first:pt-0");
+    expect(container.querySelector(".bg-brand-500")).not.toBeNull();
+    expect(screen.getByText("基本信息").className).toContain("text-strong");
   });
 });
 

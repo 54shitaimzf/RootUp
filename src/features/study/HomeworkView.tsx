@@ -94,57 +94,67 @@ export function HomeworkView({
   return (
     <div className="mt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {STATUS_FILTERS.map(({ value, labelKey }) => (
-            <Chip
-              key={value}
-              size="md"
-              variant={statusFilter === value ? "active" : "selectable"}
-              onClick={() => setStatusFilter(value)}
-            >
-              {t(labelKey)}
-            </Chip>
-          ))}
+        <div>
+          <span className="text-xs font-medium text-secondary">
+            {t("study.filterStatus")}
+          </span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {STATUS_FILTERS.map(({ value, labelKey }) => (
+              <Chip
+                key={value}
+                size="md"
+                variant={statusFilter === value ? "active" : "selectable"}
+                onClick={() => setStatusFilter(value)}
+              >
+                {t(labelKey)}
+              </Chip>
+            ))}
+          </div>
         </div>
         <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
           {t("study.addHomework")}
         </Button>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <Chip
-          size="md"
-          variant={courseFilter === "all" ? "active" : "selectable"}
-          onClick={() => onCourseFilterChange("all")}
-        >
-          {t("study.allCourses")}
-        </Chip>
-        <Chip
-          size="md"
-          variant={courseFilter === "none" ? "active" : "selectable"}
-          onClick={() => onCourseFilterChange("none")}
-        >
-          {t("study.noCourse")}
-        </Chip>
-        {courses.map((course) => (
+      <div className="mt-4">
+        <span className="text-xs font-medium text-secondary">
+          {t("study.filterCourse")}
+        </span>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <Chip
-            key={course.id}
             size="md"
-            variant={courseFilter === course.id ? "active" : "selectable"}
-            icon={
-              <span
-                className={`size-2 rounded-full ${LABEL_COLORS[course.color].dot}`}
-              />
-            }
-            onClick={() => onCourseFilterChange(course.id)}
+            variant={courseFilter === "all" ? "active" : "selectable"}
+            onClick={() => onCourseFilterChange("all")}
           >
-            {course.name}
+            {t("study.allCourses")}
           </Chip>
-        ))}
+          <Chip
+            size="md"
+            variant={courseFilter === "none" ? "active" : "selectable"}
+            onClick={() => onCourseFilterChange("none")}
+          >
+            {t("study.noCourse")}
+          </Chip>
+          {courses.map((course) => (
+            <Chip
+              key={course.id}
+              size="md"
+              variant={courseFilter === course.id ? "active" : "selectable"}
+              icon={
+                <span
+                  className={`size-2 rounded-full ${LABEL_COLORS[course.color].dot}`}
+                />
+              }
+              onClick={() => onCourseFilterChange(course.id)}
+            >
+              {course.name}
+            </Chip>
+          ))}
+        </div>
       </div>
 
       {homework.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
           <EmptyState
             title={t("study.homeworkEmpty")}
             description={t("study.homeworkEmptyDesc")}
@@ -156,7 +166,7 @@ export function HomeworkView({
           />
         </div>
       ) : items.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
           <EmptyState title={t("study.noMatchingHomework")} />
         </div>
       ) : (
@@ -168,7 +178,7 @@ export function HomeworkView({
             return (
               <li
                 key={item.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-slate-800 dark:bg-slate-900"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-slate-800 dark:bg-slate-900"
               >
                 <input
                   type="checkbox"

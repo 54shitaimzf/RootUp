@@ -36,6 +36,9 @@ export default {
   study: {
     viewSchedule: "Schedule",
     viewHomework: "Homework",
+    filterStatus: "Status",
+    filterCourse: "Course",
+    timeTo: "to",
     addCourse: "Add course",
     editCourse: "Edit course",
     deleteCourse: "Delete course",

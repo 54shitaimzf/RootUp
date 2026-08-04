@@ -35,4 +35,44 @@ describe("SegmentedControl", () => {
     fireEvent.click(screen.getByRole("button", { name: "B" }));
     expect(onChange).toHaveBeenCalledWith("b");
   });
+
+  it("tabs 变体渲染下划线页签", () => {
+    const { container } = render(
+      <SegmentedControl
+        variant="tabs"
+        value="a"
+        onChange={() => {}}
+        options={[
+          { value: "a", label: "A" },
+          { value: "b", label: "B" },
+        ]}
+      />,
+    );
+    const buttons = screen.getAllByRole("button");
+    expect(buttons[0]).toHaveAttribute("aria-pressed", "true");
+    expect(buttons[0].className).toContain("border-brand-600");
+    expect(buttons[1].className).toContain("border-transparent");
+    expect(container.querySelector('[role="group"]')?.className).toContain(
+      "border-b",
+    );
+  });
+
+  it("segmented 默认内边距放宽", () => {
+    const { container } = render(
+      <SegmentedControl
+        value="a"
+        onChange={() => {}}
+        options={[
+          { value: "a", label: "A" },
+          { value: "b", label: "B" },
+        ]}
+      />,
+    );
+    expect(container.querySelector('[role="group"]')?.className).toContain(
+      "p-1",
+    );
+    expect(container.querySelector('[role="group"]')?.className).toContain(
+      "gap-1",
+    );
+  });
 });

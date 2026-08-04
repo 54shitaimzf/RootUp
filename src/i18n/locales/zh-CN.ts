@@ -34,6 +34,9 @@ export default {
   study: {
     viewSchedule: "课程表",
     viewHomework: "作业",
+    filterStatus: "状态",
+    filterCourse: "课程",
+    timeTo: "至",
     addCourse: "添加课程",
     editCourse: "编辑课程",
     deleteCourse: "删除课程",

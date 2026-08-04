@@ -133,7 +133,7 @@ export function CourseScheduleView({
       </div>
 
       {visibleCourses.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
           <EmptyState
             title={
               courses.length === 0
@@ -153,7 +153,7 @@ export function CourseScheduleView({
           />
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-4 overflow-hidden border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
           <div className="flex border-b border-slate-200 dark:border-slate-800">
             <div className="w-12 shrink-0" />
             {days.map((day, index) => {
@@ -269,7 +269,7 @@ export function CourseScheduleView({
                             onEdit(course);
                           }
                         }}
-                        className="absolute overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md hover:ring-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-brand-500/40"
+                        className="absolute overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md hover:ring-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700 dark:hover:ring-brand-500/40"
                         style={{
                           top: `${pos.top}%`,
                           height: `${pos.height}%`,

@@ -121,6 +121,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
           value={view}
           onChange={setView}
           size="md"
+          variant="tabs"
           options={[
             { value: "schedule", label: t("study.viewSchedule") },
             { value: "homework", label: t("study.viewHomework") },

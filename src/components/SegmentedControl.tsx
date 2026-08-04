@@ -7,19 +7,48 @@ export function SegmentedControl<T extends string>({
   onChange,
   options,
   size = "sm",
+  variant = "segmented",
   className = "",
 }: {
   value: T;
   onChange: (value: T) => void;
   options: { value: T; label: string }[];
   size?: "sm" | "md";
+  variant?: "segmented" | "tabs";
   className?: string;
 }) {
   const sizeClass = size === "md" ? "px-3.5 py-1.5 text-sm" : "px-3 py-1 text-xs";
+  if (variant === "tabs") {
+    return (
+      <div
+        role="group"
+        className={`inline-flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 ${className}`}
+      >
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(option.value)}
+              className={`-mb-px border-b-2 font-medium transition-colors ${sizeClass} ${
+                active
+                  ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
+                  : "border-transparent text-secondary hover:text-strong"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div
       role="group"
-      className={`inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800 ${className}`}
+      className={`inline-flex items-center gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800 ${className}`}
     >
       {options.map((option) => {
         const active = option.value === value;

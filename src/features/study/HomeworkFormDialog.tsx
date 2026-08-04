@@ -104,7 +104,7 @@ export function HomeworkFormDialog({
           {error}
         </InlineNotice>
       )}
-      <div className="space-y-4 divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="space-y-4">
         <FormSection title={t("study.sectionBasic")}>
           <div className="space-y-2.5">
             <Field label={t("study.homeworkTitle")} htmlFor="homework-title">

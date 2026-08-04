@@ -6,17 +6,19 @@ import type { HTMLAttributes, ReactNode } from "react";
  */
 export function SectionLabel({
   size = "sm",
+  tone = "secondary",
   className = "",
   children,
   ...rest
 }: {
   size?: "sm" | "xs";
+  tone?: "secondary" | "strong";
   className?: string;
   children: ReactNode;
 } & HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`font-semibold text-secondary ${size === "sm" ? "text-sm" : "text-xs"} ${className}`}
+      className={`font-semibold ${tone === "strong" ? "text-strong" : "text-secondary"} ${size === "sm" ? "text-sm" : "text-xs"} ${className}`}
       {...rest}
     >
       {children}

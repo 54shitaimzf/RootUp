@@ -20,10 +20,18 @@ export function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className={`pt-4 first:pt-0 ${className}`}>
-      <SectionLabel>{title}</SectionLabel>
+    <section
+      className={`border-t border-slate-100 pt-4 first:border-t-0 first:pt-0 dark:border-slate-800 ${className}`}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="h-3.5 w-0.5 shrink-0 rounded-sm bg-brand-500"
+          aria-hidden="true"
+        />
+        <SectionLabel tone="strong">{title}</SectionLabel>
+      </div>
       {description && (
-        <p className="mt-0.5 text-xs text-muted">{description}</p>
+        <p className="mt-0.5 pl-[10px] text-xs text-muted">{description}</p>
       )}
       <div className="mt-2.5">{children}</div>
     </section>

@@ -10,6 +10,7 @@ import { Input } from "../../components/Input";
 import { Modal } from "../../components/Modal";
 import { FormSection } from "../../components/FormSection";
 import { Select } from "../../components/Select";
+import { TimeRangeField } from "../../components/TimeRangeField";
 import type { LabelColorKey } from "../../lib/labelDefs";
 import {
   autoAssignCourseColor,
@@ -172,7 +173,7 @@ export function CourseFormDialog({
           {error}
         </InlineNotice>
       )}
-      <div className="space-y-4 divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="space-y-4">
         <FormSection title={t("study.sectionBasic")}>
           <div className="space-y-2.5">
             <Field label={t("study.courseName")} htmlFor="course-name">
@@ -214,7 +215,7 @@ export function CourseFormDialog({
         </FormSection>
 
         <FormSection title={t("study.sectionTimeWeeks")}>
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="space-y-2.5">
             <Field label={t("study.day")} htmlFor="course-day">
               <Select
                 id="course-day"
@@ -230,30 +231,19 @@ export function CourseFormDialog({
                 ))}
               </Select>
             </Field>
-            <Field label={t("study.startTime")} htmlFor="course-start">
-              <Input
-                id="course-start"
-                size="sm"
-                type="time"
-                value={form.startTime}
-                onChange={(event) =>
-                  setForm({ ...form, startTime: event.target.value })
-                }
-              />
-            </Field>
-            <Field label={t("study.endTime")} htmlFor="course-end">
-              <Input
-                id="course-end"
-                size="sm"
-                type="time"
-                value={form.endTime}
-                onChange={(event) =>
-                  setForm({ ...form, endTime: event.target.value })
-                }
-              />
-            </Field>
-          </div>
-          <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+            <TimeRangeField
+              startLabel={t("study.startTime")}
+              endLabel={t("study.endTime")}
+              connector={t("study.timeTo")}
+              startId="course-start"
+              endId="course-end"
+              startValue={form.startTime}
+              endValue={form.endTime}
+              onStartChange={(value) =>
+                setForm({ ...form, startTime: value })
+              }
+              onEndChange={(value) => setForm({ ...form, endTime: value })}
+            />
             <Field label={t("study.weekRule")} htmlFor="course-week-rule">
               <Select
                 id="course-week-rule"
@@ -271,22 +261,23 @@ export function CourseFormDialog({
                 <option value="range">{t("study.weekRuleRange")}</option>
               </Select>
             </Field>
-            <Field
-              label={t("study.weekRangePlaceholder")}
-              hint={t("study.weekRangeHint")}
-              htmlFor="course-week-range"
-            >
-              <Input
-                id="course-week-range"
-                size="sm"
-                value={form.weekRange}
-                disabled={form.weekRule !== "range"}
-                onChange={(event) =>
-                  setForm({ ...form, weekRange: event.target.value })
-                }
-                placeholder={t("study.weekRangePlaceholder")}
-              />
-            </Field>
+            {form.weekRule === "range" && (
+              <Field
+                label={t("study.weekRangePlaceholder")}
+                hint={t("study.weekRangeHint")}
+                htmlFor="course-week-range"
+              >
+                <Input
+                  id="course-week-range"
+                  size="sm"
+                  value={form.weekRange}
+                  onChange={(event) =>
+                    setForm({ ...form, weekRange: event.target.value })
+                  }
+                  placeholder={t("study.weekRangePlaceholder")}
+                />
+              </Field>
+            )}
           </div>
         </FormSection>
 

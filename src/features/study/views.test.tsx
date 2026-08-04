@@ -67,7 +67,7 @@ describe("CourseFormDialog", () => {
     );
   });
 
-  it("非指定周次时周次范围输入禁用", () => {
+  it("非指定周次时不渲染周次范围输入，指定后出现", () => {
     render(
       <CourseFormDialog
         open
@@ -76,7 +76,27 @@ describe("CourseFormDialog", () => {
         onClose={() => {}}
       />,
     );
-    expect(screen.getByPlaceholderText("如：2-16 或 1,3,5-8")).toBeDisabled();
+    expect(
+      screen.queryByPlaceholderText("如：2-16 或 1,3,5-8"),
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("周次规则"), {
+      target: { value: "range" },
+    });
+    expect(
+      screen.getByPlaceholderText("如：2-16 或 1,3,5-8"),
+    ).toBeInTheDocument();
+  });
+
+  it("时间对包含“至”连接符", () => {
+    render(
+      <CourseFormDialog
+        open
+        initial={null}
+        onSave={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText("至")).toBeInTheDocument();
   });
 
   it("指定周次非法时提示错误", () => {
@@ -110,7 +130,8 @@ describe("CourseFormDialog", () => {
     expect(screen.getByText("基本信息")).toBeInTheDocument();
     expect(screen.getByText("时间与周次")).toBeInTheDocument();
     expect(screen.getByText("颜色")).toBeInTheDocument();
-    expect(document.querySelector(".divide-y")).not.toBeNull();
+    expect(document.querySelector(".divide-y")).toBeNull();
+    expect(document.querySelector("section.border-t")).not.toBeNull();
   });
 });
 
@@ -180,7 +201,8 @@ describe("HomeworkFormDialog", () => {
     expect(screen.getByText("基本信息")).toBeInTheDocument();
     expect(screen.getByText("截止时间")).toBeInTheDocument();
     expect(screen.getByText("作业详情")).toBeInTheDocument();
-    expect(document.querySelector(".divide-y")).not.toBeNull();
+    expect(document.querySelector(".divide-y")).toBeNull();
+    expect(document.querySelector("section.border-t")).not.toBeNull();
   });
 });
 
@@ -255,6 +277,41 @@ describe("视图空态", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "已归档" }));
     expect(screen.getByText("没有符合筛选条件的作业")).toBeInTheDocument();
+  });
+
+  it("筛选分组显示状态与课程小标题", () => {
+    render(
+      <HomeworkView
+        homework={DEMO_HOMEWORK}
+        courses={DEMO_COURSES}
+        courseFilter="all"
+        onCourseFilterChange={() => {}}
+        today={new Date("2026-08-04T12:00:00")}
+        onAdd={() => {}}
+        onEdit={() => {}}
+        onToggleStatus={() => {}}
+        onArchive={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    expect(screen.getByText("状态")).toBeInTheDocument();
+    expect(screen.getByText("课程")).toBeInTheDocument();
+  });
+
+  it("课程表容器无圆角且课程卡为小圆角", () => {
+    render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[0]]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    expect(document.querySelector(".rounded-xl")).toBeNull();
+    const card = screen
+      .getByText("高等数学")
+      .closest('[role="button"]') as HTMLElement;
+    expect(card.className).toContain("rounded-md");
+    expect(card.className).not.toContain("rounded-lg");
   });
 
   it("周次徽章与今天标记使用小圆角而非胶囊", () => {
