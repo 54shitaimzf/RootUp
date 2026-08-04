@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectOpenDialog, type OpenConfig } from "./ProjectOpenDialog";
 
-vi.mock("../../lib/tauri", () => ({
+vi.mock("../../../lib/tauri", () => ({
   listDetectedTools: vi.fn(),
 }));
 
-import { listDetectedTools } from "../../lib/tauri";
+import { listDetectedTools } from "../../../lib/tauri";
 
 const INITIAL: OpenConfig = {
   preferredIde: "auto",

@@ -8,18 +8,18 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { Button } from "../../components/Button";
-import { Chip } from "../../components/Chip";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { EmptyState } from "../../components/EmptyState";
-import { IconButton } from "../../components/IconButton";
-import { LABEL_COLORS } from "../../lib/labelDefs";
+import { Button } from "../../../components/Button";
+import { Chip } from "../../../components/Chip";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { EmptyState } from "../../../components/EmptyState";
+import { IconButton } from "../../../components/IconButton";
+import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
   filterHomework,
   type Course,
   type Homework,
   type HomeworkStatusFilter,
-} from "../../lib/study";
+} from "../../../lib/study";
 import { DueText } from "./DueText";
 
 const STATUS_FILTERS: { value: HomeworkStatusFilter; labelKey: string }[] = [

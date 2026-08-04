@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
-import { Button } from "../../components/Button";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { DialogFooter } from "../../components/DialogFooter";
-import { Field } from "../../components/Field";
-import { IconButton } from "../../components/IconButton";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
+import { Button } from "../../../components/Button";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { DialogFooter } from "../../../components/DialogFooter";
+import { Field } from "../../../components/Field";
+import { IconButton } from "../../../components/IconButton";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
 import {
   defaultWeekCount,
   validateSemesterForm,
   type SemesterFormError,
   type SemesterFormInput,
-} from "../../lib/studyStore";
-import type { Semester } from "../../lib/study";
+} from "../../../lib/studyStore";
+import type { Semester } from "../../../lib/study";
 
 const ERROR_KEYS: Record<SemesterFormError, string> = {
   nameRequired: "study.semesterNameRequired",

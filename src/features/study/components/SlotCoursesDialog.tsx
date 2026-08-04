@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { Modal } from "../../components/Modal";
-import { LABEL_COLORS } from "../../lib/labelDefs";
+import { Modal } from "../../../components/Modal";
+import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
   formatClockRange,
   type Course,
-} from "../../lib/study";
+} from "../../../lib/study";
 
 export function SlotCoursesDialog({
   open,

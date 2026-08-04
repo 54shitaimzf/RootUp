@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ArchiveSettingsDialog } from "./ArchiveSettingsDialog";
 
-vi.mock("../../lib/tauri", () => ({
+vi.mock("../../../lib/tauri", () => ({
   listArchiveBatches: vi.fn(),
   undoArchive: vi.fn(),
 }));
 
-import { listArchiveBatches, undoArchive } from "../../lib/tauri";
+import { listArchiveBatches, undoArchive } from "../../../lib/tauri";
 
 function renderDialog(
   overrides: Partial<Parameters<typeof ArchiveSettingsDialog>[0]> = {},

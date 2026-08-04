@@ -30,16 +30,16 @@ import {
 } from "../lib/effectiveMap";
 import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
-import { IgnoreRulesDialog } from "../features/settings/IgnoreRulesDialog";
-import { ClassifyMappingDialog } from "../features/settings/ClassifyMappingDialog";
-import { LabelManageDialog } from "../features/settings/LabelManageDialog";
-import { ArchiveSettingsDialog } from "../features/settings/ArchiveSettingsDialog";
-import { SchemeDialog } from "../features/settings/SchemeDialog";
-import { SchemeApplyDialog } from "../features/settings/SchemeApplyDialog";
+import { IgnoreRulesDialog } from "../features/settings/components/IgnoreRulesDialog";
+import { ClassifyMappingDialog } from "../features/settings/components/ClassifyMappingDialog";
+import { LabelManageDialog } from "../features/settings/components/LabelManageDialog";
+import { ArchiveSettingsDialog } from "../features/settings/components/ArchiveSettingsDialog";
+import { SchemeDialog } from "../features/settings/components/SchemeDialog";
+import { SchemeApplyDialog } from "../features/settings/components/SchemeApplyDialog";
 import {
   ProjectOpenDialog,
   type OpenConfig,
-} from "../features/settings/ProjectOpenDialog";
+} from "../features/settings/components/ProjectOpenDialog";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";

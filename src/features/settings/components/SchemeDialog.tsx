@@ -8,15 +8,15 @@ import {
   type ClassifyRule,
   type IgnoreRules,
   type RuleScheme,
-} from "../../lib/tauri";
-import { Button } from "../../components/Button";
-import { ConfirmButton } from "../../components/ConfirmButton";
-import { IconButton } from "../../components/IconButton";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
-import { isComposing } from "../../lib/ime";
+} from "../../../lib/tauri";
+import { Button } from "../../../components/Button";
+import { ConfirmButton } from "../../../components/ConfirmButton";
+import { IconButton } from "../../../components/IconButton";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { SectionLabel } from "../../../components/SectionLabel";
+import { isComposing } from "../../../lib/ime";
 
 const MAX_NAME_LEN = 40;
 

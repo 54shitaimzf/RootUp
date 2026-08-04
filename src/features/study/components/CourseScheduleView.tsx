@@ -13,13 +13,13 @@ import {
   Plus,
   Settings2,
 } from "lucide-react";
-import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
-import { IconButton } from "../../components/IconButton";
-import { Select } from "../../components/Select";
-import { SegmentedControl } from "../../components/SegmentedControl";
-import { LABEL_COLORS } from "../../lib/labelDefs";
-import { isComposing } from "../../lib/ime";
+import { Button } from "../../../components/Button";
+import { EmptyState } from "../../../components/EmptyState";
+import { IconButton } from "../../../components/IconButton";
+import { Select } from "../../../components/Select";
+import { SegmentedControl } from "../../../components/SegmentedControl";
+import { LABEL_COLORS } from "../../../lib/labelDefs";
+import { isComposing } from "../../../lib/ime";
 import {
   axisRange,
   axisTopPercent,
@@ -36,7 +36,7 @@ import {
   type Homework,
   type Semester,
   type WeekStart,
-} from "../../lib/study";
+} from "../../../lib/study";
 import { SlotCoursesDialog } from "./SlotCoursesDialog";
 
 const HOUR_HEIGHT = 56;

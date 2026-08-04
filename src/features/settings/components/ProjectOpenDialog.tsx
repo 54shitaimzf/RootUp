@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
-import type { CustomOpenCommand, ProjectKind } from "../../lib/tauri";
-import { listDetectedTools } from "../../lib/tauri";
-import { PREFERRED_IDE_OPTIONS } from "../../lib/projects";
-import { Button } from "../../components/Button";
-import { IconButton } from "../../components/IconButton";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { Select } from "../../components/Select";
-import { SectionLabel } from "../../components/SectionLabel";
-import { ProjectKindBadge } from "../../components/ProjectKindBadge";
+import type { CustomOpenCommand, ProjectKind } from "../../../lib/tauri";
+import { listDetectedTools } from "../../../lib/tauri";
+import { PREFERRED_IDE_OPTIONS } from "../../../lib/projects";
+import { Button } from "../../../components/Button";
+import { IconButton } from "../../../components/IconButton";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { Select } from "../../../components/Select";
+import { SectionLabel } from "../../../components/SectionLabel";
+import { ProjectKindBadge } from "../../../components/ProjectKindBadge";
 
 const MAX_CUSTOM_COMMANDS = 10;
 const KIND_ORDER: ProjectKind[] = [

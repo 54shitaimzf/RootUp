@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
-import { RULE_PRESETS } from "../../lib/presets";
-import type { CurrentScheme } from "../../lib/effectiveMap";
-import type { RuleScheme } from "../../lib/tauri";
-import { Button } from "../../components/Button";
-import { ConfirmButton } from "../../components/ConfirmButton";
-import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
+import { RULE_PRESETS } from "../../../lib/presets";
+import type { CurrentScheme } from "../../../lib/effectiveMap";
+import type { RuleScheme } from "../../../lib/tauri";
+import { Button } from "../../../components/Button";
+import { ConfirmButton } from "../../../components/ConfirmButton";
+import { Modal } from "../../../components/Modal";
+import { SectionLabel } from "../../../components/SectionLabel";
 
 /**
  * 应用方案弹窗：与其它编辑弹窗统一为居中模态 + 吸底按钮。

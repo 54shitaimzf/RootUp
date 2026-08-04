@@ -5,12 +5,12 @@ import { Button } from "../components/Button";
 import { InlineNotice } from "../components/InlineNotice";
 import { PageHeader } from "../components/PageHeader";
 import { SegmentedControl } from "../components/SegmentedControl";
-import { CourseDetailDialog } from "../features/study/CourseDetailDialog";
-import { CourseFormDialog } from "../features/study/CourseFormDialog";
-import { CourseScheduleView } from "../features/study/CourseScheduleView";
-import { HomeworkFormDialog } from "../features/study/HomeworkFormDialog";
-import { HomeworkView } from "../features/study/HomeworkView";
-import { SemesterManageDialog } from "../features/study/SemesterManageDialog";
+import { CourseDetailDialog } from "../features/study/components/CourseDetailDialog";
+import { CourseFormDialog } from "../features/study/components/CourseFormDialog";
+import { CourseScheduleView } from "../features/study/components/CourseScheduleView";
+import { HomeworkFormDialog } from "../features/study/components/HomeworkFormDialog";
+import { HomeworkView } from "../features/study/components/HomeworkView";
+import { SemesterManageDialog } from "../features/study/components/SemesterManageDialog";
 import {
   clampWeek,
   weekNumberFromDate,

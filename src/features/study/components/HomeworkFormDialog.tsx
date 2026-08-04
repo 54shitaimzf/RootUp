@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../../components/Button";
-import { DialogFooter } from "../../components/DialogFooter";
-import { Field } from "../../components/Field";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { FormSection } from "../../components/FormSection";
-import { Select } from "../../components/Select";
-import { TextArea } from "../../components/TextArea";
-import { TimeSelect } from "../../components/TimeSelect";
+import { Button } from "../../../components/Button";
+import { DialogFooter } from "../../../components/DialogFooter";
+import { Field } from "../../../components/Field";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { FormSection } from "../../../components/FormSection";
+import { Select } from "../../../components/Select";
+import { TextArea } from "../../../components/TextArea";
+import { TimeSelect } from "../../../components/TimeSelect";
 import {
   DEMO_SEMESTER_START,
   minToTime,
@@ -18,7 +18,7 @@ import {
   type Course,
   type Homework,
   type HomeworkDraft,
-} from "../../lib/study";
+} from "../../../lib/study";
 
 const NOTE_MAX = 200;
 const DETAILS_MAX = 5000;

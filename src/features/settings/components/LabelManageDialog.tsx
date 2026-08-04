@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type { LabelDef } from "../../lib/tauri";
-import { deleteLabelDef, saveLabelDef } from "../../lib/tauri";
+import type { LabelDef } from "../../../lib/tauri";
+import { deleteLabelDef, saveLabelDef } from "../../../lib/tauri";
 import {
   DEFAULT_LABEL_COLOR,
   DEFAULT_LABEL_ICON,
@@ -11,17 +11,17 @@ import {
   labelColorKey,
   labelIconKey,
   type LabelColorKey,
-} from "../../lib/labelDefs";
-import { Button } from "../../components/Button";
-import { Chip } from "../../components/Chip";
-import { ColorPicker } from "../../components/ColorPicker";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { FilterIcon } from "../../components/FilterIcon";
-import { IconButton } from "../../components/IconButton";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
+} from "../../../lib/labelDefs";
+import { Button } from "../../../components/Button";
+import { Chip } from "../../../components/Chip";
+import { ColorPicker } from "../../../components/ColorPicker";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { FilterIcon } from "../../../components/FilterIcon";
+import { IconButton } from "../../../components/IconButton";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { SectionLabel } from "../../../components/SectionLabel";
 
 const KEY_PATTERN = /^[a-z0-9-]+$/;
 

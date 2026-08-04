@@ -4,7 +4,7 @@ import {
   isOverdue,
   overdueDays,
   type Homework,
-} from "../../lib/study";
+} from "../../../lib/study";
 
 /** 统一截止文案：逾期 N 天 / 今天 / 明天 / N 天后 / 已完成绝对时间。 */
 export function DueText({

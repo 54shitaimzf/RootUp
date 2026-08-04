@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Undo2 } from "lucide-react";
-import { listArchiveBatches, undoArchive, type ArchiveBatch } from "../../lib/tauri";
-import { formatTimestamp } from "../../lib/fileUtils";
-import { Button } from "../../components/Button";
-import { IconButton } from "../../components/IconButton";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
+import { listArchiveBatches, undoArchive, type ArchiveBatch } from "../../../lib/tauri";
+import { formatTimestamp } from "../../../lib/fileUtils";
+import { Button } from "../../../components/Button";
+import { IconButton } from "../../../components/IconButton";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { SectionLabel } from "../../../components/SectionLabel";
 
 /**
  * 归档设置弹窗：归档根目录、自动归档开关、最近归档（可撤销）。

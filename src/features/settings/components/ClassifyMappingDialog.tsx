@@ -5,14 +5,14 @@ import {
   buildEffectiveMap,
   resetExtensionCategory,
   setExtensionCategory,
-} from "../../lib/effectiveMap";
-import type { ClassifyDefaultEntry, ClassifyRule } from "../../lib/tauri";
-import { Button } from "../../components/Button";
-import { Chip } from "../../components/Chip";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { Select } from "../../components/Select";
+} from "../../../lib/effectiveMap";
+import type { ClassifyDefaultEntry, ClassifyRule } from "../../../lib/tauri";
+import { Button } from "../../../components/Button";
+import { Chip } from "../../../components/Chip";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { Select } from "../../../components/Select";
 
 interface EditorAnchor {
   top: number;

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { CourseFormDialog } from "./CourseFormDialog";
 import { HomeworkFormDialog } from "./HomeworkFormDialog";
-import { DEMO_COURSES } from "../../lib/study";
+import { DEMO_COURSES } from "../../../lib/study";
 
 const TODAY = new Date("2026-08-04T12:00:00");
 

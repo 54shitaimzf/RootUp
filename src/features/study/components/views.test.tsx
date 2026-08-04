@@ -8,7 +8,7 @@ import {
   DEMO_COURSES,
   DEMO_HOMEWORK,
   DEMO_SEMESTERS,
-} from "../../lib/study";
+} from "../../../lib/study";
 
 describe("CourseFormDialog", () => {
   it("空名称提交显示错误且不保存", () => {

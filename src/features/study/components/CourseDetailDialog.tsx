@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Pencil, Trash2 } from "lucide-react";
-import { Button } from "../../components/Button";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { DialogFooter } from "../../components/DialogFooter";
-import { Modal } from "../../components/Modal";
-import { LABEL_COLORS } from "../../lib/labelDefs";
+import { Button } from "../../../components/Button";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { DialogFooter } from "../../../components/DialogFooter";
+import { Modal } from "../../../components/Modal";
+import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
   formatClockRange,
   homeworkStatusTone,
   type Course,
   type Homework,
   type HomeworkStatusTone,
-} from "../../lib/study";
+} from "../../../lib/study";
 import { DueText } from "./DueText";
 
 const DAY_KEYS = [

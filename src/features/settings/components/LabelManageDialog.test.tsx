@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LabelManageDialog } from "./LabelManageDialog";
-import type { LabelDef } from "../../lib/tauri";
+import type { LabelDef } from "../../../lib/tauri";
 
-vi.mock("../../lib/tauri", () => ({
+vi.mock("../../../lib/tauri", () => ({
   saveLabelDef: vi.fn(),
   deleteLabelDef: vi.fn(),
 }));
 
-import { deleteLabelDef, saveLabelDef } from "../../lib/tauri";
+import { deleteLabelDef, saveLabelDef } from "../../../lib/tauri";
 
 const LABELS: LabelDef[] = [
   { key: "course", name: "课程资料", icon: "book", color: "sky" },

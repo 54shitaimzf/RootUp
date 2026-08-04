@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../../components/Button";
-import { ColorPicker } from "../../components/ColorPicker";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { DialogFooter } from "../../components/DialogFooter";
-import { Field } from "../../components/Field";
-import { InlineNotice } from "../../components/InlineNotice";
-import { Input } from "../../components/Input";
-import { Modal } from "../../components/Modal";
-import { FormSection } from "../../components/FormSection";
-import { Select } from "../../components/Select";
-import { TimeRangeField } from "../../components/TimeRangeField";
-import type { LabelColorKey } from "../../lib/labelDefs";
+import { Button } from "../../../components/Button";
+import { ColorPicker } from "../../../components/ColorPicker";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { DialogFooter } from "../../../components/DialogFooter";
+import { Field } from "../../../components/Field";
+import { InlineNotice } from "../../../components/InlineNotice";
+import { Input } from "../../../components/Input";
+import { Modal } from "../../../components/Modal";
+import { FormSection } from "../../../components/FormSection";
+import { Select } from "../../../components/Select";
+import { TimeRangeField } from "../../../components/TimeRangeField";
+import type { LabelColorKey } from "../../../lib/labelDefs";
 import {
   COURSE_DURATION_PRESETS,
   DEFAULT_COURSE_DURATION,
@@ -25,7 +25,7 @@ import {
   type Course,
   type CourseDraft,
   type WeekRule,
-} from "../../lib/study";
+} from "../../../lib/study";
 
 const DAY_KEYS = [
   "monday",

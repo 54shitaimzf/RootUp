@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { SemesterManageDialog } from "./SemesterManageDialog";
-import { DEMO_SEMESTERS } from "../../lib/study";
+import { DEMO_SEMESTERS } from "../../../lib/study";
 
 const counts = { "fall-2026": 5, "spring-2027": 0 };
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { IgnoreRules } from "../../lib/tauri";
-import { Button } from "../../components/Button";
-import { ChipGroup } from "../../components/ChipGroup";
-import { Modal } from "../../components/Modal";
-import { SectionLabel } from "../../components/SectionLabel";
-import { InlineNotice } from "../../components/InlineNotice";
+import type { IgnoreRules } from "../../../lib/tauri";
+import { Button } from "../../../components/Button";
+import { ChipGroup } from "../../../components/ChipGroup";
+import { Modal } from "../../../components/Modal";
+import { SectionLabel } from "../../../components/SectionLabel";
+import { InlineNotice } from "../../../components/InlineNotice";
 
 export function IgnoreRulesDialog({
   open,

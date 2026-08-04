@@ -14,7 +14,7 @@ RootUp/
 │   ├── main.tsx                  # 入口（仅挂载 App）
 │   ├── App.tsx                   # 布局组装：Sidebar + 页面切换 + 主题/i18n
 │   ├── pages/                    # 页面层入口：Files / Homework / Courses / Tools / Settings
-│   ├── features/                 # 功能域私有组件：settings/（四个规则弹窗），随功能生长
+│   ├── features/                 # 功能域私有 UI：features/<domain>/components/（页面级组件与测试）
 │   ├── components/               # 通用 UI 层：Modal、Button、Banner、Sidebar 等跨功能复用组件
 │   ├── hooks/                    # 通用逻辑层：useSettings / useFiles / useScan
 │   ├── lib/                      # 基础设施层：类型化 invoke 封装（Tauri API 边界）
@@ -42,6 +42,14 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
                                         ↑                        ↑
                        theme / i18n（横切，任意层可读）    infra（持久化/托盘/窗口）
 ```
+
+**目录约定**：
+
+- `pages/` 只保留页面壳（状态装配与布局，不承载大段 UI 实现）。
+- `features/<domain>/components/` 放页面级 UI 组件与对应测试（如 `features/study/components/`、`features/settings/components/`）；页面壳通过该路径引用，`features/<domain>/` 根目录不散放 UI 文件。
+- `components/` 只放跨域通用组件（Modal、Button、Input、Field、FormSection 等）。
+- `lib/` 只放纯逻辑与后端契约（类型化 invoke 封装、纯函数、数据模型）。
+- `check-arch` 的「pages → features → components/hooks → lib」单向依赖规则不变，新增文件必须遵守。
 
 ## 后台生命周期（关闭即销毁）
 
@@ -121,6 +129,8 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 **版本化与向前兼容**：`CURRENT_VERSION` 为配置版本（当前 1）；新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`；结构性升级在 `Settings::migrate()` 中按版本号逐级迁移。旧版本配置文件永远可被新版本读取（未知字段容忍 + 缺省字段取默认）。
 
 **损坏容错**：`infra/storage.rs` 的 `backup_corrupt_settings` 在加载前校验 JSON，损坏文件改名为 `settings.corrupt-<时间戳>.bak` 并回退默认。
+
+**应用自有领域 JSON 的统一本地文件层**：labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` 的 `read_json<T>`（缺失返回 None；损坏备份 `*.corrupt-<时间戳>.bak` 后回退）与 `write_json_atomic<T>`（建目录 → 临时文件 → rename，失败清理），各领域 store 不再各自实现读写与损坏备份。settings 仍由 tauri-plugin-store 管理（配置边界），不并入该层。
 
 **规则装配**：`app.rs` 启动时由 `Settings` 构建 `IgnoreMatcher::from_rules(...)` 与 `ExtensionClassifier::with_overrides(...)`，监听与扫描共用；规则变更保存后重启生效（不做热更新）。
 
@@ -230,12 +240,12 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **基础表单与状态组件**：`Input`（sm/md，统一边框/聚焦/深浅色）、`Select`、`InlineNotice`（success/error/info）、`EmptyState`、`PageHeader`、`SyntaxTable`（语法行单一来源）、`FormSection`（分隔线表单分区：标题 + 可选描述 + 内容，配合父容器 `divide-y`）、`TextArea`（与 Input 同令牌的多行文本域）均为共享组件；新增输入/提示/空态/页头/分区/长文本一律复用，禁止手写等价样式。
 - **帮助中心与新手引导**：`HelpCenterProvider` 全局装配（侧栏入口 + 首次欢迎 + 分组帮助弹窗）；首次欢迎用 localStorage `rootup.onboarding.v1` 一次性标记，帮助中心可重看；IDE 指导数据在 `lib/ideGuide.ts`（仅官方链接）；后端 `list_detected_tools` 返回已检测工具 key，`open_url` 仅允许 https 且命中 `core/tools.rs` 白名单域名（`ALLOWED_DOWNLOAD_DOMAINS`），非法 URL 拒绝并记日志。
 - **打包与发布约定**：`tauri.conf.json` 启用 NSIS（`installMode: currentUser`、中英语言选择、开始菜单 RootUp），图标由 `npm run tauri icon resources/icons/rootup-sprout.svg` 生成全套；发布前必须 `npm run check:version` 全绿（规则见"版本号规则与发布纪律"）；发布验证统一走 `scripts/verify-installer.ps1`（静默安装 → 冒烟 → 卸载），日常 CI 为 `ci.yml`（构建 + smoke + 架构校验），发布为 `release.yml`（打 `v*` tag 构建安装包 → 验证 → 上传 GitHub Release）；不签名、不启用 updater，SmartScreen 提示写入发布说明。
-- **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/`（自包含组件 + hooks + API），`pages/` 只保留入口。
+- **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/components/`（页面级组件与测试），`pages/` 只保留入口。
 - **托盘菜单**：在 `infra/tray.rs` 中扩展菜单项与事件处理。
 - **后端命令**：在 `commands/` 新增模块，并在 `app.rs` 的 `invoke_handler` 中注册。
 
 ## 演进规则
 
-- `components/` 只放跨功能可复用的组件；页面私有组件随功能生长到 `features/`。
+- `components/` 只放跨功能可复用的组件；页面私有组件随功能生长到 `features/<domain>/components/`，禁止在 `features/<domain>/` 根目录散放 UI 文件。
 - 新增依赖前先评估必要性（轻量原则）；当前不引入路由、状态管理等非必要库。
 - 保持单向依赖，代码审查时以本文件依赖图为基准。
