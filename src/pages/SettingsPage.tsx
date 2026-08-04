@@ -9,6 +9,7 @@ import {
   getLogDir,
   listCategories,
   listClassifyDefaults,
+  listLabelDefs,
   listSchemes,
   listWatchedDirs,
   removeWatchedDir,
@@ -16,6 +17,7 @@ import {
   type ClassifyDefaultEntry,
   type ClassifyRule,
   type IgnoreRules,
+  type LabelDef,
   type Language,
   type RuleScheme,
   type Settings,
@@ -29,6 +31,7 @@ import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
 import { IgnoreRulesDialog } from "../features/settings/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../features/settings/ClassifyMappingDialog";
+import { LabelManageDialog } from "../features/settings/LabelManageDialog";
 import { SchemeDialog } from "../features/settings/SchemeDialog";
 import { SchemeApplyDialog } from "../features/settings/SchemeApplyDialog";
 import {
@@ -136,8 +139,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [applyMenuOpen, setApplyMenuOpen] = useState(false);
   const [ignoreOpen, setIgnoreOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
+  const [labelOpen, setLabelOpen] = useState(false);
   const [schemeOpen, setSchemeOpen] = useState(false);
   const [projectOpenOpen, setProjectOpenOpen] = useState(false);
+  const [customLabels, setCustomLabels] = useState<LabelDef[]>([]);
 
   useEffect(() => {
     listWatchedDirs()
@@ -155,7 +160,16 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     listSchemes()
       .then(setSchemes)
       .catch(() => setSchemes([]));
+    listLabelDefs()
+      .then(setCustomLabels)
+      .catch(() => setCustomLabels([]));
   }, []);
+
+  const refreshLabels = () => {
+    listLabelDefs()
+      .then(setCustomLabels)
+      .catch(() => setCustomLabels([]));
+  };
 
   const refreshSchemes = async () => {
     const next = await listSchemes();
@@ -430,6 +444,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             onClick={() => setMappingOpen(true)}
           />
           <Row
+            title={t("settings.labelRow")}
+            summary={t("settings.labelRowSummary", {
+              builtin: categories.length,
+              custom: customLabels.length,
+            })}
+            onClick={() => setLabelOpen(true)}
+          />
+          <Row
             title={t("settings.projectOpenRow")}
             summary={t("settings.projectOpenSummary", {
               ide: preferredIdeLabel,
@@ -542,6 +564,16 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         initial={settings.classify_overrides}
         onSave={saveMapping}
         onClose={() => setMappingOpen(false)}
+      />
+      <LabelManageDialog
+        open={labelOpen}
+        categories={categories}
+        labels={customLabels}
+        onChanged={refreshLabels}
+        onClose={() => {
+          setLabelOpen(false);
+          refreshLabels();
+        }}
       />
       <SchemeDialog
         open={schemeOpen}

@@ -60,6 +60,7 @@ function Harness({
   states = [],
   labels = [],
   habits = {},
+  labelDefs = {},
   callbacks = {},
 }: {
   text?: string;
@@ -67,6 +68,10 @@ function Harness({
   states?: string[];
   labels?: string[];
   habits?: FilterHabits;
+  labelDefs?: Record<
+    string,
+    { key: string; name: string; icon: string; color: string }
+  >;
   callbacks?: Callbacks;
 }) {
   const [value, setValue] = useState(text);
@@ -79,6 +84,7 @@ function Harness({
       labels={tags.labels}
       candidates={CANDIDATES}
       habits={habits}
+      labelDefs={labelDefs}
       onTextChange={(next) => {
         callbacks.onTextChange?.(next);
         setValue(next);
@@ -194,6 +200,18 @@ describe("SearchAutocomplete", () => {
       kind: "category",
       value: "document",
     });
+  });
+
+  it("自定义标签 chip 显示注册表名称", () => {
+    render(
+      <Harness
+        labels={["course"]}
+        labelDefs={{
+          course: { key: "course", name: "课程资料", icon: "book", color: "sky" },
+        }}
+      />,
+    );
+    expect(screen.getByText("课程资料")).toBeInTheDocument();
   });
 
   it("文本为空时 Backspace 删除最后一个标签", () => {

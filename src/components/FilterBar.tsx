@@ -9,9 +9,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { sortFilterItems, type FilterHabits } from "../lib/filterHabits";
-import { logEvent } from "../lib/tauri";
+import { LABEL_COLORS, labelColorKey } from "../lib/labelDefs";
+import { logEvent, type LabelDef } from "../lib/tauri";
 import { Chip } from "./Chip";
 import { FilterIcon } from "./FilterIcon";
+import { LabelIcon } from "./LabelIcon";
 
 export interface FilterBarProps {
   categories: string[];
@@ -19,6 +21,7 @@ export interface FilterBarProps {
   selectedTypes: string[];
   selectedLabels: string[];
   habits: FilterHabits;
+  labelDefs?: Record<string, LabelDef>;
   onHabitUsed: (key: string) => void;
   onTypesChange: (types: string[]) => void;
   onLabelsChange: (labels: string[]) => void;
@@ -143,6 +146,7 @@ export function FilterBar({
   selectedTypes,
   selectedLabels,
   habits,
+  labelDefs = {},
   onHabitUsed,
   onTypesChange,
   onLabelsChange,
@@ -202,10 +206,10 @@ export function FilterBar({
       ? selectedTypes.includes(item.value)
       : selectedLabels.includes(item.value);
 
-  const displayName = (item: ChipItem) =>
-    item.kind === "category"
-      ? t(`filter.${item.value}`)
-      : item.value;
+  const displayName = (item: ChipItem) => {
+    if (item.kind === "category") return t(`filter.${item.value}`);
+    return labelDefs[item.value]?.name ?? item.value;
+  };
 
   const toggle = (item: ChipItem) => {
     const active = isActive(item);
@@ -232,6 +236,21 @@ export function FilterBar({
 
   const renderChip = (item: ChipItem) => {
     const active = isActive(item);
+    const labelDef =
+      item.kind === "label" ? labelDefs[item.value] : undefined;
+    const icon =
+      item.kind === "category" ? (
+        <FilterIcon kind="category" value={item.value} />
+      ) : labelDef ? (
+        <span className="flex items-center gap-1">
+          <LabelIcon icon={labelDef.icon} />
+          <span
+            className={`size-1.5 rounded-full ${LABEL_COLORS[labelColorKey(labelDef.color)].dot}`}
+          />
+        </span>
+      ) : (
+        <FilterIcon kind="label" value={item.value} />
+      );
     return (
       <Chip
         key={item.key}
@@ -244,7 +263,7 @@ export function FilterBar({
         }}
         size="md"
         variant={active ? "active" : "neutral"}
-        icon={<FilterIcon kind={item.kind} value={item.value} />}
+        icon={icon}
         onClick={() => toggle(item)}
       >
         {displayName(item)}

@@ -10,6 +10,7 @@ vi.mock("../lib/tauri", () => ({
   revealInExplorer: vi.fn(),
   openProjectFromFile: vi.fn(),
   listCategories: vi.fn(),
+  listLabelDefs: vi.fn(),
   listLabels: vi.fn(),
   listWatchedDirs: vi.fn(),
   getHabits: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import {
   getHabits,
   listCategories,
+  listLabelDefs,
   listLabels,
   listWatchedDirs,
   openFile,
@@ -65,6 +67,7 @@ describe("FilePage 行操作", () => {
       total: 1,
     });
     vi.mocked(listCategories).mockResolvedValue(["document"]);
+    vi.mocked(listLabelDefs).mockResolvedValue([]);
     vi.mocked(listLabels).mockResolvedValue([]);
     vi.mocked(listWatchedDirs).mockResolvedValue(["C:/docs"]);
     vi.mocked(getHabits).mockResolvedValue({});

@@ -20,10 +20,12 @@ import {
 } from "../lib/autocomplete";
 import { fileStateMeta } from "../lib/fileUtils";
 import type { FilterHabits } from "../lib/filterHabits";
-import { logEvent, type FileRecord } from "../lib/tauri";
+import { LABEL_COLORS, labelColorKey } from "../lib/labelDefs";
+import { logEvent, type FileRecord, type LabelDef } from "../lib/tauri";
 import { Chip } from "./Chip";
 import { FilterIcon } from "./FilterIcon";
 import { IconButton } from "./IconButton";
+import { LabelIcon } from "./LabelIcon";
 import { SyntaxHelp } from "./SyntaxHelp";
 
 /**
@@ -39,6 +41,7 @@ export function SearchAutocomplete({
   labels,
   candidates,
   habits,
+  labelDefs = {},
   onTextChange,
   onTagsChange,
   onInsert,
@@ -53,6 +56,7 @@ export function SearchAutocomplete({
   labels: string[];
   candidates: Suggestion[];
   habits: FilterHabits;
+  labelDefs?: Record<string, LabelDef>;
   onTextChange: (value: string) => void;
   onTagsChange: (tags: FilterTags) => void;
   onInsert?: (suggestion: Suggestion) => void;
@@ -165,7 +169,22 @@ export function SearchAutocomplete({
     if (tag.kind === "state") {
       return t(fileStateMeta(tag.value as FileRecord["state"]).labelKey);
     }
-    return tag.value;
+    return labelDefs[tag.value]?.name ?? tag.value;
+  };
+
+  const tagIcon = (tag: TagValue) => {
+    if (tag.kind === "label" && labelDefs[tag.value]) {
+      const def = labelDefs[tag.value];
+      return (
+        <span className="flex items-center gap-1">
+          <LabelIcon icon={def.icon} />
+          <span
+            className={`size-1.5 rounded-full ${LABEL_COLORS[labelColorKey(def.color)].dot}`}
+          />
+        </span>
+      );
+    }
+    return <FilterIcon kind={tag.kind} value={tag.value} />;
   };
 
   return (
@@ -180,7 +199,7 @@ export function SearchAutocomplete({
               key={`${tag.kind}:${tag.value}`}
               size="sm"
               variant="brand"
-              icon={<FilterIcon kind={tag.kind} value={tag.value} />}
+              icon={tagIcon(tag)}
               onRemove={() => handleTagRemove(tag)}
               removeLabel={t("files.removeFilter")}
             >

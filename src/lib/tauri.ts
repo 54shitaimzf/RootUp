@@ -76,6 +76,14 @@ export interface RuleScheme {
   classify_overrides: ClassifyRule[];
 }
 
+/** 与 Rust 侧 core::labels::LabelDef 对应（自定义标签注册表） */
+export interface LabelDef {
+  key: string;
+  name: string;
+  icon: string;
+  color: string;
+}
+
 /** 与 Rust 侧 core::habits::Habit 对应 */
 export interface Habit {
   count: number;
@@ -249,6 +257,18 @@ export function listLabels(): Promise<string[]> {
 
 export function listCategories(): Promise<string[]> {
   return invoke<string[]>("list_categories");
+}
+
+export function listLabelDefs(): Promise<LabelDef[]> {
+  return invoke<LabelDef[]>("list_label_defs");
+}
+
+export function saveLabelDef(def: LabelDef): Promise<LabelDef> {
+  return invoke<LabelDef>("save_label_def", { def });
+}
+
+export function deleteLabelDef(key: string): Promise<void> {
+  return invoke<void>("delete_label_def", { key });
 }
 
 /** 内置扩展名映射表（只读，单一来源在后端） */

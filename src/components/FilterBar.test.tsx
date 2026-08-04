@@ -117,4 +117,24 @@ describe("FilterBar", () => {
     );
     expect(screen.queryByText(i18n.t("filter.labels"))).not.toBeInTheDocument();
   });
+
+  it("自定义标签显示注册表名称，未注册标签回退原文", () => {
+    render(
+      <FilterBar
+        categories={[]}
+        labels={["course", "unknown"]}
+        selectedTypes={[]}
+        selectedLabels={[]}
+        habits={{}}
+        labelDefs={{
+          course: { key: "course", name: "课程资料", icon: "book", color: "sky" },
+        }}
+        onHabitUsed={() => {}}
+        onTypesChange={() => {}}
+        onLabelsChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("课程资料")).toBeInTheDocument();
+    expect(screen.getByText("unknown")).toBeInTheDocument();
+  });
 });

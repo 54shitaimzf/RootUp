@@ -25,6 +25,7 @@ vi.mock("../lib/tauri", () => ({
   resetSettings: vi.fn(),
   getLogDir: vi.fn(),
   listCategories: vi.fn(),
+  listLabelDefs: vi.fn(),
   listClassifyDefaults: vi.fn(),
   listSchemes: vi.fn(),
   listWatchedDirs: vi.fn(),
@@ -36,6 +37,7 @@ import {
   getLogDir,
   getSettings,
   listCategories,
+  listLabelDefs,
   listClassifyDefaults,
   listSchemes,
   listWatchedDirs,
@@ -84,6 +86,7 @@ describe("SettingsPage", () => {
     vi.mocked(listWatchedDirs).mockResolvedValue([]);
     vi.mocked(getLogDir).mockResolvedValue("C:/logs");
     vi.mocked(listCategories).mockResolvedValue(["document", "image"]);
+    vi.mocked(listLabelDefs).mockResolvedValue([]);
     vi.mocked(listClassifyDefaults).mockResolvedValue([]);
     vi.mocked(listSchemes).mockResolvedValue([]);
   });

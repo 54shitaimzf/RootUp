@@ -3,6 +3,7 @@ pub mod events;
 pub mod habits;
 pub mod ignore;
 pub mod index;
+pub mod labels;
 pub mod log;
 pub mod path;
 pub mod project;

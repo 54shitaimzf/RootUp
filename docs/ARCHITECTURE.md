@@ -132,6 +132,23 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 `core` 层为纯 Rust 数据结构，不依赖 Tauri 类型，便于后续扩展字段与单元测试。
 
+## 标签注册表（迭代 B 第一步）
+
+自定义标签注册表独立持久化于 `app_data_dir/labels.json`（`infra/label_store.rs`，
+临时文件 + rename 原子写，损坏备份 `labels.corrupt-<ts>.bak` 并回退空表），
+模型为 `core/labels.rs::LabelDef { key, name, icon, color }`：
+
+- **key**：小写 `[a-z0-9-]`、≤32，创建后不可改，是搜索语法与索引存储标识；
+  **name** trim 后 1–40 字符且不重复；自定义标签上限 100。
+- **icon / color**：预设字符串（前端 `lib/labelDefs.ts` 单一注册表），未知值
+  前端回退 Tag 图标 / 中性色；图标与颜色是标签自身属性，不走皮肤；色板 class
+  结构与 `FileTypeIcon` 一致，皮肤可整体覆盖。
+- **命令与日志**：`list_label_defs` / `save_label_def`（按 key upsert）/
+  `delete_label_def`，日志前缀 `labels:`；现有 `list_labels`（索引现存标签）不变。
+- **展示规则**：内置 9 大类只读（沿用现有图标与翻译）；筛选行、自动补全标签、
+  文件行徽标按注册表显示自定义名称/图标/颜色，未注册标签回退现状；删除标签只删
+  注册表，不影响索引历史。
+
 ## 索引、扫描与分类模块（迭代 A.5）
 
 **新增模块与职责**：
