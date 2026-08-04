@@ -539,7 +539,7 @@ describe("作业排序与筛选", () => {
 
 describe("示例数据", () => {
   it("示例课程与作业完整且关联一致", () => {
-    expect(DEMO_COURSES).toHaveLength(4);
+    expect(DEMO_COURSES).toHaveLength(5);
     expect(DEMO_HOMEWORK).toHaveLength(4);
     const courseIds = new Set(DEMO_COURSES.map((course) => course.id));
     for (const item of DEMO_HOMEWORK) {
@@ -556,5 +556,15 @@ describe("示例数据", () => {
     expect(odd.startMin).toBe(even.startMin);
     expect(odd.endMin).toBe(even.endMin);
     expect(weeksOverlap(odd, even)).toBe(false);
+  });
+
+  it("长标题示例课程合法且不与其它课程冲突", () => {
+    const long = DEMO_COURSES[4];
+    expect(long.name.length).toBeGreaterThan(20);
+    expect(long.location.length).toBeGreaterThan(10);
+    expect(DEMO_COURSES.filter((course) => course.day === long.day)).toHaveLength(
+      1,
+    );
+    expect(courseConflicts(long, DEMO_COURSES, long.id)).toHaveLength(0);
   });
 });

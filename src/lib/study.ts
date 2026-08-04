@@ -579,6 +579,17 @@ export const DEMO_COURSES: Course[] = [
     weekRule: "even",
     color: "cyan",
   },
+  {
+    id: "c-demo-5",
+    name: "数据结构与算法分析（含实验）——面向工程实践的综合课程设计",
+    teacher: "李教授",
+    location: "工科楼 508（实验机房 / 计算中心）",
+    day: 2,
+    startMin: 600,
+    endMin: 700,
+    weekRule: "all",
+    color: "amber",
+  },
 ];
 
 export const DEMO_HOMEWORK: Homework[] = [

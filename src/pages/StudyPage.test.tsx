@@ -21,6 +21,11 @@ describe("StudyPage", () => {
     expect(screen.getByText("高等数学")).toBeInTheDocument();
     expect(screen.getByText("程序设计")).toBeInTheDocument();
     expect(screen.getByText("线性代数")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "数据结构与算法分析（含实验）——面向工程实践的综合课程设计",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("大学物理")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
     expect(screen.getByText("大学物理")).toBeInTheDocument();
@@ -37,6 +42,21 @@ describe("StudyPage", () => {
     expect(
       screen.getByRole("button", { name: /^课程表/ }).className,
     ).toContain("flex-1");
+  });
+
+  it("长标题课程详情显示完整名称", () => {
+    renderStudy();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /数据结构与算法分析/,
+      }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "课程详情" });
+    expect(
+      within(dialog).getByText(
+        "数据结构与算法分析（含实验）——面向工程实践的综合课程设计",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("周起始日切换后周日列排在最前", () => {

@@ -376,10 +376,15 @@ describe("视图空态", () => {
     expect(screen.queryByText("单周")).not.toBeInTheDocument();
     const stack = screen.getByRole("button", { name: /共 2 门/ });
     expect(stack).toHaveAttribute("aria-expanded", "false");
+    expect(stack.querySelector(".lucide-layers")).not.toBeNull();
+    expect(within(stack).getByText("2")).toBeInTheDocument();
     fireEvent.click(stack);
+    expect(screen.queryByTestId("course-stack-even")).not.toBeInTheDocument();
     const dialog = screen.getByRole("dialog", { name: "同课时段 2 门" });
     expect(within(dialog).getByText("单周")).toBeInTheDocument();
     expect(within(dialog).getByText("双周")).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/王老师/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/教 101/).length).toBeGreaterThan(0);
     const rows = within(dialog).getAllByRole("button", {
       name: /高等数学/,
     });
@@ -392,6 +397,109 @@ describe("视图空态", () => {
     expect(
       screen.queryByRole("dialog", { name: "同课时段 2 门" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId("course-stack-even")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
+    fireEvent.click(
+      document.querySelector(".fixed.inset-0.z-40") as HTMLElement,
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "同课时段 2 门" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("长标题课程卡在课表中截断", () => {
+    render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[4]]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    const name = screen.getByText(DEMO_COURSES[4].name);
+    expect(name.className).toContain("line-clamp-2");
+  });
+
+  it("铺开浮层显示完整信息且长标题悬浮全文", () => {
+    const onOpenDetail = vi.fn();
+    const odd = {
+      ...DEMO_COURSES[4],
+      id: "odd",
+      weekRule: "odd" as const,
+    };
+    const even = {
+      ...DEMO_COURSES[4],
+      id: "even",
+      weekRule: "even" as const,
+    };
+    render(
+      <CourseScheduleView
+        courses={[odd, even]}
+        homework={[]}
+        {...commonProps}
+        onOpenDetail={onOpenDetail}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
+    const dialog = screen.getByRole("dialog", {
+      name: "同课时段 2 门",
+    });
+    const cards = within(dialog).getAllByRole("button", {
+      name: /数据结构与算法分析/,
+    });
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]).getByText(DEMO_COURSES[4].name)).toHaveAttribute(
+      "title",
+      DEMO_COURSES[4].name,
+    );
+    expect(within(cards[0]).getByText(/李教授/)).toBeInTheDocument();
+    expect(
+      within(cards[0]).getByText(/工科楼 508/),
+    ).toBeInTheDocument();
+    fireEvent.click(cards[0]);
+    expect(onOpenDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "even" }),
+    );
+  });
+
+  it("三门同槽错周课程全部铺开", () => {
+    const courses = [
+      {
+        ...DEMO_COURSES[0],
+        id: "r1",
+        name: "课程一",
+        weekRule: "range" as const,
+        weekRange: "1-2",
+      },
+      {
+        ...DEMO_COURSES[0],
+        id: "r2",
+        name: "课程二",
+        weekRule: "range" as const,
+        weekRange: "3-4",
+      },
+      {
+        ...DEMO_COURSES[0],
+        id: "r3",
+        name: "课程三",
+        weekRule: "range" as const,
+        weekRange: "5-6",
+      },
+    ];
+    render(
+      <CourseScheduleView
+        courses={courses}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /共 3 门/ }));
+    const dialog = screen.getByRole("dialog", {
+      name: "同课时段 3 门",
+    });
+    expect(within(dialog).getByText("课程一")).toBeInTheDocument();
+    expect(within(dialog).getByText("课程二")).toBeInTheDocument();
+    expect(within(dialog).getByText("课程三")).toBeInTheDocument();
   });
 
   it("四门同周重叠只显示两列并折叠为 +N", () => {

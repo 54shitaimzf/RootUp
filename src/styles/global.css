@@ -125,6 +125,22 @@
   animation: fan-in 160ms ease-out both;
 }
 
+/* 铺开卡片阵：每张卡从轻微旋转/下沉状态摊平 */
+@keyframes deal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(var(--deal-rotate, 0deg)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+.deal-in {
+  animation: deal-in 180ms ease-out both;
+}
+
 /* 浮窗统一面板：无硬边框，细 ring + 双层投影 + 背景模糊建立层次感 */
 .floating-panel {
   border-radius: 1rem;
