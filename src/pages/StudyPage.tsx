@@ -97,6 +97,10 @@ export function StudyPage({
     "all" | "none" | string
   >("all");
   const idSeq = useRef(0);
+  const dirtyRef = useRef(false);
+  const markDirty = () => {
+    dirtyRef.current = true;
+  };
 
   useEffect(() => {
     if (initialData) return;
@@ -139,8 +143,10 @@ export function StudyPage({
   }, [data, prefs.semesterId]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !dirtyRef.current) return;
+    dirtyRef.current = false;
     saveStudyData(data).catch((error) => {
+      dirtyRef.current = true;
       logEvent("warn", `study: 保存失败 ${String(error)}`);
     });
   }, [data]);
@@ -174,6 +180,7 @@ export function StudyPage({
     `${prefix}-${Date.now()}-${(idSeq.current += 1)}`;
 
   const updateCourses = (updater: (list: Course[]) => Course[]) => {
+    markDirty();
     setData((prev) => {
       if (!prev || !semester) return prev;
       const list = prev.coursesBySemester[semester.id] ?? [];
@@ -188,6 +195,7 @@ export function StudyPage({
   };
 
   const updateHomework = (updater: (list: Homework[]) => Homework[]) => {
+    markDirty();
     setData((prev) => {
       if (!prev || !semester) return prev;
       const list = prev.homeworkBySemester[semester.id] ?? [];
@@ -288,6 +296,7 @@ export function StudyPage({
     editingId?: string,
     copyFromId?: string,
   ) => {
+    markDirty();
     if (editingId) {
       setData((prev) => {
         if (!prev) return prev;
@@ -322,6 +331,7 @@ export function StudyPage({
   };
 
   const handleDeleteSemester = (id: string) => {
+    markDirty();
     const remaining = (data?.semesters ?? []).filter((item) => item.id !== id);
     setData((prev) => {
       if (!prev) return prev;

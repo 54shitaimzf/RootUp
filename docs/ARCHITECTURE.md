@@ -13,7 +13,7 @@ RootUp/
 ├── src/                          # React 前端
 │   ├── main.tsx                  # 入口（仅挂载 App）
 │   ├── App.tsx                   # 布局组装：Sidebar + 页面切换 + 主题/i18n
-│   ├── pages/                    # 页面层入口：Files / Homework / Courses / Tools / Settings
+│   ├── pages/                    # 页面层入口：文件 / 项目 / 学业 / 小工具 / 设置
 │   ├── features/                 # 功能域私有 UI：features/<domain>/components/（页面级组件与测试）
 │   ├── components/               # 通用 UI 层：Modal、Button、Banner、Sidebar 等跨功能复用组件
 │   ├── hooks/                    # 通用逻辑层：useSettings / useFiles / useScan
@@ -169,7 +169,11 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
   ` (2)` 递增，绝不覆盖）；项目 `归档根/项目/<项目名>`。
 - **安全与事务**：同卷 `fs::rename`（跨卷/占用返回明确错误）；索引迁移 + 操作日志
   在同一批内完成，失败则把文件移回，不留半成品；操作写入 `archive_ops` 表
-  （`batch_id` 聚合，按批撤销，保留最近 200 批）。
+  （`batch_id` 聚合，按批撤销，保留最近 200 批）。批次号由进程内单调分配器生成
+  （毫秒时间戳×1000 + 原子递增，同毫秒不合并，无需 schema 变更）；项目归档/撤销
+  走统一 `ProjectJournal` 副作用层——settings、快捷方式与目录任一环节失败即完整
+  回滚三态（settings 还原、快捷方式目标还原、目录移回），命令层注入 Tauri 实现，
+  引擎层以故障注入测试覆盖。
 - **命令**：`archive_files`（手动/批量共用引擎）、`archive_filtered`（后端重查，
   仅 indexed、上限 200）、`archive_project`（整目录移动 + `project_dirs` 更新 +
   `shortcuts` 表登记项重建 `.lnk`）、`undo_archive`、`list_archive_batches`；
@@ -199,6 +203,11 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 **错误消息规范**：`模块: 消息` 前缀（如 `scan: 目录不可访问 ...`），命令层透传，测试断言前缀；本轮不引入 thiserror。
 
 **文件安全基线**：扫描只读 metadata；「删除」仅为索引状态标记；快照差集 + 风暴保护 + 可用性检查 + 候选复核构成误判防护；物理归档（迭代 B）须启用事务性移动 + 撤销 + 目标存在性检查。
+
+**监听稳定确认**：事件处理器在 `first_sample_delay` 后首次采样，之后按 `sample_gap`
+间隔采样大小与可打开性，避免写入中途的短暂停顿被过早判定稳定；超过 `force_timeout`
+强制上报兜底。**标签筛选**：`label:` 条件按逗号边界精确匹配（`%,key,%`），杜绝
+前缀误命中（如 `course-1` 命中 `course-10`）。
 
 **后续候选**：排序（`sort_by/sort_dir`）、统计概览（`get_stats`）、`scan_meta` 表、`resources/icons/filetypes/` SVG 源、游标分页、`RwLock` 读写分离、rayon 并行、thiserror、E2E 框架。
 

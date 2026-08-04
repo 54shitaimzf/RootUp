@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { StudyPage } from "./StudyPage";
 import { createSeedStudyData, ensureDemoScenario } from "../lib/studyStore";
 import {
@@ -429,6 +435,25 @@ describe("StudyPage", () => {
         ]),
       }),
     );
+  });
+
+  it("初始加载不触发整份保存，用户变更后才保存", async () => {
+    const seed = createSeedStudyData();
+    vi.mocked(getStudyData).mockResolvedValueOnce(seed);
+    render(<StudyPage today={TODAY} />);
+    expect(await screen.findByText("高等数学")).toBeInTheDocument();
+    expect(saveStudyData).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "添加课程" })[0]);
+    fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
+      target: { value: "新课程" },
+    });
+    fireEvent.change(screen.getByLabelText("星期"), {
+      target: { value: "2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(screen.getByText("新课程")).toBeInTheDocument();
+    await waitFor(() => expect(saveStudyData).toHaveBeenCalled());
   });
 
   it("课程与作业按学期隔离并自动保存到后端", () => {

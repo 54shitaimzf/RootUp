@@ -1,6 +1,6 @@
 //! 文件监听、索引、扫描与查询相关命令。
 use crate::core::classify::{Category, DEFAULT_EXTENSION_MAP};
-use crate::core::index::{FileRecord, IndexStore};
+use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::query::{parse_query, QueryPage};
 use crate::core::watched::{check_add, AddCheck};
@@ -156,17 +156,6 @@ pub fn query_files(
     )
 }
 
-/// 兼容旧调用：返回记录列表（无总数）。
-#[tauri::command]
-pub fn list_files(
-    store: State<'_, Arc<Mutex<dyn IndexStore>>>,
-    query: Option<String>,
-    limit: Option<i64>,
-) -> Result<Vec<FileRecord>, String> {
-    let page = run_query(&store, query.as_deref(), limit.unwrap_or(200), 0)?;
-    Ok(page.items)
-}
-
 /// 库中现存标签 key 列表（筛选器多选用）。
 #[tauri::command]
 pub fn list_labels(store: State<'_, Arc<Mutex<dyn IndexStore>>>) -> Result<Vec<String>, String> {
@@ -201,23 +190,6 @@ pub fn scan_all(app: AppHandle) -> Result<(), String> {
         scanner.enqueue(dir.clone());
     }
     log::info!("scan: 全部入队 dirs={}", settings.watched_dirs.len());
-    Ok(())
-}
-
-/// 重新扫描指定监控目录。
-#[tauri::command]
-pub fn scan_now(app: AppHandle, dir: String) -> Result<(), String> {
-    let dir = normalize_path(&dir);
-    let settings = storage::load_settings(&app);
-    if !settings
-        .watched_dirs
-        .iter()
-        .any(|d| path_key(d) == path_key(&dir))
-    {
-        return Err("目录未在监控列表中".into());
-    }
-    let scanner = app.state::<Mutex<ScanService>>();
-    scanner.lock().map_err(|e| e.to_string())?.enqueue(dir);
     Ok(())
 }
 

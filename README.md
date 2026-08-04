@@ -6,7 +6,7 @@
 
 RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
 
-### 当前能力（v0.7.0 已发布；v0.8.0-dev 开发中）
+### 当前能力（v0.7.0 已发布；v0.8.0 功能已冻结，待发布）
 
 - Tauri v2 + React 桌面应用框架
 - 系统托盘驻留（打开 / 退出）
@@ -24,7 +24,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity 项目，自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
 - 新手引导与帮助中心：首次启动欢迎弹窗、侧栏全局帮助入口（新手入门 / 搜索与高级用法）、IDE 选择与官方下载指导、检测到代码项目但无 IDE 时按需引导
 - 首个公开发布：NSIS 安装包（per-user、免管理员、中英语言选择）、品牌图标全套、安装包自动验证
-- 开发中（v0.8.0-dev）：学业页——课程表（时间轴周视图、日期与“今天”标识、当前时间线、单双周 / 指定周次、周起始日切换）与作业（截止排序、状态 / 课程筛选、短备注 + 可展开详情、逾期/剩余天数、标记完成确认）；全应用按钮遵循 Windows“是左否右”；数据持久化、截止提醒与课程关键词联动后续接入
+- 学业页（v0.8.0）：课程表（时间轴周视图、日期与“今天”标识、当前时间线、单双周 / 指定周次、周起始日切换、堆叠卡与铺开查看）与作业（截止排序、状态 / 课程筛选、短备注 + 可展开详情、逾期/剩余天数、标记完成确认、默认只看活跃）；学期即课表，支持新建/编辑/复制/删除，数据持久化到后端 `study.json`，课程名自动纳入文件分类标签；全应用按钮遵循 Windows“是左否右”；截止提醒顺延至后续版本
 
 ### 搜索语法
 
@@ -39,7 +39,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 规划能力
 
-课程表与作业管理（本迭代进行中）、AI 分类与项目识别增强（接口已预留）、快捷路径等，详见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+作业截止提醒、AI 分类与项目识别增强（接口已预留）、快捷路径等，详见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ### 技术栈
 
@@ -50,8 +50,8 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 质量检查
 
-- 前端测试：`npm test`（纯函数 + 组件交互，约 205 用例）
-- Rust 测试：`cargo test`（约 218 用例）
+- 前端测试：`npm test`（纯函数 + 组件交互，约 324 用例）
+- Rust 测试：`cargo test`（约 247 用例）
 - 架构依赖校验：`npm run check:arch`（单向依赖防回归）
 - Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
 - 日志驱动冒烟：`scripts/smoke.ps1`（需先 `npm run tauri build -- --no-bundle`）
@@ -95,7 +95,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 RootUp is a smart file-organizing desktop app built for students. It auto-sorts downloads, archives files with one click, and turns scattered cleanup habits into reusable rules.
 
-### Current Features (v0.7.0 released; v0.8.0-dev in development)
+### Current Features (v0.7.0 released; v0.8.0 feature-frozen, pending release)
 
 - Tauri v2 + React desktop app framework
 - System tray with Open / Quit actions
@@ -110,7 +110,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Configurable rules: ignore rules and classification mapping with three presets (default / developer / creative); takes effect after restart
 - Label management: custom display names, icons and a preset palette for labels; built-in categories stay read-only
 - Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
-- In development (v0.8.0-dev): Study page — timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation); buttons follow the Windows yes-left/no-right convention; persistence, reminders and course-keyword classification come next
+- Study page (v0.8.0): timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start, stacked cards with spread-out viewing) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation, active-only default); semesters act as schedules with create/edit/copy/delete and backend `study.json` persistence; course names feed file labels automatically; buttons follow the Windows yes-left/no-right convention; deadline reminders are deferred to a later release
 
 ### Search Syntax
 
@@ -123,7 +123,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 
 ### Planned Features
 
-Course schedules and homework management (current iteration), AI classification and project detection (interface reserved), smart shortcuts. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Homework deadline reminders, AI classification and project detection (interface reserved), smart shortcuts. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Tech Stack
 

@@ -16,7 +16,24 @@ const SAVE_DEBOUNCE_MS = 800;
  */
 export function useFilterHabits() {
   const [habits, setHabits] = useState<FilterHabits>({});
+  const latestRef = useRef<FilterHabits>({});
   const timerRef = useRef<number | null>(null);
+
+  const scheduleSave = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+    }
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      void saveHabits(latestRef.current).catch(() =>
+        void logEvent("warn", "habits: 写入失败"),
+      );
+    }, SAVE_DEBOUNCE_MS);
+  }, []);
+
+  useEffect(() => {
+    latestRef.current = habits;
+  }, [habits]);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,25 +78,19 @@ export function useFilterHabits() {
   }, []);
 
   const touch = useCallback((key: string) => {
-    setHabits((prev) => {
-      const next = touchHabit(prev, key);
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-      }
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null;
-        void saveHabits(next).catch(() =>
-          void logEvent("warn", "habits: 写入失败"),
-        );
-      }, SAVE_DEBOUNCE_MS);
-      return next;
-    });
-  }, []);
+    const next = touchHabit(latestRef.current, key);
+    latestRef.current = next;
+    setHabits(next);
+    scheduleSave();
+  }, [scheduleSave]);
 
   useEffect(
     () => () => {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
+        if (Object.keys(latestRef.current).length > 0) {
+          void saveHabits(latestRef.current).catch(() => {});
+        }
       }
     },
     [],

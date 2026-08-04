@@ -271,14 +271,6 @@ export function queryFiles(
   });
 }
 
-/** 兼容旧调用：仅返回列表 */
-export function listFiles(query?: string, limit?: number): Promise<FileRecord[]> {
-  return invoke<FileRecord[]>("list_files", {
-    query: query || null,
-    limit: limit ?? null,
-  });
-}
-
 export function listLabels(): Promise<string[]> {
   return invoke<string[]>("list_labels");
 }
@@ -326,10 +318,6 @@ export function listClassifyDefaults(): Promise<ClassifyDefaultEntry[]> {
 
 export function scanAll(): Promise<void> {
   return invoke<void>("scan_all");
-}
-
-export function scanNow(dir: string): Promise<void> {
-  return invoke<void>("scan_now", { dir });
 }
 
 export function cancelScan(): Promise<void> {

@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -31,15 +32,22 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
  */
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const latestRef = useRef<Settings | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     getSettings()
       .then((value) => {
-        if (!cancelled) setSettings(value);
+        if (!cancelled) {
+          latestRef.current = value;
+          setSettings(value);
+        }
       })
       .catch(() => {
-        if (!cancelled) setSettings({ ...defaultSettings });
+        if (!cancelled) {
+          latestRef.current = { ...defaultSettings };
+          setSettings({ ...defaultSettings });
+        }
       });
     return () => {
       cancelled = true;
@@ -47,14 +55,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const update = useCallback((patch: Partial<Settings>) => {
-    setSettings((prev) => {
-      const next = { ...(prev ?? defaultSettings), ...patch };
-      void saveSettings(next).catch(() => {});
-      return next;
-    });
+    const next = { ...(latestRef.current ?? defaultSettings), ...patch };
+    latestRef.current = next;
+    setSettings(next);
+    void saveSettings(next).catch(() => {});
   }, []);
 
   const replace = useCallback((next: Settings) => {
+    latestRef.current = next;
     setSettings(next);
     return saveSettings(next);
   }, []);
