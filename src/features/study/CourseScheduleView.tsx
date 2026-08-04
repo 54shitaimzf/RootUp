@@ -9,7 +9,6 @@ import { useTranslation } from "react-i18next";
 import { Layers, Plus, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { IconButton } from "../../components/IconButton";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { LABEL_COLORS } from "../../lib/labelDefs";
 import { isComposing } from "../../lib/ime";
@@ -190,6 +189,8 @@ export function CourseScheduleView({
   const [stackOverlay, setStackOverlay] = useState<{
     key: string;
     courses: Course[];
+    cx: number;
+    cy: number;
   } | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -246,11 +247,20 @@ export function CourseScheduleView({
     homework.filter((item) => item.courseId === courseId).length;
 
   const openStackOverlay = (
-    _event: { currentTarget: HTMLElement },
+    event: { currentTarget: HTMLElement },
     key: string,
     courses: Course[],
   ) => {
-    setStackOverlay({ key, courses });
+    const rect = event.currentTarget.getBoundingClientRect();
+    const cx = Math.min(
+      Math.max(rect.left + rect.width / 2, 220),
+      window.innerWidth - 220,
+    );
+    const cy = Math.min(
+      Math.max(rect.top + rect.height / 2, 160),
+      window.innerHeight - 160,
+    );
+    setStackOverlay({ key, courses, cx, cy });
   };
 
   return (
@@ -478,6 +488,7 @@ export function CourseScheduleView({
                                     width: `${column.width}%`,
                                     top: blockTopPx,
                                     height: blockHeightPx,
+                                    zIndex: 15,
                                   }}
                                 >
                                   {Array.from(
@@ -622,58 +633,83 @@ export function CourseScheduleView({
             aria-hidden
             onClick={() => setStackOverlay(null)}
           />
-          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="pointer-events-auto relative w-full max-w-2xl">
-              <IconButton
-                label={t("study.collapseStack")}
-                icon={X}
-                size="sm"
-                tone="neutral"
-                className="absolute -top-3 right-0 z-10"
-                onClick={() => setStackOverlay(null)}
-              />
-              <div
-                data-testid="stack-spread"
-                aria-label={t("study.stackCourses", {
-                  count: stackOverlay.courses.length,
-                })}
-                className="flex max-h-[80vh] flex-wrap content-start justify-center gap-2 overflow-y-auto pt-1"
-              >
-                {stackOverlay.courses.map((course, index) => {
+          {(() => {
+            const MAX_FAN = 4;
+            const CARD_W = 320;
+            const CARD_H = 240;
+            const GAP = 16;
+            const visible = stackOverlay.courses.slice(0, MAX_FAN);
+            const overflow = stackOverlay.courses.slice(MAX_FAN);
+            const cols = visible.length <= 2 ? visible.length : 2;
+            const rows = Math.ceil(visible.length / cols);
+            const totalW = cols * CARD_W + (cols - 1) * GAP;
+            const totalH = rows * CARD_H + (rows - 1) * GAP;
+            const startX = Math.max(
+              8,
+              Math.min(
+                stackOverlay.cx - totalW / 2,
+                window.innerWidth - totalW - 8,
+              ),
+            );
+            const startY = Math.max(
+              8,
+              Math.min(
+                stackOverlay.cy - totalH / 2,
+                window.innerHeight - totalH - 8,
+              ),
+            );
+            const positionOf = (index: number) => ({
+              left: startX + (index % cols) * (CARD_W + GAP),
+              top: startY + Math.floor(index / cols) * (CARD_H + GAP),
+            });
+            return (
+              <>
+                <button
+                  type="button"
+                  aria-label={t("study.collapseStack")}
+                  onClick={() => setStackOverlay(null)}
+                  className="fixed z-50 flex size-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+                  style={{ left: startX + totalW - 20, top: startY - 30 }}
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+                {visible.map((course, index) => {
+                  const pos = positionOf(index);
                   const dealStyle = {
+                    left: pos.left,
+                    top: pos.top,
+                    width: CARD_W,
                     animationDelay: `${index * 40}ms`,
-                    "--deal-rotate": `${index % 2 === 0 ? -2 : 2}deg`,
+                    "--deal-rotate": `${index % 2 === 0 ? -1.5 : 1.5}deg`,
                   } as CSSProperties;
                   return (
                     <button
                       key={course.id}
                       type="button"
+                      data-testid={`spread-card-${course.id}`}
                       onClick={() => {
                         onOpenDetail(course);
                         setStackOverlay(null);
                       }}
-                      className="deal-in flex w-56 flex-col rounded-md border border-slate-200 bg-white p-2.5 text-left shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
+                      className="deal-in fixed z-50 flex flex-col rounded-lg border border-slate-200 bg-white p-3 text-left shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-pop dark:border-slate-700 dark:bg-slate-800"
                       style={dealStyle}
                     >
-                      <span className="flex items-start gap-1.5">
+                      <span className="flex items-start gap-2">
                         <span
-                          className={`mt-0.5 size-2.5 shrink-0 rounded-full ${LABEL_COLORS[course.color].dot}`}
+                          className={`mt-0.5 size-3 shrink-0 rounded-full ${LABEL_COLORS[course.color].dot}`}
                         />
-                        <span
-                          title={course.name}
-                          className="line-clamp-2 min-w-0 flex-1 text-xs font-semibold text-strong"
-                        >
+                        <span className="min-w-0 flex-1 break-words text-sm font-semibold leading-snug text-strong">
                           {course.name}
                         </span>
                       </span>
-                      <span className="mt-1 text-[10px] tabular-nums text-muted">
+                      <span className="mt-1.5 text-xs tabular-nums text-muted">
                         {formatClockRange(
                           course.startMin,
                           course.endMin,
                           lang,
                         )}
                       </span>
-                      <span className="mt-1 flex flex-wrap gap-1">
+                      <span className="mt-1.5 flex flex-wrap gap-1">
                         {weekBadge(course) && (
                           <span className="rounded-xs bg-slate-100 px-1.5 py-px text-[9px] font-medium text-slate-500 dark:bg-slate-600/70 dark:text-slate-100">
                             {weekBadge(course)}
@@ -688,10 +724,7 @@ export function CourseScheduleView({
                         )}
                       </span>
                       {(course.teacher || course.location) && (
-                        <span
-                          title={`${course.teacher ?? ""}${course.teacher && course.location ? " · " : ""}${course.location ?? ""}`}
-                          className="mt-1 truncate text-[10px] text-muted"
-                        >
+                        <span className="mt-1.5 break-words text-xs leading-snug text-secondary">
                           {course.teacher}
                           {course.teacher && course.location ? " · " : ""}
                           {course.location}
@@ -700,9 +733,22 @@ export function CourseScheduleView({
                     </button>
                   );
                 })}
-              </div>
-            </div>
-          </div>
+                {overflow.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSlotCourses(stackOverlay.courses)}
+                    className="fixed z-50 rounded-xs bg-slate-900/70 px-2 py-1 text-[10px] font-semibold text-white shadow-sm transition-colors hover:bg-slate-900"
+                    style={{
+                      left: startX + totalW / 2 - 32,
+                      top: startY + totalH + 8,
+                    }}
+                  >
+                    {t("study.slotMore", { count: overflow.length })}
+                  </button>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
 

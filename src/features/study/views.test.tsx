@@ -380,29 +380,28 @@ describe("视图空态", () => {
     expect(within(stack).getByText("2")).toBeInTheDocument();
     fireEvent.click(stack);
     expect(screen.queryByTestId("course-stack-even")).not.toBeInTheDocument();
-    const spread = screen.getByTestId("stack-spread");
-    expect(spread.className).not.toContain("floating-panel");
-    expect(within(spread).getByText("单周")).toBeInTheDocument();
-    expect(within(spread).getByText("双周")).toBeInTheDocument();
-    expect(within(spread).getAllByText(/王老师/).length).toBeGreaterThan(0);
-    expect(within(spread).getAllByText(/教 101/).length).toBeGreaterThan(0);
-    const rows = within(spread).getAllByRole("button", {
-      name: /高等数学/,
-    });
+    const evenCard = screen.getByTestId("spread-card-even");
+    const oddCard = screen.getByTestId("spread-card-odd");
+    expect(evenCard.className).toContain("fixed");
+    expect(within(evenCard).getByText("双周")).toBeInTheDocument();
+    expect(within(oddCard).getByText("单周")).toBeInTheDocument();
+    expect(within(evenCard).getByText(/王老师/)).toBeInTheDocument();
+    expect(within(evenCard).getByText(/教 101/)).toBeInTheDocument();
+    const rows = screen.getAllByRole("button", { name: /高等数学/ });
     expect(rows).toHaveLength(2);
     fireEvent.click(rows[0]);
     expect(onOpenDetail).toHaveBeenCalledWith(
       expect.objectContaining({ id: "even" }),
     );
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("stack-spread")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("spread-card-even")).not.toBeInTheDocument();
     expect(screen.getByTestId("course-stack-even")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
     fireEvent.click(
       document.querySelector(".fixed.inset-0.z-40") as HTMLElement,
     );
-    expect(screen.queryByTestId("stack-spread")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("spread-card-even")).not.toBeInTheDocument();
   });
 
   it("长标题课程卡在课表中截断", () => {
@@ -438,15 +437,14 @@ describe("视图空态", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /共 2 门/ }));
-    const spread = screen.getByTestId("stack-spread");
-    const cards = within(spread).getAllByRole("button", {
-      name: /数据结构与算法分析/,
-    });
+    const cards = [
+      screen.getByTestId("spread-card-even"),
+      screen.getByTestId("spread-card-odd"),
+    ];
     expect(cards).toHaveLength(2);
-    expect(within(cards[0]).getByText(DEMO_COURSES[4].name)).toHaveAttribute(
-      "title",
-      DEMO_COURSES[4].name,
-    );
+    expect(
+      within(cards[0]).getByText(DEMO_COURSES[4].name),
+    ).toBeInTheDocument();
     expect(within(cards[0]).getByText(/李教授/)).toBeInTheDocument();
     expect(
       within(cards[0]).getByText(/工科楼 508/),
@@ -489,10 +487,33 @@ describe("视图空态", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /共 3 门/ }));
-    const spread = screen.getByTestId("stack-spread");
-    expect(within(spread).getByText("课程一")).toBeInTheDocument();
-    expect(within(spread).getByText("课程二")).toBeInTheDocument();
-    expect(within(spread).getByText("课程三")).toBeInTheDocument();
+    expect(screen.getByTestId("spread-card-r1")).toBeInTheDocument();
+    expect(screen.getByTestId("spread-card-r2")).toBeInTheDocument();
+    expect(screen.getByTestId("spread-card-r3")).toBeInTheDocument();
+  });
+
+  it("超过四门时只铺开四张并用 +N 收口", () => {
+    const courses = [1, 2, 3, 4, 5].map((index) => ({
+      ...DEMO_COURSES[0],
+      id: `r${index}`,
+      name: `课程${index}`,
+      weekRule: "range" as const,
+      weekRange: `${index * 2 - 1}-${index * 2}`,
+    }));
+    render(
+      <CourseScheduleView
+        courses={courses}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /共 5 门/ }));
+    expect(screen.getByTestId("spread-card-r1")).toBeInTheDocument();
+    expect(screen.getByTestId("spread-card-r4")).toBeInTheDocument();
+    expect(screen.queryByTestId("spread-card-r5")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+1 门" }));
+    const dialog = screen.getByRole("dialog", { name: "该时段课程" });
+    expect(within(dialog).getByText("课程5")).toBeInTheDocument();
   });
 
   it("四门同周重叠只显示两列并折叠为 +N", () => {

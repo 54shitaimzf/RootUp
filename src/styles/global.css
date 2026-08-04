@@ -129,11 +129,12 @@
 @keyframes deal-in {
   from {
     opacity: 0;
-    transform: translateY(10px) rotate(var(--deal-rotate, 0deg)) scale(0.96);
+    transform: translateY(12px)
+      rotate(calc(var(--deal-rotate, 0deg) - 5deg)) scale(0.94);
   }
   to {
     opacity: 1;
-    transform: translateY(0) rotate(0deg) scale(1);
+    transform: translateY(0) rotate(var(--deal-rotate, 0deg)) scale(1);
   }
 }
 
