@@ -264,23 +264,7 @@ export function CourseScheduleView({
           />
         </div>
       ) : (
-        <div className="mt-4 flex items-start">
-          <div
-            data-testid="time-axis"
-            className={`relative shrink-0 ${gutterClass}`}
-            style={{ height: gridHeight }}
-          >
-            {hourMarks.map((min) => (
-              <span
-                key={min}
-                className="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-muted"
-                style={{ top: `${axisTopPercent(min, axis)}%` }}
-              >
-                {formatClock(min, lang)}
-              </span>
-            ))}
-          </div>
-          <div className="min-w-0 flex-1 overflow-hidden border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-4 overflow-hidden border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
             <div
               data-testid="schedule-header"
               className="flex border-b border-slate-200 dark:border-slate-800"
@@ -322,6 +306,21 @@ export function CourseScheduleView({
               })}
             </div>
             <div className="flex">
+              <div
+                data-testid="time-axis"
+                className={`relative shrink-0 ${gutterClass}`}
+                style={{ height: gridHeight }}
+              >
+                {hourMarks.map((min) => (
+                  <span
+                    key={min}
+                    className="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-muted"
+                    style={{ top: `${axisTopPercent(min, axis)}%` }}
+                  >
+                    {formatClock(min, lang)}
+                  </span>
+                ))}
+              </div>
               {days.map((day, index) => {
                 const dayCourses = visibleCourses.filter(
                   (course) => course.day === day,
@@ -471,7 +470,6 @@ export function CourseScheduleView({
               })}
             </div>
           </div>
-        </div>
       )}
 
       <SlotCoursesDialog

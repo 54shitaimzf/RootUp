@@ -97,7 +97,7 @@ describe("SegmentedControl", () => {
       "w-full",
     );
     expect(container.querySelector('[role="group"]')?.className).toContain(
-      "max-w-sm",
+      "max-w-xs",
     );
   });
 

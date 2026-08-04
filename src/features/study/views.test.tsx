@@ -237,7 +237,7 @@ describe("视图空态", () => {
   it("仅当前周且无匹配课程时提示", () => {
     render(
       <CourseScheduleView
-        courses={[DEMO_COURSES[2]]}
+        courses={[DEMO_COURSES[3]]}
         homework={[]}
         {...commonProps}
         showAllWeeks={false}
@@ -322,7 +322,7 @@ describe("视图空态", () => {
   it("周次徽章与今天标记使用最小圆角而非胶囊", () => {
     render(
       <CourseScheduleView
-        courses={[DEMO_COURSES[2]]}
+        courses={[DEMO_COURSES[3]]}
         homework={[]}
         {...commonProps}
       />,
@@ -335,7 +335,7 @@ describe("视图空态", () => {
     expect(today.className).not.toContain("rounded-full");
   });
 
-  it("时间刻度移到表格外且表头不再有内部空列", () => {
+  it("时间刻度与表体对齐且表头不再有内部空列", () => {
     const { container } = render(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}

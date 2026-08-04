@@ -56,7 +56,7 @@ export function SegmentedControl<T extends string>({
       <div
         role="group"
         className={`flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 ${
-          equal ? "w-full max-w-sm" : "inline-flex"
+          equal ? "w-full max-w-xs" : "inline-flex"
         } ${className}`}
       >
         {options.map((option) => {

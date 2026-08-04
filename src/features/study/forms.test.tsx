@@ -24,7 +24,7 @@ describe("CourseFormDialog 智能表单", () => {
   it("名称与老师同行右对齐，地点独占一行", () => {
     renderCourseForm();
     expect(
-      screen.getByLabelText("课程名称").closest(".col-span-3"),
+      screen.getByLabelText("课程名称").closest(".col-span-5"),
     ).not.toBeNull();
     expect(
       screen.getByLabelText("老师").closest(".col-span-2"),

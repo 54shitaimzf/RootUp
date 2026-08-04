@@ -19,6 +19,7 @@ describe("StudyPage", () => {
       screen.getByRole("heading", { name: "学业" }),
     ).toBeInTheDocument();
     expect(screen.getByText("高等数学")).toBeInTheDocument();
+    expect(screen.getByText("大学英语")).toBeInTheDocument();
     expect(screen.getByText("程序设计")).toBeInTheDocument();
     expect(screen.getByText("线性代数")).toBeInTheDocument();
     expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();

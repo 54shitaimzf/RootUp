@@ -228,7 +228,7 @@ export function CourseFormDialog({
         open={open}
         title={t(initial ? "study.editCourse" : "study.addCourse")}
         onClose={onClose}
-        width="max-w-md"
+        width="max-w-lg"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
             <div>
@@ -256,11 +256,11 @@ export function CourseFormDialog({
         <div className="space-y-4">
           <FormSection title={t("study.sectionBasic")}>
             <div className="space-y-2.5">
-              <div className="grid grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-7 gap-2">
                 <Field
                   label={t("study.courseName")}
                   htmlFor="course-name"
-                  className="col-span-3"
+                  className="col-span-5"
                 >
                   <Input
                     id="course-name"
@@ -388,8 +388,7 @@ export function CourseFormDialog({
               </Field>
               {form.weekRule === "range" && (
                 <Field
-                  label={t("study.weekRangePlaceholder")}
-                  hint={t("study.weekRangeHint")}
+                  label={t("study.weekRuleRange")}
                   htmlFor="course-week-range"
                 >
                   <Input
