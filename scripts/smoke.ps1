@@ -91,6 +91,7 @@ $Settings = @{
     }
 } | ConvertTo-Json -Depth 6
 # 无 BOM 的 UTF-8：serde_json 无法解析带 BOM 的 JSON
+New-Item -ItemType Directory -Path (Split-Path $SettingsPath) -Force | Out-Null
 [System.IO.File]::WriteAllText($SettingsPath, $Settings, (New-Object System.Text.UTF8Encoding $false))
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 if (Test-Path $LogFile) { Remove-Item $LogFile -Force }
@@ -153,6 +154,7 @@ if ($Proc -and -not $Proc.HasExited) { Stop-Process -Id $Proc.Id -Force -ErrorAc
 Start-Sleep -Milliseconds 500
 
 if (Test-Path $Backup) {
+    New-Item -ItemType Directory -Path (Split-Path $SettingsPath) -Force | Out-Null
     Move-Item $Backup $SettingsPath -Force
 } else {
     Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue
