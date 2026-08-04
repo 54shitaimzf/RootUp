@@ -3,11 +3,8 @@
 //! 独立于 settings；写入采用“临时文件 + rename”保证原子性；
 //! 文件损坏时备份为 `habits.json.corrupt-<ts>.bak` 并回退空表。
 use crate::core::habits::FilterHabits;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-const HABITS_FILE: &str = "habits.json";
+use crate::infra::local_file;
+use std::path::PathBuf;
 
 /// 习惯存储契约：命令层只依赖该接口。
 pub trait HabitStore: Send + Sync {
@@ -26,20 +23,9 @@ impl JsonHabitStore {
     }
 
     fn read(&self) -> FilterHabits {
-        if !self.path.exists() {
-            return FilterHabits::new();
-        }
-        match fs::read_to_string(&self.path) {
-            Ok(raw) => match serde_json::from_str::<FilterHabits>(&raw) {
-                Ok(habits) => habits,
-                Err(e) => {
-                    log::warn!("habits: 文件损坏回退空表: {e}");
-                    if let Err(e) = backup_corrupt_habits(&self.path) {
-                        log::warn!("habits: 损坏备份失败: {e}");
-                    }
-                    FilterHabits::new()
-                }
-            },
+        match local_file::read_json::<FilterHabits>(&self.path) {
+            Ok(Some(habits)) => habits,
+            Ok(None) => FilterHabits::new(),
             Err(e) => {
                 log::warn!("habits: 读取失败: {e}");
                 FilterHabits::new()
@@ -48,16 +34,7 @@ impl JsonHabitStore {
     }
 
     fn write_atomic(&self, habits: &FilterHabits) -> Result<(), String> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("habits: 创建目录失败: {e}"))?;
-        }
-        let tmp = self.path.with_extension("json.tmp");
-        let raw = serde_json::to_string_pretty(habits).map_err(|e| e.to_string())?;
-        fs::write(&tmp, raw).map_err(|e| format!("habits: 写入临时文件失败: {e}"))?;
-        fs::rename(&tmp, &self.path).map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            format!("habits: 原子替换失败: {e}")
-        })
+        local_file::write_json_atomic(&self.path, habits)
     }
 }
 
@@ -71,33 +48,17 @@ impl HabitStore for JsonHabitStore {
     }
 }
 
-/// 检测损坏的 `habits.json` 并改名为备份文件；返回备份路径。
-pub fn backup_corrupt_habits(path: impl AsRef<Path>) -> Result<Option<PathBuf>, String> {
-    let path = path.as_ref();
-    if !path.exists() {
-        return Ok(None);
-    }
-    let readable = fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .is_some();
-    if readable {
-        return Ok(None);
-    }
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let backup = path.with_file_name(format!("{HABITS_FILE}.corrupt-{ts}.bak"));
-    fs::rename(path, &backup).map_err(|e| format!("备份失败: {e}"))?;
-    log::warn!("habits: 损坏备份 -> {}", backup.display());
-    Ok(Some(backup))
+/// 兼容旧测试的损坏备份入口，统一走 local_file 层。
+#[cfg(test)]
+pub fn backup_corrupt_habits(path: impl AsRef<std::path::Path>) -> Result<Option<PathBuf>, String> {
+    local_file::backup_corrupt_file(path.as_ref())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::habits::Habit;
+    use std::fs;
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir =

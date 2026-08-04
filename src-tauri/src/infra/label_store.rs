@@ -3,11 +3,8 @@
 //! 独立于 settings / schemes 存储；写入采用“临时文件 + rename”原子性；
 //! 文件损坏时备份 `labels.corrupt-<ts>.bak` 并回退空表。
 use crate::core::labels::{LabelDef, MAX_LABELS};
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-const LABELS_FILE: &str = "labels.json";
+use crate::infra::local_file;
+use std::path::PathBuf;
 
 /// 标签注册表存储契约：命令层只依赖该接口。
 pub trait LabelStore: Send + Sync {
@@ -27,20 +24,9 @@ impl JsonLabelStore {
     }
 
     fn load(&self) -> Vec<LabelDef> {
-        if !self.path.exists() {
-            return Vec::new();
-        }
-        match fs::read_to_string(&self.path) {
-            Ok(raw) => match serde_json::from_str::<Vec<LabelDef>>(&raw) {
-                Ok(defs) => defs,
-                Err(e) => {
-                    log::warn!("labels: 文件损坏回退空表: {e}");
-                    if let Err(e) = backup_corrupt_labels(&self.path) {
-                        log::warn!("labels: 损坏备份失败: {e}");
-                    }
-                    Vec::new()
-                }
-            },
+        match local_file::read_json::<Vec<LabelDef>>(&self.path) {
+            Ok(Some(defs)) => defs,
+            Ok(None) => Vec::new(),
             Err(e) => {
                 log::warn!("labels: 读取失败: {e}");
                 Vec::new()
@@ -49,30 +35,8 @@ impl JsonLabelStore {
     }
 
     fn write_atomic(&self, defs: &[LabelDef]) -> Result<(), String> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("labels: 创建目录失败: {e}"))?;
-        }
-        let tmp = self.path.with_extension("json.tmp");
-        let raw = serde_json::to_string_pretty(defs).map_err(|e| e.to_string())?;
-        fs::write(&tmp, raw).map_err(|e| format!("labels: 写入临时文件失败: {e}"))?;
-        fs::rename(&tmp, &self.path).map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            format!("labels: 原子替换失败: {e}")
-        })
+        local_file::write_json_atomic(&self.path, defs)
     }
-}
-
-fn backup_corrupt_labels(path: &Path) -> std::io::Result<()> {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| LABELS_FILE.to_string());
-    let backup = path.with_file_name(format!("{name}.corrupt-{ts}.bak"));
-    fs::rename(path, backup)
 }
 
 impl LabelStore for JsonLabelStore {
@@ -123,11 +87,12 @@ impl LabelStore for JsonLabelStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn temp_store(tag: &str) -> JsonLabelStore {
         let dir =
             std::env::temp_dir().join(format!("rootup-labels-test-{}-{tag}", std::process::id()));
-        let path = dir.join(LABELS_FILE);
+        let path = dir.join("labels.json");
         let _ = fs::remove_file(&path);
         JsonLabelStore::new(path)
     }

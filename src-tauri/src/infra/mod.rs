@@ -4,6 +4,7 @@ pub mod archive_service;
 pub mod habit_store;
 pub mod index_store;
 pub mod label_store;
+pub mod local_file;
 pub mod logging;
 pub mod scanner;
 pub mod scheme_store;

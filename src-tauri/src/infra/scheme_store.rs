@@ -3,11 +3,8 @@
 //! 独立于 settings 存储；写入采用“临时文件 + rename”保证原子性；
 //! 文件损坏时备份为 `schemes.json.corrupt-<ts>.bak` 并回退为空列表。
 use crate::core::schemes::{RuleScheme, MAX_SCHEMES};
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-const SCHEMES_FILE: &str = "schemes.json";
+use crate::infra::local_file;
+use std::path::PathBuf;
 
 /// 方案存储契约：命令层只依赖该接口。
 pub trait SchemeStore: Send + Sync {
@@ -28,20 +25,9 @@ impl JsonSchemeStore {
     }
 
     fn load(&self) -> Vec<RuleScheme> {
-        if !self.path.exists() {
-            return Vec::new();
-        }
-        match fs::read_to_string(&self.path) {
-            Ok(raw) => match serde_json::from_str::<Vec<RuleScheme>>(&raw) {
-                Ok(schemes) => schemes,
-                Err(e) => {
-                    log::warn!("schemes: 文件损坏回退空列表: {e}");
-                    if let Err(e) = backup_corrupt_schemes(&self.path) {
-                        log::warn!("schemes: 损坏备份失败: {e}");
-                    }
-                    Vec::new()
-                }
-            },
+        match local_file::read_json::<Vec<RuleScheme>>(&self.path) {
+            Ok(Some(schemes)) => schemes,
+            Ok(None) => Vec::new(),
             Err(e) => {
                 log::warn!("schemes: 读取失败: {e}");
                 Vec::new()
@@ -50,16 +36,7 @@ impl JsonSchemeStore {
     }
 
     fn write_atomic(&self, schemes: &[RuleScheme]) -> Result<(), String> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("schemes: 创建目录失败: {e}"))?;
-        }
-        let tmp = self.path.with_extension("json.tmp");
-        let raw = serde_json::to_string_pretty(schemes).map_err(|e| e.to_string())?;
-        fs::write(&tmp, raw).map_err(|e| format!("schemes: 写入临时文件失败: {e}"))?;
-        fs::rename(&tmp, &self.path).map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            format!("schemes: 原子替换失败: {e}")
-        })
+        local_file::write_json_atomic(&self.path, schemes)
     }
 }
 
@@ -112,33 +89,19 @@ impl SchemeStore for JsonSchemeStore {
     }
 }
 
-/// 检测损坏的 `schemes.json` 并改名为备份文件；返回备份路径。
-pub fn backup_corrupt_schemes(path: impl AsRef<Path>) -> Result<Option<PathBuf>, String> {
-    let path = path.as_ref();
-    if !path.exists() {
-        return Ok(None);
-    }
-    let readable = fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .is_some();
-    if readable {
-        return Ok(None);
-    }
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let backup = path.with_file_name(format!("{SCHEMES_FILE}.corrupt-{ts}.bak"));
-    fs::rename(path, &backup).map_err(|e| format!("备份失败: {e}"))?;
-    log::warn!("schemes: 损坏备份 -> {}", backup.display());
-    Ok(Some(backup))
+/// 兼容旧测试的损坏备份入口，统一走 local_file 层。
+#[cfg(test)]
+pub fn backup_corrupt_schemes(
+    path: impl AsRef<std::path::Path>,
+) -> Result<Option<PathBuf>, String> {
+    local_file::backup_corrupt_file(path.as_ref())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::settings::{ClassifyRule, Settings};
+    use std::fs;
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir =
