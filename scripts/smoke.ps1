@@ -126,6 +126,14 @@ $Proc = Start-Process -FilePath $ExePath -PassThru
 $ScanDone = Wait-LogLine $LogFile "scan: 完成 dir=$TestDir" 120
 Write-Result "首次全量扫描完成" $ScanDone "期望日志行 scan: 完成 dir=$TestDir"
 
+# 设置加载日志由前端启动后调用 get_settings 写入，需等待（快照读取可能早于前端）
+$SettingsLoaded = if ($ScanDone) {
+    Wait-LogLine $LogFile "settings: 加载" 60
+} else {
+    $false
+}
+Write-Result "设置加载日志" $SettingsLoaded "期望日志行 settings: 加载（前端启动后写入）"
+
 # ---- 日志断言 ----
 $LogContent = if (Test-Path $LogFile) { Get-Content $LogFile -Raw -Encoding UTF8 } else { "" }
 
@@ -133,7 +141,6 @@ Write-Result "扫描摘要含 added=5" ($LogContent -match "scan: 完成 dir=$Te
 Write-Result "扫描摘要含 ignored=3" ($LogContent -match "scan: 完成 dir=$TestDir .*ignored=3") "crdownload、desktop.ini 与自定义 zzz 应被忽略（配置生效）"
 Write-Result "启动自愈移除重叠子目录" ($LogContent -match "watch: 启动修正 $TestDir/sub -> $TestDir") "父+子目录配置应在启动时保留父移除子"
 Write-Result "分类覆盖装配生效" ($LogContent -match "classify: 应用覆盖 2 条") "配置中的 psd/ai→image 应被分类器加载"
-Write-Result "设置加载日志" ($LogContent -match "settings: 加载") "启动时应读取 settings.json 并记录日志"
 
 # ---- 监听场景：新增、删除 ----
 $NewFile = Join-Path $TestRoot "new.pdf"
