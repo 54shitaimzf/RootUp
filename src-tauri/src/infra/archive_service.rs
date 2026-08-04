@@ -103,12 +103,17 @@ impl ArchiveService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::archive::category_dir;
+    use crate::core::classify::ExtensionClassifier;
+    use crate::core::events::StabilityParams;
+    use crate::core::ignore::IgnoreMatcher;
     use crate::core::index::{FileRecord, IndexStore};
     use crate::core::path::normalize_path;
     use crate::infra::index_store::SqliteIndexStore;
+    use crate::infra::watcher::WatchService;
     use std::fs;
     use std::path::PathBuf;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -167,6 +172,83 @@ mod tests {
         }
         assert!(moved, "worker 未在预期时间内归档文件");
         assert!(PathBuf::from(&root).join("document/note.md").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 完整链路：真实 notify 监听新文件 → 稳定入库 → 自动归档 → 索引/日志。
+    #[test]
+    fn watcher_to_auto_archive_full_flow() {
+        let dir = temp_dir("flow");
+        let watched = dir.join("Downloads");
+        fs::create_dir_all(&watched).unwrap();
+        let root = dir.join("Archive").to_string_lossy().to_string();
+        let store = store();
+        let archive = Arc::new(Mutex::new(ArchiveService::new(
+            store.clone(),
+            root.clone(),
+            true,
+        )));
+        archive.lock().unwrap().start();
+        let archive_cb = archive.clone();
+        let mut watcher = WatchService::new(
+            store.clone(),
+            Arc::new(ExtensionClassifier::new()),
+            IgnoreMatcher::new(),
+            StabilityParams {
+                first_sample_delay: Duration::from_millis(50),
+                sample_gap: Duration::from_millis(50),
+                force_timeout: Duration::from_secs(5),
+                debounce_window: Duration::from_millis(100),
+            },
+            move |records| {
+                if let Ok(service) = archive_cb.lock() {
+                    for record in records {
+                        if record.state == "indexed" && category_dir(&record.labels) != "other" {
+                            service.enqueue(record.path);
+                        }
+                    }
+                }
+            },
+        )
+        .unwrap();
+        watcher.update_skip_roots(vec![root.clone()]);
+        watcher.add_dir(&watched).unwrap();
+        watcher.start();
+        // 等待 notify 注册完成，避免首事件丢失
+        std::thread::sleep(Duration::from_millis(300));
+
+        let src = watched.join("report.pdf");
+        fs::write(&src, "x").unwrap();
+        let dest = PathBuf::from(&root).join("document/report.pdf");
+
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut moved = false;
+        while Instant::now() < deadline {
+            if dest.exists() {
+                moved = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        watcher.stop();
+        assert!(moved, "自动归档未在时限内完成");
+        let dest_str = normalize_path(&dest.to_string_lossy());
+        let rec = store
+            .lock()
+            .unwrap()
+            .get_by_path(&dest_str)
+            .unwrap()
+            .unwrap();
+        assert_eq!(rec.state, "archived");
+        assert_eq!(
+            store
+                .lock()
+                .unwrap()
+                .list_archive_batches(10)
+                .unwrap()
+                .len(),
+            1
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

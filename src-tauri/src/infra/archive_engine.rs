@@ -1,10 +1,10 @@
 //! 归档引擎：文件级移动 + 索引迁移 + 操作日志（不依赖 Tauri，可测试）。
 use crate::core::archive::{
-    move_error, plan_file_target, unique_dest, ArchiveFailure, ArchiveOp, ArchiveOutcome,
-    UNDO_KEEP_BATCHES,
+    move_error, plan_file_target, target_collides, unique_dest, ArchiveFailure, ArchiveOp,
+    ArchiveOutcome, UNDO_KEEP_BATCHES,
 };
 use crate::core::index::IndexStore;
-use crate::core::path::{normalize_path, path_key};
+use crate::core::path::normalize_path;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -69,8 +69,8 @@ fn archive_one(
         .ok_or_else(|| "文件名为空".to_string())?;
     let planned = plan_file_target(root, &file_name, &record.labels)?;
     let dest = unique_dest(Path::new(&planned))?;
-    if path_key(&dest.to_string_lossy()) == path_key(&path) {
-        return Err("目标与源路径相同".to_string());
+    if target_collides(&path, &dest.to_string_lossy()) {
+        return Err("目标与源路径冲突".to_string());
     }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建归档目录失败: {e}"))?;
@@ -306,6 +306,94 @@ mod tests {
             fs::read_to_string(dir.join("Archive/document/a (2).pdf")).unwrap(),
             "new"
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pending_and_archived_records_are_rejected() {
+        let dir = temp_dir("state");
+        let downloads = dir.join("Downloads");
+        fs::create_dir_all(&downloads).unwrap();
+        let src = downloads.join("a.pdf");
+        fs::write(&src, "x").unwrap();
+        let root = dir.join("Archive").to_string_lossy().to_string();
+        let store = store();
+        let mut pending = indexed(&normalize_path(&src.to_string_lossy()), "document");
+        pending.state = "pending".to_string();
+        store.lock().unwrap().upsert(&pending).unwrap();
+        let outcome = archive_files(
+            &store,
+            &root,
+            &[normalize_path(&src.to_string_lossy())],
+            200,
+        )
+        .unwrap();
+        assert_eq!(outcome.archived, 0);
+        assert!(outcome.failed[0].error.contains("状态不是已索引"));
+        assert!(src.exists());
+
+        // 归档成功后再次归档同一文件（状态为 archived）应被拒绝
+        store
+            .lock()
+            .unwrap()
+            .upsert(&indexed(&normalize_path(&src.to_string_lossy()), "indexed"))
+            .unwrap();
+        let first = archive_files(
+            &store,
+            &root,
+            &[normalize_path(&src.to_string_lossy())],
+            201,
+        )
+        .unwrap();
+        assert_eq!(first.archived, 1);
+        let second = archive_files(
+            &store,
+            &root,
+            &[normalize_path(&src.to_string_lossy())],
+            202,
+        )
+        .unwrap();
+        assert_eq!(second.archived, 0);
+        assert!(
+            second.failed[0].error.contains("状态不是已索引")
+                || second.failed[0].error.contains("不在索引中")
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn undo_refuses_when_original_path_occupied() {
+        let dir = temp_dir("occupied");
+        let downloads = dir.join("Downloads");
+        fs::create_dir_all(&downloads).unwrap();
+        let src = downloads.join("a.pdf");
+        fs::write(&src, "x").unwrap();
+        let root = dir.join("Archive").to_string_lossy().to_string();
+        let store = store();
+        store
+            .lock()
+            .unwrap()
+            .upsert(&indexed(
+                &normalize_path(&src.to_string_lossy()),
+                "document",
+            ))
+            .unwrap();
+        archive_files(
+            &store,
+            &root,
+            &[normalize_path(&src.to_string_lossy())],
+            300,
+        )
+        .unwrap();
+        assert!(!src.exists());
+
+        // 原位置被新文件占用：撤销应拒绝且不破坏任何一方
+        fs::write(&src, "new file").unwrap();
+        let undo = undo_file_batch(&store, 300).unwrap();
+        assert_eq!(undo.archived, 0);
+        assert!(undo.failed[0].error.contains("原位置已有文件"));
+        assert_eq!(fs::read_to_string(&src).unwrap(), "new file");
+        assert!(dir.join("Archive/document/a.pdf").exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }

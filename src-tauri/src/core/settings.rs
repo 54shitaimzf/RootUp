@@ -1,5 +1,6 @@
 //! 应用设置模型：纯 Rust 数据 + 版本化 + 校验。
 use crate::core::classify::Category;
+use crate::core::path::path_key;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -209,6 +210,15 @@ pub fn reset_to_default(current: &Settings) -> Settings {
     }
 }
 
+/// 归档根是否与任一监控目录冲突（相等即冲突，避免跳过整个监控目录）。
+pub fn archive_root_conflicts(settings: &Settings) -> bool {
+    !settings.archive_root.trim().is_empty()
+        && settings
+            .watched_dirs
+            .iter()
+            .any(|d| path_key(d) == path_key(&settings.archive_root))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,6 +318,23 @@ mod tests {
         assert_eq!(reset.project_dirs, vec!["C:/Proj"]);
         assert_eq!(reset.archive_root, "");
         assert!(!reset.auto_archive);
+    }
+
+    #[test]
+    fn archive_root_conflicts_with_watched_dir() {
+        let settings = Settings {
+            watched_dirs: vec!["C:/Watch".into()],
+            archive_root: "c:/watch".into(),
+            ..Default::default()
+        };
+        assert!(archive_root_conflicts(&settings));
+        let settings = Settings {
+            watched_dirs: vec!["C:/Watch".into()],
+            archive_root: "C:/Watch/sub".into(),
+            ..Default::default()
+        };
+        assert!(!archive_root_conflicts(&settings));
+        assert!(!archive_root_conflicts(&Settings::default()));
     }
 
     #[test]

@@ -1,5 +1,4 @@
-use crate::core::path::{normalize_path, path_key};
-use crate::core::settings::{reset_to_default, Settings};
+use crate::core::settings::{archive_root_conflicts, reset_to_default, Settings};
 use crate::infra::storage;
 use tauri::AppHandle;
 
@@ -20,12 +19,7 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     if !settings.is_valid() {
         return Err("无效的设置值".to_string());
     }
-    if !settings.archive_root.trim().is_empty()
-        && settings
-            .watched_dirs
-            .iter()
-            .any(|d| path_key(d) == path_key(&normalize_path(&settings.archive_root)))
-    {
+    if archive_root_conflicts(&settings) {
         return Err("归档根目录不能与监控目录相同".to_string());
     }
     log::info!(

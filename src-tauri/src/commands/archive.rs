@@ -1,7 +1,7 @@
 //! 归档命令：手动/筛选批量/项目归档、撤销、最近归档列表。
 use crate::core::archive::{
-    move_error, unique_dest, ArchiveBatch, ArchiveFailure, ArchiveOp, ArchiveOutcome,
-    MAX_BATCH_FILES, PROJECT_ARCHIVE_DIR,
+    move_error, target_collides, unique_dest, ArchiveBatch, ArchiveFailure, ArchiveOp,
+    ArchiveOutcome, MAX_BATCH_FILES, PROJECT_ARCHIVE_DIR,
 };
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
@@ -111,8 +111,8 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
         .filter(|s| !s.trim().is_empty())
         .ok_or_else(|| "项目名为空".to_string())?;
     let dest = unique_dest(Path::new(&format!("{root}/{PROJECT_ARCHIVE_DIR}/{name}")))?;
-    if path_key(&dest.to_string_lossy()) == path_key(&path) {
-        return Err("目标与源路径相同".to_string());
+    if target_collides(&path, &dest.to_string_lossy()) {
+        return Err("归档根不能位于项目内部或与项目相同".to_string());
     }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建归档目录失败: {e}"))?;

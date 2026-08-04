@@ -3,7 +3,7 @@
 //! 纯逻辑与模型层，不依赖 Tauri；文件移动与索引/日志编排在
 //! `infra/archive_engine.rs` 与命令层完成。
 use crate::core::classify::Category;
-use crate::core::path::normalize_path;
+use crate::core::path::{is_subpath, normalize_path, path_key};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -130,6 +130,16 @@ pub fn move_error(path: &str, err: std::io::Error) -> String {
     }
 }
 
+/// 源与目标互相包含（含相等）时拒绝，防止目录移进自身 / 归档根位于源内部。
+pub fn target_collides(source: &str, dest: &str) -> bool {
+    let source = normalize_path(source);
+    let dest = normalize_path(dest);
+    if source.is_empty() || dest.is_empty() {
+        return true;
+    }
+    path_key(&source) == path_key(&dest) || is_subpath(&dest, &source) || is_subpath(&source, &dest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,5 +199,14 @@ mod tests {
         assert!(move_error("C:/a", e).contains("占用"));
         let e = std::io::Error::other("boom");
         assert!(move_error("C:/a", e).contains("boom"));
+    }
+
+    #[test]
+    fn target_collides_rejects_self_and_nesting() {
+        assert!(target_collides("C:/a", "C:/a"));
+        assert!(target_collides("C:/proj", "C:/proj/项目/proj"));
+        assert!(!target_collides("C:/a", "C:/Archive/a"));
+        assert!(!target_collides("C:/a.pdf", "C:/Archive/document/a.pdf"));
+        assert!(target_collides("", "C:/Archive"));
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "rootup"
-version = "0.7.0-dev"
+version = "0.7.0"
 description = "RootUp - 面向学生的智能文件整理工具"
 authors = ["余烬"]
 license = "GPL-3.0-or-later"
