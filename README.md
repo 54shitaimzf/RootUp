@@ -6,7 +6,7 @@
 
 RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
 
-### 当前能力（v0.4.0）
+### 当前能力（v0.5.0）
 
 - Tauri v2 + React 桌面应用框架
 - 系统托盘驻留（打开 / 退出）
@@ -20,6 +20,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 搜索为核心：输入自动补全类别/状态/标签，问号内提供完整语法说明；筛选 chips 按使用频率排序
 - 可配置规则：忽略规则与分类映射各自独立弹窗编辑，附默认/编程开发/素材创作三套模板，支持保存为自定义方案随时套用（重启生效）
 - 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity 项目，自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
+- 新手引导与帮助中心：首次启动欢迎弹窗、侧栏全局帮助入口（新手入门 / 搜索与高级用法）、IDE 选择与官方下载指导、检测到代码项目但无 IDE 时按需引导
 
 ### 搜索语法
 
@@ -82,7 +83,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 RootUp is a smart file-organizing desktop app built for students. It auto-sorts downloads, archives files with one click, and turns scattered cleanup habits into reusable rules.
 
-### Current Features (v0.4.0)
+### Current Features (v0.5.0)
 
 - Tauri v2 + React desktop app framework
 - System tray with Open / Quit actions
