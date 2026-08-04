@@ -194,7 +194,7 @@ export function HomeworkView({
               >
                 <input
                   type="checkbox"
-                  checked={done}
+                  checked={done || archived}
                   disabled={archived}
                   onChange={() => {
                     if (item.status === "pending") {

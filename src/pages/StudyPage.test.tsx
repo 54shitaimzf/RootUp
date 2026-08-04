@@ -229,7 +229,9 @@ describe("StudyPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "标记完成" }));
     expect(checkbox).toBeChecked();
     fireEvent.click(within(row).getByRole("button", { name: "归档" }));
-    expect(within(row).getByRole("checkbox")).toBeDisabled();
+    const archivedCheckbox = within(row).getByRole("checkbox");
+    expect(archivedCheckbox).toBeDisabled();
+    expect(archivedCheckbox).toBeChecked();
   });
 
   it("恢复待办直接生效且不弹确认", () => {
@@ -509,5 +511,28 @@ describe("StudyPage", () => {
       (screen.getByLabelText("学期") as HTMLSelectElement).value,
     ).toBe("fall-2026");
     expect(screen.getByText("高等数学")).toBeInTheDocument();
+  });
+
+  it("已归档作业勾选框为选中态且标题保留划线", () => {
+    const data = createSeedStudyData();
+    data.homeworkBySemester["fall-2026"] = [
+      {
+        id: "arch",
+        courseId: null,
+        title: "已归档作业",
+        note: "",
+        details: "",
+        dueAt: "2026-07-01T23:59:00",
+        status: "archived",
+      },
+    ];
+    render(<StudyPage today={TODAY} initialData={data} />);
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    fireEvent.click(screen.getByRole("button", { name: "已归档" }));
+    const row = screen.getByText("已归档作业").closest("li")!;
+    const checkbox = within(row).getByRole("checkbox");
+    expect(checkbox).toBeDisabled();
+    expect(checkbox).toBeChecked();
+    expect(within(row).getByText("已归档作业")).toHaveClass("line-through");
   });
 });

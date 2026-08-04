@@ -156,9 +156,11 @@ export function CourseDetailDialog({
                       />
                       <span
                         className={`min-w-0 flex-1 truncate text-sm ${
-                          done || archived
+                          done
                             ? "text-slate-400 line-through dark:text-slate-500"
-                            : "text-strong"
+                            : archived
+                              ? "text-slate-400 dark:text-slate-500"
+                              : "text-strong"
                         }`}
                       >
                         {item.title}
