@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { CourseFormDialog } from "./CourseFormDialog";
 import { CourseScheduleView } from "./CourseScheduleView";
 import { HomeworkFormDialog } from "./HomeworkFormDialog";
@@ -215,7 +215,7 @@ describe("视图空态", () => {
     currentWeek: 1,
     today: new Date("2026-08-04T12:00:00"),
     onAdd: () => {},
-    onEdit: () => {},
+    onOpenDetail: () => {},
     onOpenCourseHomework: () => {},
   };
 
@@ -298,7 +298,7 @@ describe("视图空态", () => {
     expect(screen.getByText("课程")).toBeInTheDocument();
   });
 
-  it("课程表容器无圆角且课程卡为小圆角", () => {
+  it("课程表容器无圆角且课程卡收敛为最小圆角", () => {
     render(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}
@@ -310,11 +310,12 @@ describe("视图空态", () => {
     const card = screen
       .getByText("高等数学")
       .closest('[role="button"]') as HTMLElement;
-    expect(card.className).toContain("rounded-md");
+    expect(card.className).toContain("rounded-sm");
+    expect(card.className).not.toContain("rounded-md");
     expect(card.className).not.toContain("rounded-lg");
   });
 
-  it("周次徽章与今天标记使用小圆角而非胶囊", () => {
+  it("周次徽章与今天标记使用最小圆角而非胶囊", () => {
     render(
       <CourseScheduleView
         courses={[DEMO_COURSES[2]]}
@@ -323,10 +324,108 @@ describe("视图空态", () => {
       />,
     );
     const badge = screen.getByText("双周");
-    expect(badge.className).toContain("rounded-sm");
+    expect(badge.className).toContain("rounded-xs");
     expect(badge.className).not.toContain("rounded-full");
     const today = screen.getByText("今天");
-    expect(today.className).toContain("rounded-sm");
+    expect(today.className).toContain("rounded-xs");
     expect(today.className).not.toContain("rounded-full");
+  });
+
+  it("时间刻度移到表格外且表头不再有内部空列", () => {
+    const { container } = render(
+      <CourseScheduleView
+        courses={[DEMO_COURSES[0]]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    const axis = container.querySelector('[data-testid="time-axis"]');
+    expect(axis).not.toBeNull();
+    expect(within(axis as HTMLElement).getByText("08:00")).toBeInTheDocument();
+    const header = container.querySelector(
+      '[data-testid="schedule-header"]',
+    ) as HTMLElement;
+    const firstHeaderCell = header.firstElementChild as HTMLElement;
+    expect(firstHeaderCell.getAttribute("data-testid")).toBe("day-header-1");
+  });
+
+  it("错周同槽课程渲染为堆叠行而非左右分栏", () => {
+    const odd = {
+      ...DEMO_COURSES[0],
+      id: "odd",
+      weekRule: "odd" as const,
+    };
+    const even = {
+      ...DEMO_COURSES[0],
+      id: "even",
+      weekRule: "even" as const,
+    };
+    render(
+      <CourseScheduleView
+        courses={[odd, even]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    expect(screen.getByText("单周")).toBeInTheDocument();
+    expect(screen.getByText("双周")).toBeInTheDocument();
+    const oddCard = screen
+      .getByTestId("course-card-odd")
+      .closest('[role="button"]') as HTMLElement;
+    expect(oddCard.className).toContain("ring-slate-200/70");
+  });
+
+  it("四门同周重叠只显示两列并折叠为 +N", () => {
+    const base = {
+      ...DEMO_COURSES[0],
+      teacher: "",
+      location: "",
+    };
+    const courses = [0, 1, 2, 3].map((index) => ({
+      ...base,
+      id: `c-${index}`,
+      name: `课程${index + 1}`,
+      startMin: 480 + index * 20,
+      endMin: 580 + index * 20,
+    }));
+    render(
+      <CourseScheduleView
+        courses={courses}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "+2 门" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+2 门" }));
+    expect(
+      screen.getByRole("heading", { name: "该时段课程" }),
+    ).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "该时段课程" });
+    expect(within(dialog).getByText("课程1")).toBeInTheDocument();
+    expect(within(dialog).getByText("课程4")).toBeInTheDocument();
+  });
+
+  it("短课时卡片使用紧凑密度，长课时使用完整密度", () => {
+    const short = {
+      ...DEMO_COURSES[0],
+      id: "short",
+      startMin: 480,
+      endMin: 510,
+    };
+    render(
+      <CourseScheduleView
+        courses={[short, DEMO_COURSES[0]]}
+        homework={[]}
+        {...commonProps}
+      />,
+    );
+    expect(screen.getByTestId("course-card-short")).toHaveAttribute(
+      "data-density",
+      "compact",
+    );
+    expect(screen.getByTestId("course-card-c-demo-1")).toHaveAttribute(
+      "data-density",
+      "full",
+    );
   });
 });

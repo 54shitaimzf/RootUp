@@ -157,6 +157,137 @@ export function splitOverlaps(
 }
 
 /** 时间显示：中文 24 小时制，English 12 小时 AM/PM。 */
+/** 判断两门课的周次是否会在同一周上课（按 1–30 周采样）。*/
+export function weeksOverlap(
+  a: Pick<Course, "weekRule" | "weekRange">,
+  b: Pick<Course, "weekRule" | "weekRange">,
+): boolean {
+  const weeksA = weekSetOf(a.weekRule, a.weekRange);
+  const weeksB = weekSetOf(b.weekRule, b.weekRange);
+  for (const week of weeksA) {
+    if (weeksB.has(week)) return true;
+  }
+  return false;
+}
+
+function weekSetOf(rule: WeekRule, range: string | undefined): Set<number> {
+  if (rule === "all") {
+    return new Set(
+      Array.from({ length: WEEK_MAX }, (_, index) => index + 1),
+    );
+  }
+  if (rule === "odd") {
+    return new Set(
+      Array.from({ length: WEEK_MAX }, (_, index) => index + 1).filter(
+        (week) => week % 2 === 1,
+      ),
+    );
+  }
+  if (rule === "even") {
+    return new Set(
+      Array.from({ length: WEEK_MAX }, (_, index) => index + 1).filter(
+        (week) => week % 2 === 0,
+      ),
+    );
+  }
+  return parseWeekRange(range ?? "") ?? new Set<number>();
+}
+
+/** 时间轴内某个分钟值对应的顶部百分比（刻度与网格线共用，保证对齐）。*/
+export function axisTopPercent(
+  min: number,
+  axis: { start: number; end: number },
+): number {
+  const total = Math.max(1, axis.end - axis.start);
+  return ((min - axis.start) / total) * 100;
+}
+
+/** 课程卡内容密度：完整 / 标准 / 紧凑。*/
+export type CourseCardDensity = "full" | "standard" | "compact";
+
+export function courseCardDensity(heightPx: number): CourseCardDensity {
+  if (heightPx >= 64) return "full";
+  if (heightPx >= 40) return "standard";
+  return "compact";
+}
+
+/** 一个时段块内的一列（列上课程周次互斥）。*/
+export interface SlotColumn {
+  courses: Course[];
+  /** 列左偏移 0–100 */
+  left: number;
+  /** 列宽 0–100 */
+  width: number;
+}
+
+/** 时间连通分量的排布块：列 + 溢出 + 是否同周冲突。*/
+export interface SlotBlock {
+  startMin: number;
+  endMin: number;
+  columns: SlotColumn[];
+  /** 第 3 列起收起的课程，由 +N 入口打开 */
+  overflow: Course[];
+  conflict: boolean;
+}
+
+/**
+ * 同一天课程的排布：
+ * 1. 按时间重叠切成连通分量；
+ * 2. 分量内贪心分列，同列课程周次互斥（不会同周共上一门课）；
+ * 3. 最多显示 2 列，多余课程进入 overflow 由 +N 收起。
+ */
+export function layoutDayCourses(dayCourses: Course[]): SlotBlock[] {
+  const sorted = [...dayCourses].sort(
+    (a, b) => a.startMin - b.startMin || a.id.localeCompare(b.id),
+  );
+  const components: Course[][] = [];
+  let current: Course[] = [];
+  let groupEnd = -1;
+  for (const course of sorted) {
+    if (current.length === 0) {
+      current = [course];
+      groupEnd = course.endMin;
+    } else if (course.startMin < groupEnd) {
+      current.push(course);
+      groupEnd = Math.max(groupEnd, course.endMin);
+    } else {
+      components.push(current);
+      current = [course];
+      groupEnd = course.endMin;
+    }
+  }
+  if (current.length > 0) components.push(current);
+
+  return components.map((component) => {
+    const startMin = Math.min(...component.map((course) => course.startMin));
+    const endMin = Math.max(...component.map((course) => course.endMin));
+    const columns: Course[][] = [];
+    for (const course of component) {
+      const columnIndex = columns.findIndex((column) =>
+        column.every((member) => !weeksOverlap(member, course)),
+      );
+      if (columnIndex === -1) {
+        columns.push([course]);
+      } else {
+        columns[columnIndex].push(course);
+      }
+    }
+    const visible = columns.slice(0, 2);
+    const overflow = columns.slice(2).flat();
+    return {
+      startMin,
+      endMin,
+      columns: visible.map((courses, index) => ({
+        courses,
+        left: (index * 100) / Math.max(1, visible.length),
+        width: 100 / Math.max(1, visible.length),
+      })),
+      overflow,
+      conflict: columns.length > 1,
+    };
+  });
+}
+
 export function formatClock(min: number, lang: "zh-CN" | "en"): string {
   const hour = Math.floor(min / 60) % 24;
   const minute = String(min % 60).padStart(2, "0");

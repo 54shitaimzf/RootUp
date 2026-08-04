@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/PageHeader";
 import { SegmentedControl } from "../components/SegmentedControl";
+import { CalendarDays, ClipboardList } from "lucide-react";
+import { CourseDetailDialog } from "../features/study/CourseDetailDialog";
 import { CourseFormDialog } from "../features/study/CourseFormDialog";
 import { CourseScheduleView } from "../features/study/CourseScheduleView";
 import { HomeworkFormDialog } from "../features/study/HomeworkFormDialog";
@@ -32,6 +34,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
   const [showAllWeeks, setShowAllWeeks] = useState(true);
   const [courseFormOpen, setCourseFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [homeworkFormOpen, setHomeworkFormOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
   const [homeworkCourseFilter, setHomeworkCourseFilter] = useState<
@@ -64,6 +67,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
       ),
     );
     setHomeworkCourseFilter((prev) => (prev === id ? "all" : prev));
+    setSelectedCourse((prev) => (prev?.id === id ? null : prev));
   };
 
   const saveHomework = (draft: HomeworkDraft) => {
@@ -109,6 +113,10 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
     setView("homework");
   };
 
+  const pendingCount = homework.filter(
+    (item) => item.status === "pending",
+  ).length;
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
@@ -123,9 +131,19 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
           size="md"
           variant="tabs"
           options={[
-            { value: "schedule", label: t("study.viewSchedule") },
-            { value: "homework", label: t("study.viewHomework") },
+            {
+              value: "schedule",
+              label: t("study.viewSchedule"),
+              icon: CalendarDays,
+            },
+            {
+              value: "homework",
+              label: t("study.viewHomework"),
+              icon: ClipboardList,
+              badge: pendingCount,
+            },
           ]}
+          equal
         />
       </div>
 
@@ -143,10 +161,7 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
             setEditingCourse(null);
             setCourseFormOpen(true);
           }}
-          onEdit={(course) => {
-            setEditingCourse(course);
-            setCourseFormOpen(true);
-          }}
+          onOpenDetail={setSelectedCourse}
           onOpenCourseHomework={openCourseHomework}
         />
       ) : (
@@ -177,6 +192,29 @@ export function StudyPage({ today = new Date() }: { today?: Date }) {
         onSave={saveCourse}
         onDelete={deleteCourse}
         onClose={() => setCourseFormOpen(false)}
+      />
+      <CourseDetailDialog
+        open={selectedCourse !== null}
+        course={selectedCourse}
+        homework={
+          selectedCourse
+            ? homework.filter((item) => item.courseId === selectedCourse.id)
+            : []
+        }
+        today={today}
+        onEdit={() => {
+          if (!selectedCourse) return;
+          setEditingCourse(selectedCourse);
+          setCourseFormOpen(true);
+          setSelectedCourse(null);
+        }}
+        onDelete={deleteCourse}
+        onViewHomework={() => {
+          if (!selectedCourse) return;
+          openCourseHomework(selectedCourse.id);
+          setSelectedCourse(null);
+        }}
+        onClose={() => setSelectedCourse(null)}
       />
       <HomeworkFormDialog
         open={homeworkFormOpen}

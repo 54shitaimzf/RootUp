@@ -4,8 +4,10 @@ import {
   DEMO_HOMEWORK,
   autoAssignCourseColor,
   axisRange,
+  axisTopPercent,
   calendarDaysUntil,
   compareHomework,
+  courseCardDensity,
   coursePosition,
   daysUntilDue,
   filterHomework,
@@ -14,6 +16,7 @@ import {
   isOverdue,
   isValidWeekRange,
   jsDayToStudyDay,
+  layoutDayCourses,
   minToTime,
   overdueDays,
   parseWeekRange,
@@ -23,6 +26,7 @@ import {
   weekDaysOrder,
   weekNumberFromDate,
   weekParity,
+  weeksOverlap,
 } from "./study";
 
 describe("周次规则", () => {
@@ -122,6 +126,131 @@ describe("课程表几何", () => {
     expect(slots.a.width).toBeCloseTo(33.33, 1);
     expect(slots.b.width).toBeCloseTo(33.33, 1);
     expect(slots.c.width).toBeCloseTo(33.33, 1);
+  });
+});
+
+describe("周次互斥与时段排布", () => {
+  const base = {
+    id: "c",
+    name: "课程",
+    teacher: "",
+    location: "",
+    day: 1,
+    weekRule: "all" as const,
+    color: "sky" as const,
+  };
+
+  it("weeksOverlap 覆盖全周/单双周/指定周次矩阵", () => {
+    expect(weeksOverlap({ weekRule: "all" }, { weekRule: "odd" })).toBe(true);
+    expect(weeksOverlap({ weekRule: "odd" }, { weekRule: "even" })).toBe(false);
+    expect(weeksOverlap({ weekRule: "odd" }, { weekRule: "odd" })).toBe(true);
+    expect(
+      weeksOverlap(
+        { weekRule: "range", weekRange: "2-4" },
+        { weekRule: "range", weekRange: "3-5" },
+      ),
+    ).toBe(true);
+    expect(
+      weeksOverlap(
+        { weekRule: "range", weekRange: "2-4" },
+        { weekRule: "range", weekRange: "5-8" },
+      ),
+    ).toBe(false);
+    expect(
+      weeksOverlap({ weekRule: "range", weekRange: "0" }, { weekRule: "all" }),
+    ).toBe(false);
+  });
+
+  it("时间不重叠的课程拆成独立排布块", () => {
+    const a = { ...base, id: "a", startMin: 480, endMin: 580 };
+    const b = { ...base, id: "b", startMin: 600, endMin: 700 };
+    const blocks = layoutDayCourses([a, b]);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].startMin).toBe(480);
+    expect(blocks[1].startMin).toBe(600);
+  });
+
+  it("错周同槽课程合成一列堆叠，无冲突", () => {
+    const odd = {
+      ...base,
+      id: "odd",
+      startMin: 480,
+      endMin: 580,
+      weekRule: "odd" as const,
+    };
+    const even = {
+      ...base,
+      id: "even",
+      startMin: 480,
+      endMin: 580,
+      weekRule: "even" as const,
+    };
+    const blocks = layoutDayCourses([odd, even]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].conflict).toBe(false);
+    expect(blocks[0].columns).toHaveLength(1);
+    expect(blocks[0].columns[0].courses.map((c) => c.id)).toEqual([
+      "even",
+      "odd",
+    ]);
+    expect(blocks[0].columns[0].width).toBe(100);
+    expect(blocks[0].overflow).toHaveLength(0);
+  });
+
+  it("同周真重叠拆成两列并标记冲突", () => {
+    const a = { ...base, id: "a", startMin: 480, endMin: 580 };
+    const b = { ...base, id: "b", startMin: 500, endMin: 600 };
+    const blocks = layoutDayCourses([a, b]);
+    expect(blocks[0].conflict).toBe(true);
+    expect(blocks[0].columns).toHaveLength(2);
+    expect(blocks[0].columns[0].width).toBeCloseTo(50);
+    expect(blocks[0].columns[1].width).toBeCloseTo(50);
+  });
+
+  it("三门同周重叠只显示两列，第三门进入溢出", () => {
+    const a = { ...base, id: "a", startMin: 480, endMin: 580 };
+    const b = { ...base, id: "b", startMin: 500, endMin: 600 };
+    const c = { ...base, id: "c", startMin: 520, endMin: 620 };
+    const blocks = layoutDayCourses([a, b, c]);
+    expect(blocks[0].columns).toHaveLength(2);
+    expect(blocks[0].overflow.map((course) => course.id)).toEqual(["c"]);
+  });
+
+  it("起止不同但周次互斥的课程仍可并入同一列", () => {
+    const odd = {
+      ...base,
+      id: "odd",
+      startMin: 480,
+      endMin: 580,
+      weekRule: "odd" as const,
+    };
+    const even = {
+      ...base,
+      id: "even",
+      startMin: 500,
+      endMin: 600,
+      weekRule: "even" as const,
+    };
+    const blocks = layoutDayCourses([odd, even]);
+    expect(blocks[0].columns).toHaveLength(1);
+    expect(blocks[0].columns[0].courses).toHaveLength(2);
+  });
+});
+
+describe("课程卡密度与时间轴刻度", () => {
+  it("内容密度按高度分档", () => {
+    expect(courseCardDensity(28)).toBe("compact");
+    expect(courseCardDensity(39)).toBe("compact");
+    expect(courseCardDensity(40)).toBe("standard");
+    expect(courseCardDensity(63)).toBe("standard");
+    expect(courseCardDensity(64)).toBe("full");
+    expect(courseCardDensity(100)).toBe("full");
+  });
+
+  it("时间轴刻度百分比与网格线共用计算", () => {
+    expect(axisTopPercent(480, { start: 480, end: 720 })).toBe(0);
+    expect(axisTopPercent(600, { start: 480, end: 720 })).toBe(50);
+    expect(axisTopPercent(720, { start: 480, end: 720 })).toBe(100);
   });
 });
 

@@ -9,7 +9,7 @@ function renderStudy() {
 }
 
 describe("StudyPage", () => {
-  it("默认展示课程表与示例课程、当前周信息", () => {
+  it("默认显示课程表与示例课程、当前周信息，主切换为等宽图标页签", () => {
     const { container } = renderStudy();
     expect(
       screen.getByRole("heading", { name: "学业" }),
@@ -21,6 +21,15 @@ describe("StudyPage", () => {
     expect(
       container.querySelector('[data-testid="day-header-1"]'),
     ).toBeInTheDocument();
+    expect(
+      container.querySelector(".lucide-calendar-days"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".lucide-clipboard-list"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^课程表/ }).className,
+    ).toContain("flex-1");
   });
 
   it("周起始日切换后周日列排在最前", () => {
@@ -52,9 +61,17 @@ describe("StudyPage", () => {
     expect(screen.getByText("大学英语")).toBeInTheDocument();
   });
 
-  it("点击课程卡进入编辑并保存", () => {
+  it("点击课程卡进入详情，再从详情进入编辑并保存", () => {
     renderStudy();
     fireEvent.click(screen.getByRole("button", { name: /高等数学/ }));
+    expect(
+      screen.getByRole("heading", { name: "课程详情" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "编辑课程" }),
+    ).toBeNull();
+    const dialog = screen.getByRole("dialog", { name: "课程详情" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "编辑" }));
     expect(
       screen.getByRole("heading", { name: "编辑课程" }),
     ).toBeInTheDocument();
@@ -65,28 +82,70 @@ describe("StudyPage", () => {
     expect(screen.getByText("高等数学（进阶）")).toBeInTheDocument();
   });
 
+  it("课程详情展示完整信息与作业列表", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: /高等数学/ }));
+    const dialog = screen.getByRole("dialog", { name: "课程详情" });
+    expect(within(dialog).getByText("王老师")).toBeInTheDocument();
+    expect(within(dialog).getByText("教 101")).toBeInTheDocument();
+    expect(within(dialog).getByText("周一")).toBeInTheDocument();
+    expect(within(dialog).getByText("08:00–09:40")).toBeInTheDocument();
+    expect(within(dialog).getByText("全周")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("heading", { name: "课程作业" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("高等数学 作业 3")).toBeInTheDocument();
+    expect(within(dialog).getByText("待办")).toBeInTheDocument();
+  });
+
+  it("课程详情可查看该课作业", () => {
+    renderStudy();
+    fireEvent.click(screen.getByRole("button", { name: /高等数学/ }));
+    const dialog = screen.getByRole("dialog", { name: "课程详情" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "查看该课作业" }),
+    );
+    expect(screen.getByText("高等数学 作业 3")).toBeInTheDocument();
+    expect(
+      screen.queryByText("程序设计 实验报告"),
+    ).not.toBeInTheDocument();
+  });
+
   it("删除课程后作业保留并变为无课程", () => {
     renderStudy();
     fireEvent.click(screen.getByRole("button", { name: /线性代数/ }));
-    const deleteButtons = screen.getAllByRole("button", {
-      name: "删除课程",
-    });
-    fireEvent.click(deleteButtons[0]);
+    const dialog = screen.getByRole("dialog", { name: "课程详情" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "删除课程" }),
+    );
     const confirmButtons = screen.getAllByRole("button", {
       name: "删除课程",
     });
     fireEvent.click(confirmButtons[confirmButtons.length - 1]);
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     expect(screen.getByText("线性代数 习题 2")).toBeInTheDocument();
     expect(screen.getAllByText("无课程").length).toBeGreaterThan(0);
     expect(
-      screen.queryByRole("button", { name: "线性代数" }),
+      screen.queryByRole("button", { name: /线性代数/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("作业页签显示待办数量并在完成后更新", () => {
+    renderStudy();
+    const tab = screen.getByRole("button", { name: /^作业/ });
+    expect(within(tab).getByText("3")).toBeInTheDocument();
+    fireEvent.click(tab);
+    const row = screen.getByText("程序设计 实验报告").closest("li")!;
+    fireEvent.click(within(row).getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "标记完成" }));
+    expect(
+      within(screen.getByRole("button", { name: /^作业/ })).getByText("2"),
+    ).toBeInTheDocument();
   });
 
   it("添加作业后出现在列表", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     fireEvent.click(screen.getByRole("button", { name: "添加作业" }));
     fireEvent.change(screen.getByPlaceholderText("如：高数作业 3"), {
       target: { value: "新作业" },
@@ -97,7 +156,7 @@ describe("StudyPage", () => {
 
   it("勾选完成需确认，确认后可归档", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     const row = screen.getByText("程序设计 实验报告").closest("li")!;
     const checkbox = within(row).getByRole("checkbox");
     fireEvent.click(checkbox);
@@ -112,7 +171,7 @@ describe("StudyPage", () => {
 
   it("恢复待办直接生效且不弹确认", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     const row = screen.getByText("线性代数 习题 2").closest("li")!;
     const checkbox = within(row).getByRole("checkbox");
     expect(checkbox).toBeChecked();
@@ -125,7 +184,7 @@ describe("StudyPage", () => {
 
   it("详情可展开显示完整内容", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     const row = screen.getByText("高等数学 作业 3").closest("li")!;
     expect(
       within(row).queryByText(/完整推导过程/),
@@ -142,14 +201,18 @@ describe("StudyPage", () => {
 
   it("截止文案显示逾期天数与剩余天数", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
-    expect(screen.getByText(/已逾期 2 天 · 2026-08-02 23:59/)).toBeInTheDocument();
-    expect(screen.getByText(/2 天后截止 · 2026-08-06 18:00/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
+    expect(
+      screen.getByText(/已逾期 2 天 · 2026-08-02 23:59/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 天后截止 · 2026-08-06 18:00/),
+    ).toBeInTheDocument();
   });
 
   it("删除作业需确认", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     const row = screen.getByText("自学笔记整理").closest("li")!;
     fireEvent.click(within(row).getByRole("button", { name: "删除作业" }));
     const confirmButtons = screen.getAllByRole("button", {
@@ -171,7 +234,7 @@ describe("StudyPage", () => {
 
   it("筛选空态提示", () => {
     renderStudy();
-    fireEvent.click(screen.getByRole("button", { name: "作业" }));
+    fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     fireEvent.click(screen.getByRole("button", { name: "已归档" }));
     expect(screen.getByText("没有符合筛选条件的作业")).toBeInTheDocument();
   });
