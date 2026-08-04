@@ -132,6 +132,7 @@ export default {
     midnightError: "Course time cannot cross midnight",
     weekRangeInvalid: "Invalid week range",
     conflictWarning: "Time overlaps with {{names}}",
+    conflictBlocked: "Time overlaps with {{names}}; adjust the time or weeks before saving",
     duePastWarning: "Due time is in the past; it will show as overdue",
     dueSuggested: "Suggested from {{name}} schedule",
     date: "Date",

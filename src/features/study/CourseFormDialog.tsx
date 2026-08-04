@@ -204,6 +204,14 @@ export function CourseFormDialog({
       setError(t("study.formInvalid"));
       return;
     }
+    if (conflicts.length > 0) {
+      setError(
+        t("study.conflictBlocked", {
+          names: conflicts.map((course) => course.name).join("、"),
+        }),
+      );
+      return;
+    }
     setError(null);
     onSave({
       name,

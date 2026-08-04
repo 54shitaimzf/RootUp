@@ -237,7 +237,7 @@ describe("视图空态", () => {
   it("仅当前周且无匹配课程时提示", () => {
     render(
       <CourseScheduleView
-        courses={[DEMO_COURSES[3]]}
+        courses={[DEMO_COURSES[2]]}
         homework={[]}
         {...commonProps}
         showAllWeeks={false}
@@ -322,7 +322,7 @@ describe("视图空态", () => {
   it("周次徽章与今天标记使用最小圆角而非胶囊", () => {
     render(
       <CourseScheduleView
-        courses={[DEMO_COURSES[3]]}
+        courses={[DEMO_COURSES[2]]}
         homework={[]}
         {...commonProps}
       />,

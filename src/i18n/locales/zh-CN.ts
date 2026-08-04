@@ -129,6 +129,7 @@ export default {
     midnightError: "课程时间不能跨过午夜",
     weekRangeInvalid: "周次范围格式不正确",
     conflictWarning: "与 {{names}} 时间重叠",
+    conflictBlocked: "与 {{names}} 时间重叠，请调整时间或周次后保存",
     duePastWarning: "截止时间已过，将显示为逾期",
     dueSuggested: "已按“{{name}}”上课时间建议",
     date: "日期",

@@ -522,17 +522,6 @@ export const DEMO_COURSES: Course[] = [
     color: "sky",
   },
   {
-    id: "c-demo-4",
-    name: "大学英语",
-    teacher: "陈老师",
-    location: "外语楼 203",
-    day: 1,
-    startMin: 510,
-    endMin: 610,
-    weekRule: "all",
-    color: "rose",
-  },
-  {
     id: "c-demo-2",
     name: "程序设计",
     teacher: "李老师",

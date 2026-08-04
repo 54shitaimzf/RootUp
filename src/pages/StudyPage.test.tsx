@@ -19,7 +19,6 @@ describe("StudyPage", () => {
       screen.getByRole("heading", { name: "学业" }),
     ).toBeInTheDocument();
     expect(screen.getByText("高等数学")).toBeInTheDocument();
-    expect(screen.getByText("大学英语")).toBeInTheDocument();
     expect(screen.getByText("程序设计")).toBeInTheDocument();
     expect(screen.getByText("线性代数")).toBeInTheDocument();
     expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();
@@ -61,6 +60,9 @@ describe("StudyPage", () => {
     expect(screen.getByText(/请检查填写内容/)).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
       target: { value: "大学英语" },
+    });
+    fireEvent.change(screen.getByLabelText("星期"), {
+      target: { value: "2" },
     });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByText("大学英语")).toBeInTheDocument();

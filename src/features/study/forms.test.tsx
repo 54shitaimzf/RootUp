@@ -57,9 +57,18 @@ describe("CourseFormDialog 智能表单", () => {
     expect(screen.getByText("已自动调整结束时间")).toBeInTheDocument();
   });
 
-  it("同周重叠课程实时显示冲突警告", () => {
-    renderCourseForm({ existingCourses: [DEMO_COURSES[0]] });
+  it("同周重叠课程实时警告且保存被拦截", () => {
+    const onSave = vi.fn();
+    renderCourseForm({ existingCourses: [DEMO_COURSES[0]], onSave });
     expect(screen.getByText("与 高等数学 时间重叠")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
+      target: { value: "大学英语" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("与 高等数学 时间重叠，请调整时间或周次后保存"),
+    ).toBeInTheDocument();
   });
 
   it("周次范围失焦时归一化全角与“周”字", () => {

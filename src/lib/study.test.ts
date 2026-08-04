@@ -506,7 +506,7 @@ describe("作业排序与筛选", () => {
 
 describe("示例数据", () => {
   it("示例课程与作业完整且关联一致", () => {
-    expect(DEMO_COURSES).toHaveLength(4);
+    expect(DEMO_COURSES).toHaveLength(3);
     expect(DEMO_HOMEWORK).toHaveLength(4);
     const courseIds = new Set(DEMO_COURSES.map((course) => course.id));
     for (const item of DEMO_HOMEWORK) {
