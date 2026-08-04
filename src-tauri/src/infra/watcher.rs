@@ -30,6 +30,7 @@ const TICK_INTERVAL: Duration = Duration::from_millis(200);
 struct Pending {
     first_seen: Instant,
     last_sample: Option<u64>,
+    last_sample_at: Option<Instant>,
 }
 
 /// 事件处理器：纯业务逻辑（无 Tauri、无 notify 类型依赖）。
@@ -114,6 +115,7 @@ impl EventProcessor {
                     Pending {
                         first_seen: Instant::now(),
                         last_sample: None,
+                        last_sample_at: None,
                     },
                 );
             }
@@ -164,6 +166,11 @@ impl EventProcessor {
             if elapsed < self.params.first_sample_delay {
                 continue;
             }
+            if let Some(prev_at) = pending.last_sample_at {
+                if prev_at.elapsed() < self.params.sample_gap {
+                    continue;
+                }
+            }
             let size = std::fs::metadata(path).ok().map(|m| m.len());
             let openable = OpenOptions::new()
                 .read(true)
@@ -188,6 +195,9 @@ impl EventProcessor {
                     // 文件已不存在：视同删除
                     deleted.push(path.clone());
                 }
+            }
+            if size.is_some() {
+                pending.last_sample_at = Some(Instant::now());
             }
         }
 
@@ -329,6 +339,7 @@ impl WatchService {
         if self.handle.is_some() {
             return;
         }
+        self.running.store(true, Ordering::SeqCst);
         let processor = Arc::new(Mutex::new(EventProcessor::with_skip_roots(
             self.store.clone(),
             self.classifier.clone(),
@@ -361,7 +372,6 @@ impl WatchService {
                 }
             })
             .expect("watcher 线程创建失败");
-        self.running.store(true, Ordering::SeqCst);
         self.handle = Some(handle);
     }
 
@@ -618,6 +628,57 @@ mod tests {
     }
 
     #[test]
+    fn sample_gap_prevents_early_stability() {
+        let dir = temp_dir("gap");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            StabilityParams {
+                first_sample_delay: Duration::ZERO,
+                sample_gap: Duration::from_millis(200),
+                force_timeout: Duration::from_secs(5),
+                debounce_window: Duration::ZERO,
+            },
+            |_| {},
+        );
+        let good = dir.join("gap.pdf");
+        fs::write(&good, b"content").unwrap();
+        processor.handle_event(&NormalizedEvent {
+            path: good.clone(),
+            kind: FileEventKind::Created,
+            is_dir: false,
+        });
+
+        // 第一次采样建立基线
+        processor.tick();
+        // 采样间隔内再次 tick 不应判定稳定
+        processor.tick();
+        assert_eq!(
+            store.lock().unwrap().count().unwrap(),
+            0,
+            "采样间隔内不应入库"
+        );
+
+        // 超过 sample_gap 后再次采样 → 稳定并入库
+        std::thread::sleep(Duration::from_millis(250));
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(2),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 1
+                },
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "超过采样间隔后应判定稳定并入库"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn skip_roots_ignore_events_below_root() {
         let store: Arc<Mutex<dyn IndexStore>> = Arc::new(Mutex::new(
             SqliteIndexStore::open(":memory:").expect("内存库打开失败"),
@@ -680,6 +741,39 @@ mod tests {
         });
         processor.tick();
         assert_eq!(store.lock().unwrap().count().unwrap(), 0);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn start_marks_running_before_return() {
+        let dir = temp_dir("start");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut service = WatchService::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        )
+        .unwrap();
+        service.add_dir(&dir).unwrap();
+        service.start();
+        assert!(
+            service.running.load(Ordering::SeqCst),
+            "start 返回后 running 必须为 true（线程不得先观察到 false 而退出）"
+        );
+
+        fs::write(dir.join("hello.txt"), b"x").unwrap();
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(5),
+                || store.lock().unwrap().count().unwrap() == 1,
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "启动后应立即处理事件"
+        );
+        service.stop();
         fs::remove_dir_all(&dir).unwrap();
     }
 

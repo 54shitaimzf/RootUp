@@ -57,6 +57,13 @@ pub trait IndexStore: Send + Sync {
     fn all_records(&self) -> Result<Vec<FileRecord>, String>;
     /// 仅更新 labels 列（保留 first_seen/modified）。
     fn update_labels(&mut self, path: &str, labels: &str) -> Result<(), String>;
+    /// 批量仅更新 labels 列（单事务，保留 first_seen/modified）。
+    fn update_labels_batch(&mut self, updates: &[(String, String)]) -> Result<(), String> {
+        for (path, labels) in updates {
+            self.update_labels(path, labels)?;
+        }
+        Ok(())
+    }
     /// 按名称/路径模糊搜索。
     #[allow(dead_code)]
     fn search(&self, text: &str, limit: i64) -> Result<Vec<FileRecord>, String> {

@@ -14,7 +14,15 @@ pub fn load_settings(app: &AppHandle) -> Settings {
             log::warn!("settings: 损坏备份失败: {e}");
         }
     }
-    let store = app.store(SETTINGS_FILE).expect("无法打开设置存储");
+    let store = match app.store(SETTINGS_FILE) {
+        Ok(store) => store,
+        Err(e) => {
+            log::warn!("settings: 无法打开设置存储，回退默认值: {e}");
+            let mut settings = Settings::default();
+            settings.migrate();
+            return settings;
+        }
+    };
     let mut settings: Settings = store
         .get(SETTINGS_KEY)
         .and_then(|value| serde_json::from_value(value).ok())

@@ -208,6 +208,25 @@ impl IndexStore for SqliteIndexStore {
         Ok(())
     }
 
+    fn update_labels_batch(&mut self, updates: &[(String, String)]) -> Result<(), String> {
+        if updates.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        {
+            let mut stmt = tx
+                .prepare("UPDATE files SET labels = ?1 WHERE path = ?2")
+                .map_err(|e| e.to_string())?;
+            for (path, labels) in updates {
+                stmt.execute(params![labels, path])
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn query(&self, query: &FileQuery) -> Result<QueryPage, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let limit = if query.limit <= 0 {
@@ -249,7 +268,7 @@ impl IndexStore for SqliteIndexStore {
                 query
                     .labels
                     .iter()
-                    .map(|label| Value::Text(format!("%,{}%", label))),
+                    .map(|label| Value::Text(format!("%,{},%", label))),
             );
         }
         if !query.states.is_empty() {
@@ -457,7 +476,7 @@ impl IndexStore for SqliteIndexStore {
             let pattern = format!("{}/%", escape_like(root));
             changed += tx
                 .execute(
-                    "UPDATE files SET state = ?1 WHERE state != ?1 AND (path = ?2 OR path LIKE ?3 ESCAPE '\\')",
+                    "UPDATE files SET state = ?1 WHERE state != ?1 AND (LOWER(path) = LOWER(?2) OR path LIKE ?3 ESCAPE '\\')",
                     params![FileState::Deleted.as_str(), root, pattern],
                 )
                 .map_err(|e| e.to_string())? as i64;
@@ -488,7 +507,9 @@ impl IndexStore for SqliteIndexStore {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare(
-                "SELECT batch_id, MIN(kind), COUNT(*), MIN(created_at), MAX(dest), \
+                "SELECT batch_id, MIN(kind), COUNT(*), MIN(created_at), \
+                 (SELECT dest FROM archive_ops o2 WHERE o2.batch_id = archive_ops.batch_id \
+                  ORDER BY o2.id LIMIT 1), \
                  SUM(CASE WHEN undone_at IS NULL THEN 1 ELSE 0 END) \
                  FROM archive_ops GROUP BY batch_id ORDER BY MIN(created_at) DESC LIMIT ?1",
             )
@@ -734,6 +755,70 @@ mod tests {
         assert_eq!(got.labels, "document,course-c-demo-1");
         assert_eq!(got.first_seen, 1000);
         assert_eq!(got.modified, 1000);
+    }
+
+    #[test]
+    fn label_filter_matches_exact_key_not_prefix() {
+        let mut s = store();
+        s.upsert(&record_with(
+            "C:/a/course-1.pdf",
+            1,
+            100,
+            "pdf",
+            "document,course-1",
+            "indexed",
+        ))
+        .unwrap();
+        s.upsert(&record_with(
+            "C:/b/course-10.pdf",
+            1,
+            200,
+            "pdf",
+            "document,course-10",
+            "indexed",
+        ))
+        .unwrap();
+
+        let page = s
+            .query(&FileQuery {
+                labels: vec!["course-1".into()],
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1, "course-1 不应误命中 course-10");
+        assert_eq!(page.items[0].name, "course-1.pdf");
+
+        let page = s
+            .query(&FileQuery {
+                labels: vec!["course".into()],
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 0, "裸 course 不应命中 course-1/course-10");
+    }
+
+    #[test]
+    fn update_labels_batch_updates_all_and_preserves_meta() {
+        let mut s = store();
+        s.upsert(&record("C:/a.pdf", 1, 100)).unwrap();
+        s.upsert(&record("C:/b.pdf", 1, 200)).unwrap();
+
+        s.update_labels_batch(&[
+            ("C:/a.pdf".to_string(), "document".to_string()),
+            ("C:/b.pdf".to_string(), "image".to_string()),
+        ])
+        .unwrap();
+
+        let a = s.get_by_path("C:/a.pdf").unwrap().unwrap();
+        let b = s.get_by_path("C:/b.pdf").unwrap().unwrap();
+        assert_eq!(a.labels, "document");
+        assert_eq!(b.labels, "image");
+        assert_eq!(a.first_seen, 100);
+        assert_eq!(a.modified, 100);
+        assert_eq!(b.first_seen, 200);
+        assert_eq!(b.modified, 200);
     }
 
     #[test]

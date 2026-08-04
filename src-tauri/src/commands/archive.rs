@@ -7,12 +7,14 @@ use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector, ProjectKind};
 use crate::core::query::parse_query;
+use crate::core::settings::Settings;
 use crate::infra::archive_engine::{
-    archive_files as engine_archive_files, now_millis, undo_one_file,
+    apply_project_journal, archive_files as engine_archive_files, next_batch_id, now_millis,
+    remap_target, undo_one_file, ProjectJournal, ProjectLinkEffect, ProjectSideEffects,
 };
 use crate::infra::shortcut;
 use crate::infra::storage;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
@@ -36,7 +38,7 @@ pub fn archive_files(app: AppHandle, paths: Vec<String>) -> Result<ArchiveOutcom
         return Err("没有选择文件".to_string());
     }
     let paths: Vec<String> = paths.into_iter().map(|p| normalize_path(&p)).collect();
-    let batch_id = now_millis();
+    let batch_id = next_batch_id();
     let outcome = engine_archive_files(&store(&app), &root, &paths, batch_id)?;
     if outcome.archived == 0 {
         let first = outcome
@@ -72,7 +74,7 @@ pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome,
         return Err("当前筛选没有可归档的文件".to_string());
     }
     let paths: Vec<String> = page.items.into_iter().map(|r| r.path).collect();
-    let batch_id = now_millis();
+    let batch_id = next_batch_id();
     let outcome = engine_archive_files(&store(&app), &root, &paths, batch_id)?;
     if outcome.archived == 0 {
         let first = outcome
@@ -95,6 +97,7 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
     let path = normalize_path(&path);
     let root = require_root(&app)?;
     let mut settings = storage::load_settings(&app);
+    let settings_backup = settings.clone();
     let detector = FeatureDetector;
     let projects = discover_projects(&settings.watched_dirs, &settings.project_dirs, &detector);
     let info = projects
@@ -117,66 +120,60 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建归档目录失败: {e}"))?;
     }
+    let store = store(&app);
+    let store_arc = store.inner().clone();
+    // 移动前登记快捷方式清单（失败回滚需要归档前目标）
+    let links: Vec<ProjectLinkEffect> = store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .shortcuts_under(&path)?
+        .into_iter()
+        .map(|link| ProjectLinkEffect {
+            lnk_path: link.lnk_path,
+            original_target: link.target_path.clone(),
+            new_target: remap_target(&link.target_path, &path, &dest.to_string_lossy()),
+        })
+        .collect();
     std::fs::rename(dir, &dest).map_err(|e| move_error(&path, e))?;
     let dest_str = normalize_path(&dest.to_string_lossy());
-    let batch_id = now_millis();
-    let journal_result = (|| -> Result<(), String> {
-        settings.project_dirs = settings
-            .project_dirs
-            .iter()
-            .map(|d| {
-                if path_key(d) == path_key(&path) {
-                    dest_str.clone()
-                } else {
-                    d.clone()
-                }
-            })
-            .collect();
-        storage::save_settings(&app, &settings)?;
-
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let icon_dir = app
+    let batch_id = next_batch_id();
+    settings.project_dirs = settings
+        .project_dirs
+        .iter()
+        .map(|d| {
+            if path_key(d) == path_key(&path) {
+                dest_str.clone()
+            } else {
+                d.clone()
+            }
+        })
+        .collect();
+    let effects = ProjectSideEffects {
+        settings,
+        settings_backup,
+        links,
+        kind: info.kind,
+        insert_op: Some(ArchiveOp {
+            id: 0,
+            batch_id,
+            kind: "project".to_string(),
+            source: path.clone(),
+            dest: dest_str.clone(),
+            created_at: now_millis(),
+            undone_at: None,
+        }),
+    };
+    let journal = TauriProjectJournal {
+        app: &app,
+        exe: std::env::current_exe().map_err(|e| e.to_string())?,
+        icon_dir: app
             .path()
             .app_cache_dir()
             .map_err(|e| e.to_string())?
-            .join("shortcut-icons");
-        let store = store(&app);
-        let links = store
-            .lock()
-            .map_err(|e| e.to_string())?
-            .shortcuts_under(&path)?;
-        for link in links {
-            shortcut::rewrite_project_shortcut_at(
-                Path::new(&link.lnk_path),
-                &dest_str,
-                info.kind,
-                &exe,
-                &icon_dir,
-            )?;
-            store
-                .lock()
-                .map_err(|e| e.to_string())?
-                .update_shortcut_target(&link.lnk_path, &dest_str)?;
-            log::info!("shortcut: 重写 lnk={} -> {dest_str}", link.lnk_path);
-        }
-        store
-            .lock()
-            .map_err(|e| e.to_string())?
-            .insert_archive_op(&ArchiveOp {
-                id: 0,
-                batch_id,
-                kind: "project".to_string(),
-                source: path.clone(),
-                dest: dest_str.clone(),
-                created_at: now_millis(),
-                undone_at: None,
-            })?;
-        Ok(())
-    })();
-    if let Err(e) = journal_result {
-        let _ = std::fs::rename(&dest, &path);
-        return Err(format!("归档项目失败，已还原: {e}"));
-    }
+            .join("shortcut-icons"),
+        store: store_arc,
+    };
+    apply_project_journal(&effects, &journal, &dest_str, &path)?;
     log::info!("archive: 项目 {path} -> {dest_str}");
     Ok(ArchiveOutcome {
         batch_id: Some(batch_id),
@@ -245,9 +242,24 @@ fn undo_project(
     if !Path::new(&op.dest).is_dir() {
         return Err(format!("归档目标已不存在: {}", op.dest));
     }
-    std::fs::rename(&op.dest, &op.source).map_err(|e| move_error(&op.dest, e))?;
-
     let mut settings = storage::load_settings(app);
+    let settings_backup = settings.clone();
+    let kind = FeatureDetector
+        .detect(Path::new(&op.dest))
+        .unwrap_or(ProjectKind::Generic);
+    // 移动前登记快捷方式清单（失败回滚需要归档态目标）
+    let links: Vec<ProjectLinkEffect> = store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .shortcuts_under(&op.dest)?
+        .into_iter()
+        .map(|link| ProjectLinkEffect {
+            lnk_path: link.lnk_path,
+            original_target: link.target_path.clone(),
+            new_target: remap_target(&link.target_path, &op.dest, &op.source),
+        })
+        .collect();
+    std::fs::rename(&op.dest, &op.source).map_err(|e| move_error(&op.dest, e))?;
     settings.project_dirs = settings
         .project_dirs
         .iter()
@@ -259,37 +271,70 @@ fn undo_project(
             }
         })
         .collect();
-    storage::save_settings(app, &settings)?;
-
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let icon_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("shortcut-icons");
-    let kind = FeatureDetector
-        .detect(Path::new(&op.source))
-        .unwrap_or(ProjectKind::Generic);
-    let links = store
-        .lock()
-        .map_err(|e| e.to_string())?
-        .shortcuts_under(&op.dest)?;
-    for link in links {
-        shortcut::rewrite_project_shortcut_at(
-            Path::new(&link.lnk_path),
-            &op.source,
-            kind,
-            &exe,
-            &icon_dir,
-        )?;
-        store
-            .lock()
+    let effects = ProjectSideEffects {
+        settings,
+        settings_backup,
+        links,
+        kind,
+        insert_op: None,
+    };
+    let journal = TauriProjectJournal {
+        app,
+        exe: std::env::current_exe().map_err(|e| e.to_string())?,
+        icon_dir: app
+            .path()
+            .app_cache_dir()
             .map_err(|e| e.to_string())?
-            .update_shortcut_target(&link.lnk_path, &op.source)?;
-        log::info!("shortcut: 重写 lnk={} -> {}", link.lnk_path, op.source);
-    }
+            .join("shortcut-icons"),
+        store: store.clone(),
+    };
+    apply_project_journal(&effects, &journal, &op.source, &op.dest)?;
     log::info!("archive: 撤销项目 {} <- {}", op.source, op.dest);
     Ok(())
+}
+
+/// Tauri 侧的项目 journal 实现：settings 持久化、快捷方式重建与索引登记。
+struct TauriProjectJournal<'a> {
+    app: &'a AppHandle,
+    exe: PathBuf,
+    icon_dir: PathBuf,
+    store: Arc<Mutex<dyn IndexStore>>,
+}
+
+impl ProjectJournal for TauriProjectJournal<'_> {
+    fn save_settings(&self, settings: &Settings) -> Result<(), String> {
+        storage::save_settings(self.app, settings)
+    }
+
+    fn rewrite_shortcut(
+        &self,
+        lnk_path: &str,
+        target: &str,
+        kind: ProjectKind,
+    ) -> Result<(), String> {
+        shortcut::rewrite_project_shortcut_at(
+            Path::new(lnk_path),
+            target,
+            kind,
+            &self.exe,
+            &self.icon_dir,
+        )
+    }
+
+    fn update_shortcut_target(&self, lnk_path: &str, target: &str) -> Result<(), String> {
+        self.store
+            .lock()
+            .map_err(|e| e.to_string())?
+            .update_shortcut_target(lnk_path, target)
+    }
+
+    fn insert_archive_op(&self, op: &ArchiveOp) -> Result<(), String> {
+        self.store
+            .lock()
+            .map_err(|e| e.to_string())?
+            .insert_archive_op(op)
+            .map(|_| ())
+    }
 }
 
 /// 最近归档批次列表。

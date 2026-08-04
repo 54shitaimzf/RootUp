@@ -88,6 +88,7 @@ pub fn reapply_labels(
 ) -> Result<i64, String> {
     let records = store.all_records()?;
     let mut changed = 0_i64;
+    let mut updates: Vec<(String, String)> = Vec::new();
     for record in &records {
         let input = ClassifyInput {
             name: &record.name,
@@ -98,10 +99,11 @@ pub fn reapply_labels(
         let labels = classifier.labels(&input);
         let joined = labels.join(",");
         if joined != record.labels {
-            store.update_labels(&record.path, &joined)?;
+            updates.push((record.path.clone(), joined));
             changed += 1;
         }
     }
+    store.update_labels_batch(&updates)?;
     Ok(changed)
 }
 

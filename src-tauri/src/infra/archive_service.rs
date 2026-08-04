@@ -1,7 +1,7 @@
 //! 自动归档后台队列：新稳定文件入队，worker 单线程串行归档。
 use crate::core::archive::AUTO_QUEUE_CAPACITY;
 use crate::core::index::IndexStore;
-use crate::infra::archive_engine::{archive_files, now_millis};
+use crate::infra::archive_engine::{archive_files, next_batch_id};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -62,6 +62,7 @@ impl ArchiveService {
         if self.handle.lock().unwrap().is_some() {
             return;
         }
+        self.inner.running.store(true, Ordering::SeqCst);
         let inner = self.inner.clone();
         let handle = std::thread::Builder::new()
             .name("rootup-archiver".into())
@@ -81,7 +82,7 @@ impl ArchiveService {
                 if root.is_empty() {
                     continue;
                 }
-                let batch_id = now_millis();
+                let batch_id = next_batch_id();
                 match archive_files(&inner.store, &root, std::slice::from_ref(&path), batch_id) {
                     Ok(outcome) => {
                         log::info!(
@@ -95,7 +96,6 @@ impl ArchiveService {
                 }
             })
             .expect("自动归档线程创建失败");
-        self.inner.running.store(true, Ordering::SeqCst);
         *self.handle.lock().unwrap() = Some(handle);
     }
 }
@@ -160,6 +160,10 @@ mod tests {
 
         let mut service = ArchiveService::new(store, root.clone(), true);
         service.start();
+        assert!(
+            service.inner.running.load(Ordering::SeqCst),
+            "start 返回后 running 必须为 true（线程不得先观察到 false 而退出）"
+        );
         service.enqueue(normalize_path(&src.to_string_lossy()));
 
         let mut moved = false;

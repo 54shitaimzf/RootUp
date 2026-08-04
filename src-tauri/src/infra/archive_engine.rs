@@ -4,16 +4,133 @@ use crate::core::archive::{
     ArchiveOutcome, UNDO_KEEP_BATCHES,
 };
 use crate::core::index::IndexStore;
-use crate::core::path::normalize_path;
+use crate::core::path::{normalize_path, path_key};
+use crate::core::project::ProjectKind;
+use crate::core::settings::Settings;
 use std::path::Path;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// 批次号分配：进程内严格递增，基准为毫秒时间戳×1000，
+/// 保证同一毫秒内的多个批次不会共用同一 id（无需数据库 schema 变更）。
+static NEXT_BATCH_ID: AtomicI64 = AtomicI64::new(0);
 
 pub fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+/// 分配下一个归档批次号（进程内单调递增）。
+pub fn next_batch_id() -> i64 {
+    let base = now_millis().saturating_mul(1000);
+    let mut current = NEXT_BATCH_ID.load(Ordering::Relaxed);
+    loop {
+        let next = base.max(current) + 1;
+        match NEXT_BATCH_ID.compare_exchange_weak(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return next,
+            Err(actual) => current = actual,
+        }
+    }
+}
+
+/// 把快捷方式目标从 `from_root` 重映射到 `to_root`（保持相对子路径）。
+pub fn remap_target(target: &str, from_root: &str, to_root: &str) -> String {
+    let from = normalize_path(from_root);
+    let to = normalize_path(to_root);
+    let target = normalize_path(target);
+    if path_key(&target) == path_key(&from) {
+        return to;
+    }
+    if let Some(rel) = target.strip_prefix(&format!("{from}/")) {
+        return format!("{to}/{rel}");
+    }
+    target
+}
+
+/// 项目 journal 中单条快捷方式的联动：应用写入 `new_target`，失败回滚到 `original_target`。
+#[derive(Debug, Clone)]
+pub struct ProjectLinkEffect {
+    pub lnk_path: String,
+    pub original_target: String,
+    pub new_target: String,
+}
+
+/// 项目归档/撤销的副作用清单（settings 新值与回滚备份、快捷方式联动、可选归档日志）。
+pub struct ProjectSideEffects {
+    pub settings: Settings,
+    pub settings_backup: Settings,
+    pub links: Vec<ProjectLinkEffect>,
+    pub kind: ProjectKind,
+    pub insert_op: Option<ArchiveOp>,
+}
+
+/// 项目 journal 的外部副作用注入：命令层提供 Tauri 实现，测试可注入故障。
+pub trait ProjectJournal {
+    fn save_settings(&self, settings: &Settings) -> Result<(), String>;
+    fn rewrite_shortcut(
+        &self,
+        lnk_path: &str,
+        target: &str,
+        kind: ProjectKind,
+    ) -> Result<(), String>;
+    fn update_shortcut_target(&self, lnk_path: &str, target: &str) -> Result<(), String>;
+    fn insert_archive_op(&self, op: &ArchiveOp) -> Result<(), String>;
+}
+
+/// 应用项目移动后的 journal；任一步失败时尽力完整回滚：
+/// settings 还原、快捷方式目标还原、目录移回 `dir_back`，然后返回原始错误。
+pub fn apply_project_journal(
+    effects: &ProjectSideEffects,
+    ops: &dyn ProjectJournal,
+    dir_current: &str,
+    dir_back: &str,
+) -> Result<(), String> {
+    let apply = (|| -> Result<(), String> {
+        ops.save_settings(&effects.settings)?;
+        for link in &effects.links {
+            ops.rewrite_shortcut(&link.lnk_path, &link.new_target, effects.kind)?;
+            ops.update_shortcut_target(&link.lnk_path, &link.new_target)?;
+            log::info!(
+                "shortcut: 重写 lnk={} -> {}",
+                link.lnk_path,
+                link.new_target
+            );
+        }
+        if let Some(op) = &effects.insert_op {
+            ops.insert_archive_op(op)?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = apply {
+        if let Err(e) = ops.save_settings(&effects.settings_backup) {
+            log::error!("archive: 回滚设置失败: {e}");
+        }
+        for link in &effects.links {
+            if let Err(e) =
+                ops.rewrite_shortcut(&link.lnk_path, &link.original_target, effects.kind)
+            {
+                log::error!("archive: 回滚快捷方式 {} 失败: {e}", link.lnk_path);
+            }
+            if let Err(e) = ops.update_shortcut_target(&link.lnk_path, &link.original_target) {
+                log::error!("archive: 回滚快捷方式登记 {} 失败: {e}", link.lnk_path);
+            }
+        }
+        if Path::new(dir_current).exists() {
+            if let Err(e) = std::fs::rename(dir_current, dir_back) {
+                log::error!("archive: 回滚目录移动 {dir_current} -> {dir_back} 失败: {e}");
+            }
+        }
+        return Err(error);
+    }
+    Ok(())
 }
 
 /// 批量归档文件：逐文件执行，部分失败保留成功项；结束后裁剪旧日志。
@@ -184,6 +301,304 @@ mod tests {
         let mut r = FileRecord::new(path, 10, 1, "indexed");
         r.labels = labels.to_string();
         r
+    }
+
+    #[test]
+    fn next_batch_id_is_unique_and_increasing() {
+        let mut seen = std::collections::HashSet::new();
+        let mut previous = i64::MIN;
+        for _ in 0..5000 {
+            let id = next_batch_id();
+            assert!(seen.insert(id), "批次号重复: {id}");
+            assert!(id > previous, "批次号未递增: {id} <= {previous}");
+            previous = id;
+        }
+    }
+
+    #[test]
+    fn remap_target_keeps_relative_subpath() {
+        assert_eq!(
+            remap_target("C:/proj", "C:/proj", "C:/Archive/项目/proj"),
+            "C:/Archive/项目/proj"
+        );
+        assert_eq!(
+            remap_target("C:/proj/sub/a", "C:/proj", "C:/Archive/项目/proj"),
+            "C:/Archive/项目/proj/sub/a"
+        );
+        assert_eq!(
+            remap_target("C:/other", "C:/proj", "C:/Archive/x"),
+            "C:/other"
+        );
+    }
+
+    fn test_settings(dirs: &[&str]) -> Settings {
+        Settings {
+            project_dirs: dirs.iter().map(|d| d.to_string()).collect(),
+            ..Settings::default()
+        }
+    }
+
+    struct RecordingJournal {
+        store: Arc<Mutex<dyn IndexStore>>,
+        calls: Arc<Mutex<Vec<String>>>,
+        fail_save: bool,
+        fail_rewrite_target: Option<String>,
+        fail_insert: bool,
+    }
+
+    impl ProjectJournal for RecordingJournal {
+        fn save_settings(&self, settings: &Settings) -> Result<(), String> {
+            let mut calls = self.calls.lock().unwrap();
+            calls.push(format!("save:{}", settings.project_dirs.join("|")));
+            let is_first = calls.len() == 1;
+            if self.fail_save && is_first {
+                return Err("注入: 设置保存失败".into());
+            }
+            Ok(())
+        }
+
+        fn rewrite_shortcut(
+            &self,
+            lnk_path: &str,
+            target: &str,
+            _kind: ProjectKind,
+        ) -> Result<(), String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("rewrite:{lnk_path}->{target}"));
+            if self
+                .fail_rewrite_target
+                .as_deref()
+                .is_some_and(|t| t == target)
+            {
+                return Err("注入: 快捷方式重写失败".into());
+            }
+            Ok(())
+        }
+
+        fn update_shortcut_target(&self, lnk_path: &str, target: &str) -> Result<(), String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("update:{lnk_path}->{target}"));
+            self.store
+                .lock()
+                .map_err(|e| e.to_string())?
+                .update_shortcut_target(lnk_path, target)
+        }
+
+        fn insert_archive_op(&self, op: &ArchiveOp) -> Result<(), String> {
+            self.calls.lock().unwrap().push("insert".into());
+            if self.fail_insert {
+                return Err("注入: 日志写入失败".into());
+            }
+            self.store
+                .lock()
+                .map_err(|e| e.to_string())?
+                .insert_archive_op(op)
+                .map(|_| ())
+        }
+    }
+
+    type JournalFixture = (
+        std::path::PathBuf,
+        std::path::PathBuf,
+        Arc<Mutex<dyn IndexStore>>,
+        ProjectSideEffects,
+        Arc<Mutex<Vec<String>>>,
+    );
+
+    fn project_journal_fixture(tag: &str) -> JournalFixture {
+        let dir = temp_dir(tag);
+        let source = dir.join("proj");
+        let dest = dir.join("Archive").join("proj");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        fs::write(source.join("a.txt"), "x").unwrap();
+
+        let store = store();
+        {
+            let mut guard = store.lock().unwrap();
+            guard
+                .upsert_shortcut("C:/lnk1.lnk", &normalize_path(&source.to_string_lossy()), 1)
+                .unwrap();
+            guard
+                .upsert_shortcut(
+                    "C:/lnk2.lnk",
+                    &normalize_path(&source.join("sub").to_string_lossy()),
+                    2,
+                )
+                .unwrap();
+        }
+
+        let source_str = normalize_path(&source.to_string_lossy());
+        let dest_str = normalize_path(&dest.to_string_lossy());
+        let effects = ProjectSideEffects {
+            settings: test_settings(&[&dest_str]),
+            settings_backup: test_settings(&[&source_str]),
+            links: vec![
+                ProjectLinkEffect {
+                    lnk_path: "C:/lnk1.lnk".into(),
+                    original_target: source_str.clone(),
+                    new_target: dest_str.clone(),
+                },
+                ProjectLinkEffect {
+                    lnk_path: "C:/lnk2.lnk".into(),
+                    original_target: format!("{source_str}/sub"),
+                    new_target: format!("{dest_str}/sub"),
+                },
+            ],
+            kind: ProjectKind::Generic,
+            insert_op: Some(ArchiveOp {
+                id: 0,
+                batch_id: 42,
+                kind: "project".into(),
+                source: source_str.clone(),
+                dest: dest_str.clone(),
+                created_at: 1,
+                undone_at: None,
+            }),
+        };
+        (
+            source,
+            dest,
+            store,
+            effects,
+            Arc::new(Mutex::new(Vec::new())),
+        )
+    }
+
+    #[test]
+    fn project_journal_success_rewrites_links_and_inserts_op() {
+        let (source, dest, store, effects, calls) = project_journal_fixture("journal_ok");
+        fs::rename(&source, &dest).unwrap();
+        let journal = RecordingJournal {
+            store: store.clone(),
+            calls: calls.clone(),
+            fail_save: false,
+            fail_rewrite_target: None,
+            fail_insert: false,
+        };
+        apply_project_journal(
+            &effects,
+            &journal,
+            &normalize_path(&dest.to_string_lossy()),
+            &normalize_path(&source.to_string_lossy()),
+        )
+        .unwrap();
+
+        assert!(dest.exists() && !source.exists());
+        assert_eq!(store.lock().unwrap().ops_for_batch(42).unwrap().len(), 1);
+        let dest_str = normalize_path(&dest.to_string_lossy());
+        let links = store.lock().unwrap().shortcuts_under(&dest_str).unwrap();
+        assert_eq!(links.len(), 2);
+        assert!(links.iter().all(|l| l.target_path.starts_with(&dest_str)));
+        let call_count = calls.lock().unwrap().len();
+        assert!(
+            call_count >= 5,
+            "应有保存+重写+登记+日志调用，实际 {call_count}"
+        );
+        let _ = std::fs::remove_dir_all(dest.parent().unwrap().parent().unwrap());
+    }
+
+    #[test]
+    fn project_journal_save_failure_rolls_back_everything() {
+        let (source, dest, store, effects, calls) = project_journal_fixture("journal_save");
+        fs::rename(&source, &dest).unwrap();
+        let journal = RecordingJournal {
+            store: store.clone(),
+            calls: calls.clone(),
+            fail_save: true,
+            fail_rewrite_target: None,
+            fail_insert: false,
+        };
+        let err = apply_project_journal(
+            &effects,
+            &journal,
+            &normalize_path(&dest.to_string_lossy()),
+            &normalize_path(&source.to_string_lossy()),
+        )
+        .unwrap_err();
+        assert!(err.contains("设置保存失败"));
+
+        assert!(source.exists() && !dest.exists(), "目录应被移回原位置");
+        let saved = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|c| c.starts_with("save:"))
+            .count();
+        assert_eq!(saved, 2, "应保存新值一次 + 回滚备份一次");
+        assert!(store.lock().unwrap().ops_for_batch(42).unwrap().is_empty());
+        let links = store
+            .lock()
+            .unwrap()
+            .shortcuts_under(&normalize_path(&source.to_string_lossy()))
+            .unwrap();
+        assert_eq!(links.len(), 2, "快捷方式目标应保持原样");
+        let _ = std::fs::remove_dir_all(source.parent().unwrap());
+    }
+
+    #[test]
+    fn project_journal_rewrite_failure_rolls_back_all_links_and_dir() {
+        let (source, dest, store, effects, calls) = project_journal_fixture("journal_rewrite");
+        fs::rename(&source, &dest).unwrap();
+        let dest_str = normalize_path(&dest.to_string_lossy());
+        let journal = RecordingJournal {
+            store: store.clone(),
+            calls: calls.clone(),
+            fail_save: false,
+            fail_rewrite_target: Some(format!("{dest_str}/sub")),
+            fail_insert: false,
+        };
+        let err = apply_project_journal(
+            &effects,
+            &journal,
+            &dest_str,
+            &normalize_path(&source.to_string_lossy()),
+        )
+        .unwrap_err();
+        assert!(err.contains("快捷方式重写失败"));
+
+        assert!(source.exists() && !dest.exists(), "目录应被移回原位置");
+        let source_str = normalize_path(&source.to_string_lossy());
+        let links = store.lock().unwrap().shortcuts_under(&source_str).unwrap();
+        assert_eq!(links.len(), 2, "全部快捷方式应还原到原目标");
+        assert!(
+            links.iter().all(|l| l.target_path.starts_with(&source_str)),
+            "回滚后 target 应全部指向原路径"
+        );
+        assert!(store.lock().unwrap().ops_for_batch(42).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(source.parent().unwrap());
+    }
+
+    #[test]
+    fn project_journal_insert_failure_rolls_back_everything() {
+        let (source, dest, store, effects, calls) = project_journal_fixture("journal_insert");
+        fs::rename(&source, &dest).unwrap();
+        let journal = RecordingJournal {
+            store: store.clone(),
+            calls: calls.clone(),
+            fail_save: false,
+            fail_rewrite_target: None,
+            fail_insert: true,
+        };
+        let err = apply_project_journal(
+            &effects,
+            &journal,
+            &normalize_path(&dest.to_string_lossy()),
+            &normalize_path(&source.to_string_lossy()),
+        )
+        .unwrap_err();
+        assert!(err.contains("日志写入失败"));
+
+        assert!(source.exists() && !dest.exists());
+        assert!(store.lock().unwrap().ops_for_batch(42).unwrap().is_empty());
+        let source_str = normalize_path(&source.to_string_lossy());
+        let links = store.lock().unwrap().shortcuts_under(&source_str).unwrap();
+        assert_eq!(links.len(), 2);
+        let _ = std::fs::remove_dir_all(source.parent().unwrap());
     }
 
     #[test]

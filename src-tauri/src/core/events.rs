@@ -64,7 +64,6 @@ pub struct StabilityParams {
     /// 首次采样前的等待时间
     pub first_sample_delay: Duration,
     /// 两次采样间隔
-    #[cfg_attr(not(test), allow(dead_code))]
     pub sample_gap: Duration,
     /// 超过该时间强制视为稳定（兜底，避免漏文件）
     pub force_timeout: Duration,
