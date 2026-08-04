@@ -12,7 +12,6 @@ import {
   Layers,
   Plus,
   Settings2,
-  X,
 } from "lucide-react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -703,13 +702,14 @@ export function CourseScheduleView({
             const MAX_FAN = 4;
             const CARD_W = 320;
             const CARD_H = 240;
-            const GAP = 16;
+            const COL_GAP = 16;
+            const ROW_GAP = 8;
             const visible = stackOverlay.courses.slice(0, MAX_FAN);
             const overflow = stackOverlay.courses.slice(MAX_FAN);
             const cols = visible.length <= 2 ? visible.length : 2;
             const rows = Math.ceil(visible.length / cols);
-            const totalW = cols * CARD_W + (cols - 1) * GAP;
-            const totalH = rows * CARD_H + (rows - 1) * GAP;
+            const totalW = cols * CARD_W + (cols - 1) * COL_GAP;
+            const totalH = rows * CARD_H + (rows - 1) * ROW_GAP;
             const startX = Math.max(
               8,
               Math.floor((window.innerWidth - totalW) / 2),
@@ -719,20 +719,11 @@ export function CourseScheduleView({
               Math.floor((window.innerHeight - totalH) / 2),
             );
             const positionOf = (index: number) => ({
-              left: startX + (index % cols) * (CARD_W + GAP),
-              top: startY + Math.floor(index / cols) * (CARD_H + GAP),
+              left: startX + (index % cols) * (CARD_W + COL_GAP),
+              top: startY + Math.floor(index / cols) * (CARD_H + ROW_GAP),
             });
             return (
               <>
-                <button
-                  type="button"
-                  aria-label={t("study.collapseStack")}
-                  onClick={() => setStackOverlay(null)}
-                  className="fixed z-50 flex size-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-                  style={{ left: startX + totalW - 20, top: startY - 30 }}
-                >
-                  <X aria-hidden className="size-4" />
-                </button>
                 {visible.map((course, index) => {
                   const pos = positionOf(index);
                   const dealStyle = {
