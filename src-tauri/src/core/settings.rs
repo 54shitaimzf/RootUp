@@ -11,6 +11,16 @@ pub const THEME_DARK: &str = "dark";
 pub const LANG_ZH_CN: &str = "zh-CN";
 pub const LANG_EN: &str = "en";
 
+pub const CLOSE_ACTION_ASK: &str = "ask";
+pub const CLOSE_ACTION_BACKGROUND: &str = "background";
+pub const CLOSE_ACTION_QUIT: &str = "quit";
+pub const CLOSE_ACTION_VALUES: &[&str] =
+    &[CLOSE_ACTION_ASK, CLOSE_ACTION_BACKGROUND, CLOSE_ACTION_QUIT];
+
+/// 作业截止提醒的临期提前天数范围。
+pub const REMINDER_LEAD_MIN: u32 = 1;
+pub const REMINDER_LEAD_MAX: u32 = 14;
+
 pub const PREFERRED_IDE_AUTO: &str = "auto";
 pub const PREFERRED_IDE_VSCODE: &str = "vscode";
 pub const PREFERRED_IDE_CURSOR: &str = "cursor";
@@ -39,7 +49,7 @@ pub const MAX_CUSTOM_OPEN_COMMANDS: usize = 10;
 /// - 新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`，
 ///   旧版本配置文件永远可被新版本读取；
 /// - 结构性升级在 [`Settings::migrate`] 中按版本号逐级迁移。
-pub const CURRENT_VERSION: u32 = 2;
+pub const CURRENT_VERSION: u32 = 3;
 
 /// 用户分类覆盖规则上限。
 pub const MAX_CLASSIFY_RULES: usize = 100;
@@ -100,6 +110,12 @@ pub struct Settings {
     pub archive_root: String,
     /// 自动归档开关（仅新稳定文件 + 分类明确非 other）
     pub auto_archive: bool,
+    /// 关闭窗口默认行为："ask"（弹窗询问）/ "background"（后台运行）/ "quit"（退出）
+    pub close_action: String,
+    /// 作业截止提醒开关（默认关闭）
+    pub reminder_enabled: bool,
+    /// 临期提前天数（1–14，默认 3）
+    pub reminder_lead_days: u32,
 }
 
 impl Default for Settings {
@@ -124,6 +140,9 @@ impl Default for Settings {
             custom_open_commands: Vec::new(),
             archive_root: String::new(),
             auto_archive: false,
+            close_action: CLOSE_ACTION_ASK.to_string(),
+            reminder_enabled: false,
+            reminder_lead_days: 3,
         }
     }
 }
@@ -132,9 +151,9 @@ impl Settings {
     /// 版本升级（逐级迁移）；当前 v1 为幂等空迁移。
     pub fn migrate(&mut self) {
         while self.version < CURRENT_VERSION {
-            // 1 -> 2：新增 archive_root / auto_archive，缺失字段由 serde default 填充，
-            // 无需数据转换，仅提升版本号。
-            self.version = CURRENT_VERSION;
+            // 1 -> 2：archive_root / auto_archive；2 -> 3：close_action / reminder_*。
+            // 缺失字段由 serde default 填充，无需数据转换，仅提升版本号。
+            self.version += 1;
         }
     }
 
@@ -153,6 +172,8 @@ impl Settings {
                 .all(CustomOpenCommand::is_valid)
             && self.archive_root.len() <= 1024
             && valid_non_empty(&self.project_dirs)
+            && CLOSE_ACTION_VALUES.contains(&self.close_action.as_str())
+            && (REMINDER_LEAD_MIN..=REMINDER_LEAD_MAX).contains(&self.reminder_lead_days)
     }
 }
 
@@ -248,6 +269,9 @@ mod tests {
             vec!["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"]
         );
         assert!(s.classify_overrides.is_empty());
+        assert_eq!(s.close_action, CLOSE_ACTION_ASK);
+        assert!(!s.reminder_enabled);
+        assert_eq!(s.reminder_lead_days, 3);
         assert!(s.is_valid());
     }
 
@@ -259,6 +283,8 @@ mod tests {
         assert_eq!(settings.version, CURRENT_VERSION);
         assert_eq!(settings.ignore_rules.extensions.len(), 5);
         assert!(settings.classify_overrides.is_empty());
+        assert_eq!(settings.close_action, CLOSE_ACTION_ASK);
+        assert!(!settings.reminder_enabled);
         assert!(settings.is_valid());
     }
 
@@ -279,11 +305,14 @@ mod tests {
     }
 
     #[test]
-    fn archive_fields_default_off_and_migrate_v1_to_v2() {
+    fn new_fields_default_and_migrate_v1_to_v3() {
         let s = Settings::default();
-        assert_eq!(s.version, 2);
+        assert_eq!(s.version, 3);
         assert_eq!(s.archive_root, "");
         assert!(!s.auto_archive);
+        assert_eq!(s.close_action, CLOSE_ACTION_ASK);
+        assert!(!s.reminder_enabled);
+        assert_eq!(s.reminder_lead_days, 3);
 
         let json = r#"{
             "version": 1,
@@ -298,10 +327,71 @@ mod tests {
         }"#;
         let mut settings: Settings = serde_json::from_str(json).unwrap();
         settings.migrate();
-        assert_eq!(settings.version, 2);
+        assert_eq!(settings.version, 3);
         assert_eq!(settings.archive_root, "");
         assert!(!settings.auto_archive);
+        assert_eq!(settings.close_action, CLOSE_ACTION_ASK);
+        assert!(!settings.reminder_enabled);
         assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn migrate_v2_to_v3_is_idempotent() {
+        let json = r#"{
+            "version": 2,
+            "theme": "light",
+            "language": "en",
+            "watched_dirs": ["C:/Watch"],
+            "ignore_rules": {"extensions": [], "prefixes": [], "exact_names": []},
+            "classify_overrides": [],
+            "project_dirs": [],
+            "preferred_ide": "auto",
+            "custom_open_commands": [],
+            "archive_root": "C:/Archive",
+            "auto_archive": true
+        }"#;
+        let mut settings: Settings = serde_json::from_str(json).unwrap();
+        settings.migrate();
+        assert_eq!(settings.version, 3);
+        assert_eq!(settings.archive_root, "C:/Archive");
+        assert!(settings.auto_archive);
+        assert_eq!(settings.close_action, CLOSE_ACTION_ASK);
+        assert!(!settings.reminder_enabled);
+        assert!(settings.is_valid());
+
+        settings.migrate();
+        assert_eq!(settings.version, 3);
+    }
+
+    #[test]
+    fn close_action_and_reminder_validation() {
+        for action in CLOSE_ACTION_VALUES {
+            let s = Settings {
+                close_action: (*action).to_string(),
+                ..Default::default()
+            };
+            assert!(s.is_valid(), "close_action={action}");
+        }
+        let invalid = Settings {
+            close_action: "minimize".into(),
+            ..Default::default()
+        };
+        assert!(!invalid.is_valid());
+
+        for days in [REMINDER_LEAD_MIN, 7, REMINDER_LEAD_MAX] {
+            let s = Settings {
+                reminder_lead_days: days,
+                ..Default::default()
+            };
+            assert!(s.is_valid(), "lead_days={days}");
+        }
+        for days in [0u32, 15] {
+            let s = Settings {
+                reminder_lead_days: days,
+                ..Default::default()
+            };
+            assert!(!s.is_valid(), "lead_days={days} 应非法");
+        }
     }
 
     #[test]
@@ -318,6 +408,8 @@ mod tests {
         assert_eq!(reset.project_dirs, vec!["C:/Proj"]);
         assert_eq!(reset.archive_root, "");
         assert!(!reset.auto_archive);
+        assert_eq!(reset.close_action, CLOSE_ACTION_ASK);
+        assert!(!reset.reminder_enabled);
     }
 
     #[test]

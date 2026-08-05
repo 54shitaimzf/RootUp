@@ -456,6 +456,34 @@ describe("StudyPage", () => {
     await waitFor(() => expect(saveStudyData).toHaveBeenCalled());
   });
 
+  it("开启提醒后显示临期提示条并可关闭本次", () => {
+    render(
+      <StudyPage
+        today={TODAY}
+        initialData={createSeedStudyData()}
+        reminderEnabled
+        leadDays={3}
+      />,
+    );
+    expect(screen.getByText(/有 \d+ 项作业临期或逾期/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByText(/有 \d+ 项作业临期或逾期/)).not.toBeInTheDocument();
+  });
+
+  it("托盘深链：focusHomework 切到作业视图并展开对应作业", () => {
+    const onFocusConsumed = vi.fn();
+    render(
+      <StudyPage
+        today={TODAY}
+        initialData={createSeedStudyData()}
+        focusHomework={{ homeworkId: "h-demo-2" }}
+        onFocusConsumed={onFocusConsumed}
+      />,
+    );
+    expect(screen.getByText("程序设计 实验报告")).toBeInTheDocument();
+    expect(onFocusConsumed).toHaveBeenCalled();
+  });
+
   it("课程与作业按学期隔离并自动保存到后端", () => {
     renderStudy();
     fireEvent.click(screen.getByRole("button", { name: "管理学期" }));

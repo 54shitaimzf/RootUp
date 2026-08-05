@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, ClipboardList } from "lucide-react";
+import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { InlineNotice } from "../components/InlineNotice";
 import { PageHeader } from "../components/PageHeader";
@@ -13,6 +14,8 @@ import { HomeworkView } from "../features/study/components/HomeworkView";
 import { SemesterManageDialog } from "../features/study/components/SemesterManageDialog";
 import {
   clampWeek,
+  isDueSoon,
+  isOverdue,
   weekNumberFromDate,
   type Course,
   type CourseDraft,
@@ -70,9 +73,17 @@ function loadPrefs(): StudyPrefs {
 export function StudyPage({
   today = new Date(),
   initialData,
+  reminderEnabled = false,
+  leadDays = 3,
+  focusHomework = null,
+  onFocusConsumed,
 }: {
   today?: Date;
   initialData?: StudyData;
+  reminderEnabled?: boolean;
+  leadDays?: number;
+  focusHomework?: { homeworkId?: string } | null;
+  onFocusConsumed?: () => void;
 }) {
   const { t } = useTranslation();
   const [prefs] = useState(loadPrefs);
@@ -85,6 +96,7 @@ export function StudyPage({
   const [semesterId, setSemesterId] = useState("");
   const [weekOverride, setWeekOverride] = useState<number | null>(null);
   const [semesterManageOpen, setSemesterManageOpen] = useState(false);
+  const [reminderBannerHidden, setReminderBannerHidden] = useState(false);
   const [courseFormOpen, setCourseFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -150,6 +162,22 @@ export function StudyPage({
       logEvent("warn", `study: 保存失败 ${String(error)}`);
     });
   }, [data]);
+
+  useEffect(() => {
+    if (!focusHomework || !data) return;
+    if (focusHomework.homeworkId) {
+      for (const [sid, list] of Object.entries(data.homeworkBySemester)) {
+        if (list.some((item) => item.id === focusHomework.homeworkId)) {
+          setSemesterId(sid);
+          break;
+        }
+      }
+    }
+    setView("homework");
+    setHomeworkCourseFilter("all");
+    setExpandedHomeworkId(focusHomework.homeworkId ?? null);
+    onFocusConsumed?.();
+  }, [focusHomework, data, onFocusConsumed]);
 
   useEffect(() => {
     try {
@@ -363,6 +391,11 @@ export function StudyPage({
   const pendingCount = homework.filter(
     (item) => item.status === "pending",
   ).length;
+  const reminderCount = homework.filter(
+    (item) =>
+      item.status === "pending" &&
+      (isOverdue(item, today) || isDueSoon(item.dueAt, leadDays, today)),
+  ).length;
 
   if (loadError) {
     return (
@@ -406,6 +439,16 @@ export function StudyPage({
         title={t("pages.study.title")}
         description={t("pages.study.description")}
       />
+
+      {reminderEnabled && !reminderBannerHidden && reminderCount > 0 && (
+        <Banner
+          variant="warn"
+          className="mt-4"
+          onClose={() => setReminderBannerHidden(true)}
+        >
+          {t("study.reminderBanner", { count: reminderCount })}
+        </Banner>
+      )}
 
       <div className="mt-5">
         <SegmentedControl
@@ -461,6 +504,8 @@ export function StudyPage({
           courseFilter={homeworkCourseFilter}
           onCourseFilterChange={setHomeworkCourseFilter}
           today={today}
+          reminderEnabled={reminderEnabled}
+          leadDays={leadDays}
           expandHomeworkId={expandedHomeworkId}
           onAdd={() => {
             setEditingHomework(null);

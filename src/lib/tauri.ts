@@ -3,6 +3,7 @@ import type { StudyData } from "./studyStore";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type Language = "zh-CN" | "en";
+export type CloseAction = "ask" | "background" | "quit";
 
 /** 忽略规则：临时扩展名 / 文件名前缀 / 完整文件名（与后端 IgnoreRules 对应） */
 export interface IgnoreRules {
@@ -30,6 +31,9 @@ export interface Settings {
   custom_open_commands: CustomOpenCommand[];
   archive_root: string;
   auto_archive: boolean;
+  close_action: CloseAction;
+  reminder_enabled: boolean;
+  reminder_lead_days: number;
 }
 
 /** 用户自定义打开命令（tool 为空 = 通用最后兜底） */
@@ -112,6 +116,9 @@ export const defaultSettings: Settings = {
   custom_open_commands: [],
   archive_root: "",
   auto_archive: false,
+  close_action: "ask",
+  reminder_enabled: false,
+  reminder_lead_days: 3,
 };
 
 /** 与 Rust 侧 core::archive::ArchiveBatch 对应 */
@@ -379,6 +386,10 @@ export function revealInExplorer(path: string): Promise<void> {
 
 export function createProjectShortcut(path: string): Promise<ShortcutOutcome> {
   return invoke<ShortcutOutcome>("create_project_shortcut", { path });
+}
+
+export function createHomeworkShortcut(): Promise<ShortcutOutcome> {
+  return invoke<ShortcutOutcome>("create_homework_shortcut");
 }
 
 export function listDetectedTools(): Promise<string[]> {

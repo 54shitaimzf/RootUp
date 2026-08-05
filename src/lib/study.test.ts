@@ -21,7 +21,9 @@ import {
   formatClock,
   formatClockRange,
   homeworkStatusTone,
+  homeworkReminderGroup,
   isOverdue,
+  isDueSoon,
   isValidWeekRange,
   jsDayToStudyDay,
   layoutDayCourses,
@@ -520,6 +522,49 @@ describe("作业时间文案数据", () => {
     expect(calendarDaysUntil("2026-08-05T09:00:00", now)).toBe(1);
     expect(calendarDaysUntil("2026-08-04T09:00:00", now)).toBe(0);
     expect(calendarDaysUntil("2026-08-03T23:00:00", now)).toBe(-1);
+  });
+});
+
+describe("截止提醒判定", () => {
+  const NOW = new Date("2026-08-06T12:00:00");
+
+  it("isDueSoon 边界：当天/提前 N 天/超出/已过期", () => {
+    expect(isDueSoon("2026-08-06T23:59:00", 3, NOW)).toBe(true);
+    expect(isDueSoon("2026-08-09T23:59:00", 3, NOW)).toBe(true);
+    expect(isDueSoon("2026-08-10T00:00:00", 3, NOW)).toBe(false);
+    expect(isDueSoon("2026-08-05T23:59:00", 3, NOW)).toBe(false);
+    expect(isDueSoon("2026-08-20T00:00:00", 14, NOW)).toBe(true);
+  });
+
+  it("homeworkReminderGroup 状态矩阵（仅待办参与）", () => {
+    const base = {
+      id: "h",
+      courseId: null,
+      title: "t",
+      note: "",
+      details: "",
+      dueAt: "",
+      status: "pending" as const,
+    };
+    expect(
+      homeworkReminderGroup({ ...base, dueAt: "2026-08-04T23:59:00" }, 3, NOW),
+    ).toBe("overdue");
+    expect(
+      homeworkReminderGroup({ ...base, dueAt: "2026-08-06T23:59:00" }, 3, NOW),
+    ).toBe("dueSoon");
+    expect(
+      homeworkReminderGroup({ ...base, dueAt: "2026-08-09T23:59:00" }, 3, NOW),
+    ).toBe("dueSoon");
+    expect(
+      homeworkReminderGroup({ ...base, dueAt: "2026-08-10T00:00:00" }, 3, NOW),
+    ).toBe("normal");
+    expect(
+      homeworkReminderGroup(
+        { ...base, dueAt: "2026-08-09T23:59:00", status: "done" },
+        3,
+        NOW,
+      ),
+    ).toBe("normal");
   });
 });
 

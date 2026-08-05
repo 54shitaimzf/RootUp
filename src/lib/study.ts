@@ -490,6 +490,27 @@ export function isOverdue(homework: Homework, now: Date): boolean {
   );
 }
 
+/** 临期判定：0 ≤ 距截止自然日 ≤ leadDays（与提醒分组共用）。 */
+export function isDueSoon(dueAt: string, leadDays: number, now: Date): boolean {
+  const days = calendarDaysUntil(dueAt, now);
+  return days >= 0 && days <= leadDays;
+}
+
+export type ReminderGroup = "overdue" | "dueSoon" | "normal";
+
+/** 提醒分组：仅待办参与（逾期 / 临期 / 正常）。 */
+export function homeworkReminderGroup(
+  item: Homework,
+  leadDays: number,
+  now: Date,
+): ReminderGroup {
+  if (item.status !== "pending") return "normal";
+  const days = calendarDaysUntil(item.dueAt, now);
+  if (days < 0) return "overdue";
+  if (days <= leadDays) return "dueSoon";
+  return "normal";
+}
+
 export function daysUntilDue(dueAt: string, now: Date): number {
   return Math.ceil((new Date(dueAt).getTime() - now.getTime()) / 86_400_000);
 }

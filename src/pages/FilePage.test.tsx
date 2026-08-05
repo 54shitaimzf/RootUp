@@ -86,9 +86,12 @@ const SETTINGS: Settings = {
   project_dirs: [],
   preferred_ide: "auto",
   custom_open_commands: [],
-  archive_root: "",
-  auto_archive: false,
-};
+      archive_root: "",
+      auto_archive: false,
+      close_action: "ask",
+      reminder_enabled: false,
+      reminder_lead_days: 3,
+    };
 
 function renderPage() {
   return render(

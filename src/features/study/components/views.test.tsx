@@ -313,6 +313,31 @@ describe("视图空态", () => {
     expect(screen.getByText("课程")).toBeInTheDocument();
   });
 
+  it("开启提醒后按逾期/临期分组展示，关闭时平铺", () => {
+    const props = {
+      homework: DEMO_HOMEWORK,
+      courses: DEMO_COURSES,
+      courseFilter: "all" as const,
+      onCourseFilterChange: () => {},
+      today: new Date("2026-08-04T12:00:00"),
+      onAdd: () => {},
+      onEdit: () => {},
+      onToggleStatus: () => {},
+      onArchive: () => {},
+      onDelete: () => {},
+    };
+    const { unmount } = render(
+      <HomeworkView {...props} reminderEnabled leadDays={3} />,
+    );
+    expect(screen.getByText(/已逾期（\d+）/)).toBeInTheDocument();
+    expect(screen.getByText(/临期（\d+）/)).toBeInTheDocument();
+    unmount();
+
+    render(<HomeworkView {...props} />);
+    expect(screen.queryByText(/已逾期（\d+）/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/临期（\d+）/)).not.toBeInTheDocument();
+  });
+
   it("课程表容器无圆角且课程卡收敛为最小圆角", () => {
     render(
       <CourseScheduleView

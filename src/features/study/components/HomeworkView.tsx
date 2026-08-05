@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Archive,
@@ -16,6 +16,7 @@ import { IconButton } from "../../../components/IconButton";
 import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
   filterHomework,
+  homeworkReminderGroup,
   type Course,
   type Homework,
   type HomeworkStatusFilter,
@@ -36,6 +37,8 @@ export function HomeworkView({
   courseFilter,
   onCourseFilterChange,
   today,
+  reminderEnabled = false,
+  leadDays = 3,
   expandHomeworkId = null,
   onAdd,
   onEdit,
@@ -48,6 +51,8 @@ export function HomeworkView({
   courseFilter: "all" | "none" | string;
   onCourseFilterChange: (value: "all" | "none" | string) => void;
   today: Date;
+  reminderEnabled?: boolean;
+  leadDays?: number;
   expandHomeworkId?: string | null;
   onAdd: () => void;
   onEdit: (item: Homework) => void;
@@ -76,6 +81,39 @@ export function HomeworkView({
     status: statusFilter,
     courseId: courseFilter,
   });
+
+  const groups = useMemo(() => {
+    const byGroup = { overdue: [] as Homework[], dueSoon: [] as Homework[], normal: [] as Homework[] };
+    for (const item of items) {
+      byGroup[homeworkReminderGroup(item, leadDays, today)].push(item);
+    }
+    return byGroup;
+  }, [items, leadDays, today]);
+
+  const sections = useMemo(() => {
+    if (!reminderEnabled || (groups.overdue.length === 0 && groups.dueSoon.length === 0)) {
+      return [{ key: "all", label: "", items }];
+    }
+    const list: { key: string; label: string; items: Homework[] }[] = [];
+    if (groups.overdue.length > 0) {
+      list.push({
+        key: "overdue",
+        label: t("study.reminderOverdue", { count: groups.overdue.length }),
+        items: groups.overdue,
+      });
+    }
+    if (groups.dueSoon.length > 0) {
+      list.push({
+        key: "dueSoon",
+        label: t("study.reminderDueSoon", { count: groups.dueSoon.length }),
+        items: groups.dueSoon,
+      });
+    }
+    if (groups.normal.length > 0) {
+      list.push({ key: "normal", label: "", items: groups.normal });
+    }
+    return list;
+  }, [reminderEnabled, groups, items, t]);
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -184,7 +222,14 @@ export function HomeworkView({
         </div>
       ) : (
         <ul className="mt-4 space-y-2">
-          {items.map((item) => {
+          {sections.map((section) => (
+            <Fragment key={section.key}>
+              {section.label && (
+                <li className="px-1 pt-1.5 text-xs font-semibold text-secondary">
+                  {section.label}
+                </li>
+              )}
+              {section.items.map((item) => {
             const done = item.status === "done";
             const archived = item.status === "archived";
             const expanded = expandedIds.has(item.id);
@@ -276,7 +321,9 @@ export function HomeworkView({
                 </div>
               </li>
             );
-          })}
+              })}
+            </Fragment>
+          ))}
         </ul>
       )}
 

@@ -77,6 +77,9 @@ describe("ProjectsPage", () => {
       custom_open_commands: [],
       archive_root: "",
       auto_archive: false,
+      close_action: "ask",
+      reminder_enabled: false,
+      reminder_lead_days: 3,
     });
     vi.mocked(saveSettings).mockResolvedValue(undefined);
     vi.mocked(listProjects).mockResolvedValue([
@@ -144,6 +147,9 @@ describe("ProjectsPage", () => {
       custom_open_commands: [],
       archive_root: "C:/Archive",
       auto_archive: false,
+      close_action: "ask",
+      reminder_enabled: false,
+      reminder_lead_days: 3,
     });
     renderPage();
     await screen.findByText("rust-app");
