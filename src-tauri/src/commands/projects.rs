@@ -317,6 +317,38 @@ pub fn create_project_shortcut(app: AppHandle, path: String) -> Result<ShortcutO
     })
 }
 
+/// 创建桌面“打开未完成作业”快捷方式（目标 = RootUp --open-homework，幂等）。
+#[tauri::command]
+pub fn create_homework_shortcut(app: AppHandle) -> Result<ShortcutOutcome, String> {
+    let settings = storage::load_settings(&app);
+    let name = if settings.language == "en" {
+        "Open Homework (RootUp)"
+    } else {
+        "打开未完成作业 (RootUp)"
+    };
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let desktop = app.path().desktop_dir().map_err(|e| e.to_string())?;
+    let icon_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("shortcut-icons");
+    let lnk = shortcut::create_shortcut(
+        &exe,
+        &desktop,
+        &icon_dir,
+        name,
+        "--open-homework",
+        "rootup.ico",
+    )?;
+    log::info!("shortcut: 创建未完成作业入口 {}", lnk.display());
+    Ok(ShortcutOutcome {
+        path: lnk.to_string_lossy().to_string(),
+        name: name.to_string(),
+        kind: "homework".to_string(),
+    })
+}
+
 /// 当前环境已检测到的工具 key 列表（供引导提示与帮助中心展示）。
 #[tauri::command]
 pub fn list_detected_tools(app: AppHandle) -> Vec<String> {

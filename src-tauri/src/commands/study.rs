@@ -5,6 +5,7 @@ use crate::core::study::{ensure_label_keys, validate_study_data, StudyData};
 use crate::core::study_classify::{reapply_labels, SharedStudyClassifier, StudyClassifier};
 use crate::infra::storage;
 use crate::infra::study_store::{JsonStudyStore, StudyStore};
+use crate::infra::tray;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 
@@ -66,6 +67,7 @@ pub fn save_study_data(app: AppHandle, mut data: StudyData) -> Result<StudyData,
     let classifier = app.state::<Arc<Mutex<StudyClassifier>>>();
     classifier.lock().map_err(|e| e.to_string())?.refresh(&data);
     let changed = reapply(&app)?;
+    let _ = tray::refresh_tray(&app);
     let total_courses: usize = data.courses_by_semester.values().map(Vec::len).sum();
     log::info!(
         "study: 保存 semesters={} courses={total_courses} labels={changed}",

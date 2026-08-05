@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { CloseConfirmDialog } from "./components/CloseConfirmDialog";
 import { PagePlaceholder } from "./components/PagePlaceholder";
 import { Sidebar } from "./components/Sidebar";
@@ -19,9 +20,17 @@ function renderPage(
   {
     onNavigate,
     scan,
+    studyFocus,
+    setStudyFocus,
+    reminderEnabled,
+    leadDays,
   }: {
     onNavigate: (page: PageKey) => void;
     scan: ScanController;
+    studyFocus: { homeworkId?: string } | null;
+    setStudyFocus: (value: { homeworkId?: string } | null) => void;
+    reminderEnabled: boolean;
+    leadDays: number;
   },
 ) {
   switch (page) {
@@ -32,7 +41,14 @@ function renderPage(
     case "projects":
       return <ProjectsPage onNavigate={onNavigate} />;
     case "study":
-      return <StudyPage />;
+      return (
+        <StudyPage
+          reminderEnabled={reminderEnabled}
+          leadDays={leadDays}
+          focusHomework={studyFocus}
+          onFocusConsumed={() => setStudyFocus(null)}
+        />
+      );
     case "tools":
       return (
         <PagePlaceholder
@@ -56,8 +72,26 @@ export default function App() {
 function Shell() {
   useImeGuard();
   const [page, setPage] = useState<PageKey>("files");
-  const { settings } = useSettings();
+  const [studyFocus, setStudyFocus] = useState<{
+    homeworkId?: string;
+  } | null>(null);
+  const { settings, update } = useSettings();
   const scan = useScan();
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<string | null>("study-homework-open", (event) => {
+      setPage("study");
+      setStudyFocus(event.payload ? { homeworkId: event.payload } : {});
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   // 语言随设置变化即时切换
   useEffect(() => {
@@ -71,10 +105,19 @@ function Shell() {
       <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
         <Sidebar current={page} onNavigate={setPage} />
         <main className="flex-1 overflow-auto p-8">
-          {renderPage(page, { onNavigate: setPage, scan })}
+          {renderPage(page, {
+            onNavigate: setPage,
+            scan,
+            studyFocus,
+            setStudyFocus,
+            reminderEnabled: settings?.reminder_enabled ?? false,
+            leadDays: settings?.reminder_lead_days ?? 3,
+          })}
         </main>
       </div>
-      <CloseConfirmDialog />
+      <CloseConfirmDialog
+        onRemember={(action) => update({ close_action: action })}
+      />
     </ThemeProvider>
   );
 }

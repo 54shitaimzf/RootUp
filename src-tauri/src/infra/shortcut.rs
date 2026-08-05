@@ -46,6 +46,7 @@ const EMBEDDED_ICONS: &[(&str, &[u8])] = &[
         "generic.ico",
         include_bytes!("../../../resources/icons/projects/generic.ico"),
     ),
+    ("rootup.ico", include_bytes!("../../icons/icon.ico")),
 ];
 
 pub fn shortcut_icon_name(kind: ProjectKind) -> &'static str {
@@ -105,6 +106,25 @@ pub fn create_project_shortcut(
     desktop_dir: &Path,
     icon_dir: &Path,
 ) -> Result<PathBuf, String> {
+    create_shortcut(
+        rootup_exe,
+        desktop_dir,
+        icon_dir,
+        &project.name,
+        &format!("--open-project \"{}\"", project.path),
+        shortcut_icon_name(project.kind),
+    )
+}
+
+/// 通用快捷方式创建：目标 RootUp exe + 参数 + 图标（幂等，重名递增）。
+pub fn create_shortcut(
+    rootup_exe: &Path,
+    desktop_dir: &Path,
+    icon_dir: &Path,
+    name: &str,
+    args: &str,
+    icon_name: &str,
+) -> Result<PathBuf, String> {
     if !rootup_exe.is_file() {
         return Err("找不到 RootUp 程序文件".to_string());
     }
@@ -113,17 +133,12 @@ pub fn create_project_shortcut(
     }
     ensure_shortcut_icons(icon_dir)?;
 
-    let name = sanitize_name(&project.name);
-    let lnk_path = unique_shortcut_path(desktop_dir, &name);
+    let safe_name = sanitize_name(name);
+    let lnk_path = unique_shortcut_path(desktop_dir, &safe_name);
 
     let mut link = ShellLink::new(rootup_exe).map_err(|e| format!("创建快捷方式失败: {e}"))?;
-    link.set_arguments(Some(format!("--open-project \"{}\"", project.path)));
-    link.set_icon_location(Some(
-        icon_dir
-            .join(shortcut_icon_name(project.kind))
-            .to_string_lossy()
-            .to_string(),
-    ));
+    link.set_arguments(Some(args.to_string()));
+    link.set_icon_location(Some(icon_dir.join(icon_name).to_string_lossy().to_string()));
     link.header_mut()
         .update_link_flags(LinkFlags::HAS_ARGUMENTS, true);
     link.header_mut()

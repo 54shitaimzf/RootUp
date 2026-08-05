@@ -1,5 +1,6 @@
 use crate::core::settings::{archive_root_conflicts, reset_to_default, Settings};
 use crate::infra::storage;
+use crate::infra::tray;
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -31,6 +32,7 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     );
     storage::save_settings(&app, &settings)?;
     crate::app::refresh_managed_state(&app)?;
+    let _ = tray::refresh_tray(&app);
     Ok(())
 }
 
@@ -41,6 +43,7 @@ pub fn reset_settings(app: AppHandle) -> Result<Settings, String> {
     let reset = reset_to_default(&current);
     storage::save_settings(&app, &reset)?;
     crate::app::refresh_managed_state(&app)?;
+    let _ = tray::refresh_tray(&app);
     log::info!(
         "settings: 恢复默认（保留监控目录 {} 个）",
         reset.watched_dirs.len()

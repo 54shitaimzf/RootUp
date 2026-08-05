@@ -23,6 +23,7 @@ vi.mock("../lib/tauri", () => ({
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
   addWatchedDir: vi.fn(),
+  createHomeworkShortcut: vi.fn(),
   removeWatchedDir: vi.fn(),
   resetSettings: vi.fn(),
   getLogDir: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("../lib/tauri", () => ({
 
 import {
   addWatchedDir,
+  createHomeworkShortcut,
   getLogDir,
   getSettings,
   listCategories,
@@ -61,9 +63,12 @@ const SETTINGS: Settings = {
   project_dirs: [],
   preferred_ide: "auto",
   custom_open_commands: [],
-  archive_root: "",
-  auto_archive: false,
-};
+      archive_root: "",
+      auto_archive: false,
+      close_action: "ask",
+      reminder_enabled: false,
+      reminder_lead_days: 3,
+    };
 
 function scan(): ScanController {
   return {
@@ -112,6 +117,39 @@ describe("SettingsPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("忽略规则")).toBeInTheDocument();
     expect(screen.getByText("分类映射")).toBeInTheDocument();
+  });
+
+  it("语言下拉切换写回设置", async () => {
+    renderPage();
+    await screen.findByLabelText("语言");
+    fireEvent.change(screen.getByLabelText("语言"), {
+      target: { value: "en" },
+    });
+    await waitFor(() =>
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ language: "en" }),
+      ),
+    );
+  });
+
+  it("学业提醒开关与桌面快捷方式", async () => {
+    renderPage();
+    await screen.findByText("作业截止提醒");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await waitFor(() =>
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ reminder_enabled: true }),
+      ),
+    );
+
+    vi.mocked(createHomeworkShortcut).mockResolvedValue({
+      path: "C:/Users/x/Desktop/打开未完成作业 (RootUp).lnk",
+      name: "打开未完成作业 (RootUp)",
+      kind: "homework",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建快捷方式" }));
+    expect(createHomeworkShortcut).toHaveBeenCalled();
+    expect(await screen.findByText("已创建桌面快捷方式")).toBeInTheDocument();
   });
 
   it("忽略规则与分类映射弹窗可开关", async () => {

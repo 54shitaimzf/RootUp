@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   defaultSettings,
   getSettings,
@@ -51,6 +52,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // 托盘等外部入口修改设置后同步刷新（如主题快速切换）。
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<null>("settings-changed", () => {
+      getSettings()
+        .then((value) => {
+          latestRef.current = value;
+          setSettings(value);
+        })
+        .catch(() => {});
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
     };
   }, []);
 

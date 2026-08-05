@@ -5,8 +5,10 @@ import { useSettings } from "../hooks/useSettings";
 import type { ScanController } from "../hooks/useScan";
 import { isComposing } from "../lib/ime";
 import { applyPreset, RULE_PRESETS } from "../lib/presets";
+import { LANGUAGE_OPTIONS } from "../lib/languages";
 import {
   addWatchedDir,
+  createHomeworkShortcut,
   getLogDir,
   listCategories,
   listClassifyDefaults,
@@ -17,6 +19,7 @@ import {
   resetSettings,
   type ClassifyDefaultEntry,
   type ClassifyRule,
+  type CloseAction,
   type IgnoreRules,
   type LabelDef,
   type Language,
@@ -30,6 +33,8 @@ import {
 } from "../lib/effectiveMap";
 import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
+import { FormSection } from "../components/FormSection";
+import { Select } from "../components/Select";
 import { IgnoreRulesDialog } from "../features/settings/components/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../features/settings/components/ClassifyMappingDialog";
 import { LabelManageDialog } from "../features/settings/components/LabelManageDialog";
@@ -53,10 +58,13 @@ const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "dark", labelKey: "settings.themeDark" },
 ];
 
-const LANGUAGE_OPTIONS: { value: Language; labelKey: string }[] = [
-  { value: "zh-CN", labelKey: "settings.languageZh" },
-  { value: "en", labelKey: "settings.languageEn" },
+const CLOSE_ACTION_OPTIONS: { value: CloseAction; labelKey: string }[] = [
+  { value: "ask", labelKey: "settings.closeActionAsk" },
+  { value: "background", labelKey: "settings.closeActionBackground" },
+  { value: "quit", labelKey: "settings.closeActionQuit" },
 ];
+
+const REMINDER_LEAD_OPTIONS = [1, 2, 3, 5, 7, 14];
 
 function cloneRules(source: {
   ignore_rules: IgnoreRules;
@@ -285,6 +293,16 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     setNotice(t("settings.archiveSaved"));
   };
 
+  const handleCreateHomeworkShortcut = async () => {
+    try {
+      await createHomeworkShortcut();
+      setNotice(t("settings.homeworkShortcutCreated"));
+    } catch (err) {
+      setNotice(null);
+      setRuleError(String(err));
+    }
+  };
+
   if (!settings) {
     return (
       <div className="mx-auto max-w-2xl">
@@ -339,140 +357,204 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         </Banner>
       )}
 
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-secondary">
-            {t("settings.watchedDirs")}
-          </h2>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={handleRescanAll}
-          >
-            {t("settings.rescanAll")}
-          </Button>
-        </div>
-        <p className="mt-1 text-xs text-muted">
-          {t("settings.watchedDirsDesc")}
-        </p>
-        <div className="mt-3 flex gap-2">
-          <Input
-            type="text"
-            value={newDir}
-            onChange={(event) => setNewDir(event.target.value)}
-            onKeyDown={(event) => {
-              if (isComposing(event)) return;
-              if (event.key === "Enter") void handleAddDir();
-            }}
-            placeholder={t("settings.dirPlaceholder")}
-            className="flex-1"
-          />
-          <Button variant="primary" size="md" onClick={() => void handleAddDir()}>
-            {t("settings.addDir")}
-          </Button>
-        </div>
-        <ul className="mt-3 space-y-1">
-          {watchedDirs.length === 0 ? (
-            <li className="text-xs text-slate-400 dark:text-slate-500">
-              {t("settings.dirEmpty")}
-            </li>
-          ) : (
-            watchedDirs.map((dir) => (
-              <li
-                key={dir}
-                className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800"
-              >
-                <span className="min-w-0 flex-1 truncate">{dir}</span>
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveDir(dir)}
-                  className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
-                >
-                  {t("settings.remove")}
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold text-secondary">
-          {t("settings.rulesSection")}
-        </h2>
-        <div className="mt-3 space-y-2">
-          <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-secondary">
-                  {t("settings.schemeRow")}
-                </span>
-                <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-                  {schemeLabel}
-                </span>
-              </div>
-              <div className="mt-1 truncate text-xs text-muted">
-                {t("settings.schemeSummary", {
-                  ignore: ignoreSummary.total,
-                  override: settings.classify_overrides.length,
-                })}
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <FormSection title={t("settings.settingsGroupGeneral")}>
+          <div className="space-y-4">
+            <div>
+              <span className="text-xs font-medium text-secondary">
+                {t("settings.theme")}
+              </span>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {THEME_OPTIONS.map(({ value, labelKey }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    className={`rounded-md px-4 py-2 text-sm transition-colors ${
+                      theme === value
+                        ? "bg-brand-700 font-medium text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setApplyMenuOpen(true)}
+            <div>
+              <label
+                htmlFor="settings-language"
+                className="text-xs font-medium text-secondary"
               >
-                {t("settings.applyScheme")}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setSchemeOpen(true);
-                }}
+                {t("settings.language")}
+              </label>
+              <Select
+                id="settings-language"
+                value={language}
+                onChange={(event) =>
+                  update({ language: event.target.value as Language })
+                }
+                className="mt-1.5 w-44"
               >
-                {t("settings.saveAsScheme")}
-              </Button>
+                {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
+                  <option key={value} value={value}>
+                    {t(labelKey)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label
+                htmlFor="settings-close-action"
+                className="text-xs font-medium text-secondary"
+              >
+                {t("settings.closeAction")}
+              </label>
+              <Select
+                id="settings-close-action"
+                value={settings.close_action}
+                onChange={(event) =>
+                  update({ close_action: event.target.value as CloseAction })
+                }
+                className="mt-1.5 w-44"
+              >
+                {CLOSE_ACTION_OPTIONS.map(({ value, labelKey }) => (
+                  <option key={value} value={value}>
+                    {t(labelKey)}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
+        </FormSection>
 
-          <Row
-            title={t("settings.ignoreRow")}
-            summary={t("settings.ignoreRowSummary", {
-              total: ignoreSummary.total,
-              extensions: ignoreSummary.extensions,
-              prefixes: ignoreSummary.prefixes,
-              names: ignoreSummary.exactNames,
-            })}
-            onClick={() => setIgnoreOpen(true)}
-          />
-          <Row
-            title={t("settings.mappingRow")}
-            summary={t("settings.mappingRowSummary", {
-              builtin: defaults.length,
-              overrides: settings.classify_overrides.length,
-            })}
-            onClick={() => setMappingOpen(true)}
-          />
-          <Row
-            title={t("settings.labelRow")}
-            summary={t("settings.labelRowSummary", {
-              builtin: categories.length,
-              custom: customLabels.length,
-            })}
-            onClick={() => setLabelOpen(true)}
-          />
-          <Row
-            title={t("settings.projectOpenRow")}
-            summary={t("settings.projectOpenSummary", {
-              ide: preferredIdeLabel,
-              custom: settings.custom_open_commands.length,
-            })}
-            onClick={() => setProjectOpenOpen(true)}
-          />
+        <FormSection title={t("settings.settingsGroupWatch")}>
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-secondary">
+                  {t("settings.watchedDirs")}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={RefreshCw}
+                  onClick={handleRescanAll}
+                >
+                  {t("settings.rescanAll")}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                {t("settings.watchedDirsDesc")}
+              </p>
+              <div className="mt-2.5 flex gap-2">
+                <Input
+                  type="text"
+                  value={newDir}
+                  onChange={(event) => setNewDir(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (isComposing(event)) return;
+                    if (event.key === "Enter") void handleAddDir();
+                  }}
+                  placeholder={t("settings.dirPlaceholder")}
+                  className="flex-1"
+                />
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => void handleAddDir()}
+                >
+                  {t("settings.addDir")}
+                </Button>
+              </div>
+              <ul className="mt-2.5 space-y-1">
+                {watchedDirs.length === 0 ? (
+                  <li className="text-xs text-slate-400 dark:text-slate-500">
+                    {t("settings.dirEmpty")}
+                  </li>
+                ) : (
+                  watchedDirs.map((dir) => (
+                    <li
+                      key={dir}
+                      className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{dir}</span>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveDir(dir)}
+                        className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
+                      >
+                        {t("settings.remove")}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-secondary">
+                    {t("settings.schemeRow")}
+                  </span>
+                  <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+                    {schemeLabel}
+                  </span>
+                </div>
+                <div className="mt-1 truncate text-xs text-muted">
+                  {t("settings.schemeSummary", {
+                    ignore: ignoreSummary.total,
+                    override: settings.classify_overrides.length,
+                  })}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setApplyMenuOpen(true)}
+                >
+                  {t("settings.applyScheme")}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setSchemeOpen(true)}
+                >
+                  {t("settings.saveAsScheme")}
+                </Button>
+              </div>
+            </div>
+            <Row
+              title={t("settings.ignoreRow")}
+              summary={t("settings.ignoreRowSummary", {
+                total: ignoreSummary.total,
+                extensions: ignoreSummary.extensions,
+                prefixes: ignoreSummary.prefixes,
+                names: ignoreSummary.exactNames,
+              })}
+              onClick={() => setIgnoreOpen(true)}
+            />
+            <Row
+              title={t("settings.mappingRow")}
+              summary={t("settings.mappingRowSummary", {
+                builtin: defaults.length,
+                overrides: settings.classify_overrides.length,
+              })}
+              onClick={() => setMappingOpen(true)}
+            />
+            <Row
+              title={t("settings.labelRow")}
+              summary={t("settings.labelRowSummary", {
+                builtin: categories.length,
+                custom: customLabels.length,
+              })}
+              onClick={() => setLabelOpen(true)}
+            />
+          </div>
+        </FormSection>
+
+        <FormSection title={t("settings.settingsGroupArchive")}>
           <Row
             title={t("settings.archiveRow")}
             summary={t("settings.archiveRowSummary", {
@@ -483,97 +565,118 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
             })}
             onClick={() => setArchiveOpen(true)}
           />
-        </div>
-      </section>
+        </FormSection>
 
-      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold text-secondary">
-          {t("settings.theme")}
-        </h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {THEME_OPTIONS.map(({ value, labelKey }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTheme(value)}
-              className={`rounded-md px-4 py-2 text-sm transition-colors ${
-                theme === value
-                  ? "bg-brand-700 font-medium text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </div>
-      </section>
+        <FormSection title={t("settings.settingsGroupReminder")}>
+          <div className="space-y-4">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-secondary">
+                {t("settings.reminderEnabled")}
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.reminder_enabled}
+                onChange={(event) =>
+                  update({ reminder_enabled: event.target.checked })
+                }
+                className="size-4 accent-brand-600"
+              />
+            </label>
+            <div>
+              <label
+                htmlFor="settings-reminder-lead"
+                className="text-xs font-medium text-secondary"
+              >
+                {t("settings.reminderLeadDays")}
+              </label>
+              <Select
+                id="settings-reminder-lead"
+                value={String(settings.reminder_lead_days)}
+                onChange={(event) =>
+                  update({ reminder_lead_days: Number(event.target.value) })
+                }
+                className="mt-1.5 w-44"
+              >
+                {REMINDER_LEAD_OPTIONS.map((days) => (
+                  <option key={days} value={days}>
+                    {days}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted">
+                {t("settings.reminderLeadDaysHint")}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <div className="min-w-0 text-sm font-semibold text-secondary">
+                {t("settings.homeworkShortcut")}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Check}
+                onClick={() => void handleCreateHomeworkShortcut()}
+              >
+                {t("settings.homeworkShortcutCreate")}
+              </Button>
+            </div>
+          </div>
+        </FormSection>
 
-      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold text-secondary">
-          {t("settings.language")}
-        </h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => update({ language: value })}
-              className={`rounded-md px-4 py-2 text-sm transition-colors ${
-                language === value
-                  ? "bg-brand-700 font-medium text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold text-secondary">
-          {t("settings.logDir")}
-        </h2>
-        <p className="mt-1 text-xs text-muted">
-          {t("settings.logDirHint")}
-        </p>
-        {logDir && (
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 dark:bg-slate-800">
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-600 dark:text-slate-300">
-              {logDir}
-            </span>
-            <IconButton
-              label={t("settings.copyPath")}
-              icon={copied ? Check : Copy}
-              tone="brand"
-              size="md"
-              onClick={() => void handleCopyLogDir()}
-              className={copied ? "text-brand-600" : ""}
+        <FormSection title={t("settings.settingsGroupAdvanced")}>
+          <div className="space-y-2">
+            <Row
+              title={t("settings.projectOpenRow")}
+              summary={t("settings.projectOpenSummary", {
+                ide: preferredIdeLabel,
+                custom: settings.custom_open_commands.length,
+              })}
+              onClick={() => setProjectOpenOpen(true)}
             />
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <div className="text-sm font-semibold text-secondary">
+                {t("settings.logDir")}
+              </div>
+              <p className="mt-0.5 text-xs text-muted">
+                {t("settings.logDirHint")}
+              </p>
+              {logDir && (
+                <div className="mt-2 flex items-center gap-2 rounded-md bg-white px-3 py-2 dark:bg-slate-900">
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-600 dark:text-slate-300">
+                    {logDir}
+                  </span>
+                  <IconButton
+                    label={t("settings.copyPath")}
+                    icon={copied ? Check : Copy}
+                    tone="brand"
+                    size="md"
+                    onClick={() => void handleCopyLogDir()}
+                    className={copied ? "text-brand-600" : ""}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 dark:border-red-500/25 dark:bg-red-500/10">
+              <div>
+                <div className="text-sm font-semibold text-red-600 dark:text-red-400">
+                  {t("settings.resetSettings")}
+                </div>
+                <p className="mt-0.5 text-xs text-muted">
+                  {t("settings.resetHint")}
+                </p>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={RotateCcw}
+                onClick={() => setResetOpen(true)}
+              >
+                {t("settings.resetSettings")}
+              </Button>
+            </div>
           </div>
-        )}
-      </section>
-
-      <section className="mt-4 rounded-xl border border-red-200 bg-white p-5 shadow-card dark:border-red-500/25 dark:bg-slate-900">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-red-600 dark:text-red-400">
-              {t("settings.resetSettings")}
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              {t("settings.resetHint")}
-            </p>
-          </div>
-          <Button
-            variant="danger"
-            size="sm"
-            icon={RotateCcw}
-            onClick={() => setResetOpen(true)}
-          >
-            {t("settings.resetSettings")}
-          </Button>
-        </div>
-      </section>
+        </FormSection>
+      </div>
 
       <IgnoreRulesDialog
         open={ignoreOpen}

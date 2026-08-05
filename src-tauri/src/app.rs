@@ -95,6 +95,15 @@ fn open_project_from_args(app: &AppHandle, args: &[String]) {
     }
 }
 
+/// 解析 `--open-homework` 启动参数：唤起窗口并让前端打开学业页作业视图。
+fn open_homework_from_args(app: &AppHandle, args: &[String]) {
+    if args.iter().any(|a| a == "--open-homework") {
+        let _ = window_lifecycle::ensure_main_window(app);
+        let _ = app.emit("study-homework-open", Option::<String>::None);
+        log::info!("study: 启动参数打开未完成作业");
+    }
+}
+
 /// 扫描事件 → Tauri 前端事件（Progress → scan-progress，其余 → scan-finished）。
 struct TauriScanSink {
     app: AppHandle,
@@ -119,6 +128,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             let _ = window_lifecycle::ensure_main_window(app);
             open_project_from_args(app, &args);
+            open_homework_from_args(app, &args);
         }))
         // 文件/目录默认程序打开与资源管理器定位（ShellExecuteW）
         .plugin(tauri_plugin_opener::init())
@@ -166,6 +176,7 @@ pub fn run() {
             projects_commands::open_file,
             projects_commands::reveal_in_explorer,
             projects_commands::create_project_shortcut,
+            projects_commands::create_homework_shortcut,
             projects_commands::list_detected_tools,
             projects_commands::open_url,
             window_commands::hide_to_tray,
@@ -176,7 +187,20 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.emit("close-requested", ());
+                let app = window.app_handle();
+                let settings = storage::load_settings(app);
+                match settings.close_action.as_str() {
+                    crate::core::settings::CLOSE_ACTION_BACKGROUND => {
+                        let _ = window_lifecycle::destroy_main_window(app);
+                    }
+                    crate::core::settings::CLOSE_ACTION_QUIT => {
+                        app.state::<QuitFlag>().0.store(true, Ordering::SeqCst);
+                        app.exit(0);
+                    }
+                    _ => {
+                        let _ = window.emit("close-requested", ());
+                    }
+                }
             }
         })
         .setup(|app| {
@@ -346,6 +370,7 @@ pub fn run() {
             if args.iter().any(|a| a == "--open-project") {
                 open_project_from_args(app.handle(), &args);
             }
+            open_homework_from_args(app.handle(), &args);
             Ok(())
         })
         .build(tauri::generate_context!())
