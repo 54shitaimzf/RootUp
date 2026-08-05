@@ -35,4 +35,11 @@
   --shadow-card:
     0 1px 2px rgb(15 23 42 / 0.06), 0 4px 16px rgb(15 23 42 / 0.06);
   --shadow-pop: 0 8px 30px rgb(15 23 42 / 0.16);
+
+  /* 动效令牌：时长与缓动（微交互/反馈动画统一引用，禁止散落硬编码） */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }

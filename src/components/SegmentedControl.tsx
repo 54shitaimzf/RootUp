@@ -67,7 +67,7 @@ export function SegmentedControl<T extends string>({
               type="button"
               aria-pressed={active}
               onClick={() => onChange(option.value)}
-              className={`-mb-px flex items-center justify-center gap-1.5 border-b-2 font-medium transition-colors ${sizeClass} ${
+              className={`-mb-px flex items-center justify-center gap-1.5 border-b-2 font-medium transition-colors duration-[var(--duration-fast)] ${sizeClass} ${
                 equal ? "flex-1" : ""
               } ${
                 active
@@ -95,7 +95,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(option.value)}
-            className={`flex items-center gap-1.5 rounded-md font-medium transition-colors ${sizeClass} ${
+            className={`flex items-center gap-1.5 rounded-md font-medium transition-colors duration-[var(--duration-fast)] ${sizeClass} ${
               active
                 ? "bg-white text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100"
                 : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"

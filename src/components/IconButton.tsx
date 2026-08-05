@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 import type { LucideIcon } from "lucide-react";
+import { Tooltip } from "./Tooltip";
 
 export type IconButtonSize = "xs" | "sm" | "md";
 export type IconButtonTone = "neutral" | "danger" | "brand" | "inherit";
@@ -40,14 +41,16 @@ export function IconButton({
   className?: string;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      className={`inline-flex shrink-0 items-center justify-center transition-colors ${SIZE_CLASSES[size]} ${TONE_CLASSES[tone]} ${className}`}
-      {...rest}
-    >
-      <Icon />
-    </button>
+    <Tooltip content={label}>
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        className={`micro-press inline-flex shrink-0 items-center justify-center ${SIZE_CLASSES[size]} ${TONE_CLASSES[tone]} ${className}`}
+        {...rest}
+      >
+        <Icon />
+      </button>
+    </Tooltip>
   );
 }

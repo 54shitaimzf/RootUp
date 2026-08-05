@@ -22,14 +22,14 @@ export type ButtonSize = "xs" | "sm" | "md";
  * 皮肤：替换 tokens.css 品牌色即整体换肤，组件零改动。
  */
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: "bg-brand-700 font-medium text-white transition-colors hover:bg-brand-800",
+  primary: "bg-brand-700 font-medium text-white hover:bg-brand-800",
   secondary:
-    "bg-slate-100 font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700",
+    "bg-slate-100 font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700",
   danger:
-    "border font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10",
-  amber: "bg-amber-500 font-medium text-white transition-colors hover:bg-amber-600",
+    "border font-medium text-red-600 hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10",
+  amber: "bg-amber-500 font-medium text-white hover:bg-amber-600",
   ghost:
-    "text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+    "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -61,7 +61,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex shrink-0 items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
+      className={`micro-press inline-flex shrink-0 items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
       {...rest}
     >
       {Icon && <Icon className={ICON_CLASSES[size]} />}

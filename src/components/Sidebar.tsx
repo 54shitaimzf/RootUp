@@ -56,7 +56,7 @@ export function Sidebar({
               key={key}
               type="button"
               onClick={() => onNavigate(key)}
-              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-[var(--duration-fast)] ${
                 active
                   ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
                   : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -73,7 +73,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => openHelp("guide")}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition-colors duration-[var(--duration-fast)] hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           <HelpCircle className="size-4 shrink-0" />
           <span className="truncate">{t("help.title")}</span>

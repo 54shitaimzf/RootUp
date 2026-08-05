@@ -556,7 +556,7 @@ export function FilePage({
                 return (
                   <li
                     key={file.path}
-                    className="group flex items-center gap-3 px-4 py-2.5 text-sm"
+                    className="list-enter group flex items-center gap-3 px-4 py-2.5 text-sm"
                     title={file.path}
                   >
                     {batchMode && (

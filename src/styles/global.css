@@ -106,7 +106,7 @@
 }
 
 .pop-in {
-  animation: pop-in 120ms ease-out;
+  animation: pop-in var(--duration-fast) var(--ease-out);
 }
 
 /* 堆叠卡展开：每张卡依次浮起铺开 */
@@ -122,7 +122,7 @@
 }
 
 .fan-in {
-  animation: fan-in 160ms ease-out both;
+  animation: fan-in var(--duration-base) var(--ease-out) both;
 }
 
 /* 铺开卡片阵：每张卡从轻微旋转/下沉状态摊平 */
@@ -139,7 +139,45 @@
 }
 
 .deal-in {
-  animation: deal-in 180ms ease-out both;
+  animation: deal-in var(--duration-slow) var(--ease-out) both;
+}
+
+/* 微交互：统一 hover/active 过渡与按压轻缩（仅 transform/opacity/颜色） */
+.micro-press {
+  transition-property: transform, color, background-color, border-color, box-shadow;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+.micro-press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* 列表项入场：淡入 + 轻位移（文件行/作业行） */
+@keyframes list-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.list-enter {
+  animation: list-in var(--duration-base) var(--ease-out) both;
+}
+
+/* 无障碍：系统开启“减少动画”时全局降级（极短时长 + 单次） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 浮窗统一面板：无硬边框，细 ring + 双层投影 + 背景模糊建立层次感 */

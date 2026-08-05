@@ -51,7 +51,7 @@ export const Chip = forwardRef<HTMLElement, ChipProps>(function Chip(
   },
   ref,
 ) {
-  const base = `inline-flex shrink-0 items-center gap-1.5 rounded-md text-xs font-medium transition-colors ${SIZE_CLASSES[size]} ${variant === "neutral" && onClick ? HOVER_NEUTRAL : ""} ${VARIANT_CLASSES[variant]} ${onRemove ? PAD_CLASSES[size] : PAD_PLAIN[size]} ${className}`;
+  const base = `micro-press inline-flex shrink-0 items-center gap-1.5 rounded-md text-xs font-medium ${SIZE_CLASSES[size]} ${variant === "neutral" && onClick ? HOVER_NEUTRAL : ""} ${VARIANT_CLASSES[variant]} ${onRemove ? PAD_CLASSES[size] : PAD_PLAIN[size]} ${className}`;
 
   const content = (
     <>

@@ -236,7 +236,7 @@ export function HomeworkView({
             return (
               <li
                 key={item.id}
-                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-slate-800 dark:bg-slate-900"
+                className="list-enter flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-slate-800 dark:bg-slate-900"
               >
                 <input
                   type="checkbox"
