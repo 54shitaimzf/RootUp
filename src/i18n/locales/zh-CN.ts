@@ -175,6 +175,85 @@ export default {
     homeworkFormInvalid:
       "请检查填写内容：标题必填（≤60 字）；截止时间必填；备注 ≤200 字、详情 ≤5000 字。",
   },
+  settingsGuide: {
+    groups: {
+      general: { title: "常规", description: "外观、语言与关闭行为。", },
+      watch: { title: "监控与分类", description: "告诉 RootUp 看哪些目录、如何归类文件。", },
+      archive: { title: "归档", description: "受控移动文件并保留撤销能力。", },
+      reminder: { title: "学业提醒", description: "作业临期提醒与快捷入口。", },
+      advanced: { title: "高级", description: "智能打开、日志与重置。", },
+    },
+    theme: {
+      intro: "选择浅色、深色或跟随系统外观。",
+      example: "晚上学习时切到深色，降低屏幕刺激。",
+      tips: "托盘菜单也可快速切换主题；重启后保持选择。",
+    },
+    language: {
+      intro: "切换界面语言，立即生效并持久保存。",
+      example: "英文用户切到 English 后全部界面同步切换。",
+      tips: "新增语言需同步前端字典、注册表与后端白名单。",
+    },
+    closeAction: {
+      intro: "设置点击关闭窗口时的默认行为。",
+      example: "希望一直后台驻留就选“后台运行”，之后关闭不再弹窗。",
+      tips: "仍可在关闭确认弹窗里勾选“记住我的选择”来修改。",
+    },
+    watchedDirs: {
+      intro: "监控目录内的文件会被扫描、索引并实时跟踪。",
+      example: "把“下载”和“桌面”加进来，新文件几秒内出现在文件页。",
+      tips: "可直接拖入文件夹或用“浏览…”选择；移除目录会同时清理其索引（不影响磁盘文件，可重新添加恢复）。",
+    },
+    scheme: {
+      intro: "规则方案是“忽略规则 + 分类映射”的命名快照。",
+      example: "先保存一份“编程开发”，之后一键套用回该组合。",
+      tips: "应用方案会替换当前规则，主题、语言与监控目录不受影响。",
+    },
+    ignoreRules: {
+      intro: "配置哪些扩展名、前缀或文件名不被索引。",
+      example: "临时文件 `.crdownload` 默认被忽略，避免半成品入库。",
+      tips: "忽略只影响索引，不删除磁盘文件。",
+    },
+    classifyMapping: {
+      intro: "把扩展名映射到文档/图片/视频等大类。",
+      example: "把 `psd`、`ai` 归入“图片”，设计素材自动归类。",
+      tips: "覆盖规则优先生效；保存后重启生效。",
+    },
+    labels: {
+      intro: "管理自定义标签的显示名、图标与颜色。",
+      example: "创建“课程资料”标签，文件名匹配课程后统一展示。",
+      tips: "内置大类只读；标签被文件携带后才会出现在筛选与搜索。",
+    },
+    archive: {
+      intro: "归档把文件移动到归档根目录并记录可撤销批次。",
+      example: "把完成的项目整理进“归档根/项目/”并保持桌面快捷方式可用。",
+      tips: "归档根需与源文件同盘；同名文件自动递增，绝不覆盖。",
+    },
+    reminder: {
+      intro: "开启后按提前天数提醒待办作业的临期与逾期。",
+      example: "设提前 3 天，作业列表会置顶“临期”分组并在托盘显示计数。",
+      tips: "只提醒待办；系统级通知暂未启用，当前为应用内与托盘直达。",
+    },
+    homeworkShortcut: {
+      intro: "在桌面创建“打开未完成作业”快捷方式。",
+      example: "双击后直接打开学业页作业视图并筛选活跃待办。",
+      tips: "重复创建会生成带序号的新快捷方式。",
+    },
+    projectOpen: {
+      intro: "配置项目识别后的打开方式与自定义命令。",
+      example: "默认自动探测 IDE；也可固定用 VS Code 打开 Rust 项目。",
+      tips: "找不到工具时自动回退资源管理器，不会卡住。",
+    },
+    logDir: {
+      intro: "查看与复制日志目录，便于排查问题。",
+      example: "反馈问题时把日志路径和最近一段日志发给开发者。",
+      tips: "日志按大小滚动轮转，保留最近三份。",
+    },
+    reset: {
+      intro: "把规则与外观恢复默认，保留监控目录与项目目录。",
+      example: "配置混乱时一键回到初始状态。",
+      tips: "不会删除磁盘文件或归档记录；重置前建议先确认监控目录列表。",
+    },
+  },
   settings: {
     theme: "主题",
     themeSystem: "跟随系统",
@@ -220,6 +299,10 @@ export default {
     logDir: "日志目录",
     logDirHint: "日志记录扫描、索引、查询等全部关键操作，可用于排查与验证。",
     copyPath: "复制路径",
+    infoIntro: "功能介绍",
+    infoExample: "情景举例",
+    infoTips: "设置说明",
+    infoClose: "关闭",
     dirAdded: "已添加，正在扫描该目录",
     presetDefault: "默认（学生日常）",
     presetDev: "编程开发",
@@ -460,6 +543,7 @@ export default {
     title: "帮助与新手入门",
     sectionGuide: "新手入门",
     sectionSyntax: "搜索与高级用法",
+    sectionSettings: "设置说明",
     onboardingTitle: "欢迎使用 RootUp",
     onboardingIntro: "三步即可开始使用：",
     onboardingStep1Title: "选择主题与语言",

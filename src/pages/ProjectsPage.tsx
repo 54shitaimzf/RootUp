@@ -320,7 +320,7 @@ export function ProjectsPage({
             return (
               <div
                 key={project.path}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-start gap-3">
                   <ProjectKindBadge kind={project.kind} />

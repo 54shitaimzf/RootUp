@@ -26,7 +26,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 首个公开发布：NSIS 安装包（per-user、免管理员、中英语言选择）、品牌图标全套、安装包自动验证
 - 学业页（v0.8.0）：课程表（时间轴周视图、日期与“今天”标识、当前时间线、单双周 / 指定周次、周起始日切换、堆叠卡与铺开查看）与作业（截止排序、状态 / 课程筛选、短备注 + 可展开详情、逾期/剩余天数、标记完成确认、默认只看活跃）；学期即课表，支持新建/编辑/复制/删除，数据持久化到后端 `study.json`，课程名自动纳入文件分类标签；全应用按钮遵循 Windows“是左否右”
 - 学业提醒与设置（v0.8.1）：作业截止提醒（默认关闭、可设提前量，学业页提示条 + 列表分组 + 托盘计数直达）；关闭默认行为持久化（每次询问 / 后台运行 / 退出）；语言下拉与 i18n 注册表；设置页按常规/监控与分类/归档/学业提醒/高级分组；托盘左键打开、动态菜单（临期作业直达、自动归档与主题快速切换）；桌面“打开未完成作业”快捷方式
-- 监控体验与视觉（v0.8.2）：移除监控目录即清理索引（可重扫恢复）；原生“浏览…”目录选择器、文件夹拖拽、常用目录一键添加；动效令牌与全局“减少动画”降级、按钮微动、悬浮提示体系
+- 监控体验与视觉（v0.8.2）：移除监控目录即清理索引（可重扫恢复）；原生“浏览…”目录选择器、文件夹拖拽、常用目录一键添加；动效令牌与全局“减少动画”降级、按钮微动、悬浮提示体系；设置项“点行看说明 / 编辑按钮才编辑”，说明中心新增“设置说明”分区
 
 ### 搜索语法
 
@@ -114,7 +114,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
 - Study page (v0.8.0): timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start, stacked cards with spread-out viewing) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation, active-only default); semesters act as schedules with create/edit/copy/delete and backend `study.json` persistence; course names feed file labels automatically; buttons follow the Windows yes-left/no-right convention
 - Reminders & settings (v0.8.1): homework deadline reminders (off by default, configurable lead days; study-page banner + list grouping + tray count/direct open); persistent close behavior (ask / background / quit); language dropdown with a language registry; settings grouped into General / Monitoring & classification / Archive / Study reminders / Advanced; tray left-click open, dynamic menu (due-homework shortcuts, auto-archive and theme toggles); desktop “Open homework” shortcut
-- Monitoring UX & visuals (v0.8.2): removing a watched folder also cleans its index (restorable by rescanning); native “Browse…” folder picker, folder drag & drop, one-click common folders; motion tokens with global reduced-motion support, button micro-interactions and a unified tooltip system
+- Monitoring UX & visuals (v0.8.2): removing a watched folder also cleans its index (restorable by rescanning); native “Browse…” folder picker, folder drag & drop, one-click common folders; motion tokens with global reduced-motion support, button micro-interactions, a unified tooltip system, and a settings guide (row click = explain, edit button = edit) with a new “Settings guide” help section
 
 ### Search Syntax
 

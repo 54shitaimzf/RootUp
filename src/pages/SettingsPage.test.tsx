@@ -272,7 +272,10 @@ describe("SettingsPage", () => {
 
   it("归档设置弹窗可保存归档根与自动归档开关", async () => {
     renderPage();
-    fireEvent.click(await screen.findByText("归档设置"));
+    const archiveRow = (await screen.findByText("归档设置")).closest(
+      '[role="button"]',
+    ) as HTMLElement;
+    fireEvent.click(within(archiveRow).getByRole("button", { name: "编辑" }));
     expect(
       screen.getByRole("dialog", { name: "归档设置" }),
     ).toBeInTheDocument();
@@ -289,6 +292,29 @@ describe("SettingsPage", () => {
         }),
       );
     });
+  });
+
+  it("点击设置行打开说明弹窗，编辑按钮打开编辑弹窗且互不干扰", async () => {
+    renderPage();
+    const ignoreRow = (await screen.findByText("忽略规则")).closest(
+      '[role="button"]',
+    ) as HTMLElement;
+    fireEvent.click(ignoreRow);
+    expect(
+      screen.getByRole("dialog", { name: "忽略规则" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("功能介绍")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "编辑忽略规则" })).not.toBeInTheDocument();
+
+    const closeButtons = screen.getAllByRole("button", { name: "关闭" });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(within(ignoreRow).getByRole("button", { name: "编辑" }));
+    expect(
+      screen.getByRole("dialog", { name: "编辑忽略规则" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("功能介绍")).not.toBeInTheDocument();
   });
 
   it("应用方案与保存方案弹窗可打开", async () => {

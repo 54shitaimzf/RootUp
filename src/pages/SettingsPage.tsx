@@ -34,6 +34,7 @@ import {
   type ThemeMode,
 } from "../lib/tauri";
 import { cleanPathInput } from "../lib/paths";
+import { SETTINGS_GUIDE, type SettingsGuideEntry } from "../lib/settingsGuide";
 import {
   resolveCurrentScheme,
   summarizeIgnoreRules,
@@ -42,6 +43,7 @@ import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
 import { FormSection } from "../components/FormSection";
 import { Select } from "../components/Select";
+import { SettingsInfoDialog } from "../components/SettingsInfoDialog";
 import { IgnoreRulesDialog } from "../features/settings/components/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../features/settings/components/ClassifyMappingDialog";
 import { LabelManageDialog } from "../features/settings/components/LabelManageDialog";
@@ -97,26 +99,30 @@ function cloneRules(source: {
 function Row({
   title,
   summary,
-  onClick,
+  guideId,
+  onInfo,
+  onEdit,
 }: {
   title: string;
   summary: string;
-  onClick: () => void;
+  guideId: string;
+  onInfo: (id: string) => void;
+  onEdit: () => void;
 }) {
   const { t } = useTranslation();
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={() => onInfo(guideId)}
       onKeyDown={(event) => {
         if (isComposing(event)) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onClick();
+          onInfo(guideId);
         }
       }}
-      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 transition-colors hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/70"
+      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3.5 transition-colors hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/70"
     >
       <div className="min-w-0">
         <div className="text-sm font-semibold text-secondary">
@@ -131,7 +137,7 @@ function Row({
         size="sm"
         onClick={(event) => {
           event.stopPropagation();
-          onClick();
+          onEdit();
         }}
       >
         {t("settings.edit")}
@@ -172,6 +178,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     dir: string;
     count: number;
   } | null>(null);
+  const [infoEntry, setInfoEntry] = useState<SettingsGuideEntry | null>(null);
 
   useEffect(() => {
     listWatchedDirs()
@@ -438,8 +445,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       )}
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-        <FormSection title={t("settings.settingsGroupGeneral")}>
-          <div className="space-y-4">
+        <FormSection
+          title={t("settings.settingsGroupGeneral")}
+          description={t("settingsGuide.groups.general.description")}
+        >
+          <div className="space-y-5">
             <div>
               <span className="text-xs font-medium text-secondary">
                 {t("settings.theme")}
@@ -508,8 +518,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
           </div>
         </FormSection>
 
-        <FormSection title={t("settings.settingsGroupWatch")}>
-          <div className="space-y-3">
+        <FormSection
+          title={t("settings.settingsGroupWatch")}
+          description={t("settingsGuide.groups.watch.description")}
+        >
+          <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-secondary">
@@ -649,7 +662,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 prefixes: ignoreSummary.prefixes,
                 names: ignoreSummary.exactNames,
               })}
-              onClick={() => setIgnoreOpen(true)}
+              guideId="ignoreRules"
+              onInfo={(id) =>
+                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
+              }
+              onEdit={() => setIgnoreOpen(true)}
             />
             <Row
               title={t("settings.mappingRow")}
@@ -657,7 +674,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 builtin: defaults.length,
                 overrides: settings.classify_overrides.length,
               })}
-              onClick={() => setMappingOpen(true)}
+              guideId="classifyMapping"
+              onInfo={(id) =>
+                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
+              }
+              onEdit={() => setMappingOpen(true)}
             />
             <Row
               title={t("settings.labelRow")}
@@ -665,12 +686,19 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 builtin: categories.length,
                 custom: customLabels.length,
               })}
-              onClick={() => setLabelOpen(true)}
+              guideId="labels"
+              onInfo={(id) =>
+                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
+              }
+              onEdit={() => setLabelOpen(true)}
             />
           </div>
         </FormSection>
 
-        <FormSection title={t("settings.settingsGroupArchive")}>
+        <FormSection
+          title={t("settings.settingsGroupArchive")}
+          description={t("settingsGuide.groups.archive.description")}
+        >
           <Row
             title={t("settings.archiveRow")}
             summary={t("settings.archiveRowSummary", {
@@ -679,12 +707,19 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 ? t("settings.archiveAutoOn")
                 : t("settings.archiveAutoOff"),
             })}
-            onClick={() => setArchiveOpen(true)}
+            guideId="archive"
+            onInfo={(id) =>
+              setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
+            }
+            onEdit={() => setArchiveOpen(true)}
           />
         </FormSection>
 
-        <FormSection title={t("settings.settingsGroupReminder")}>
-          <div className="space-y-4">
+        <FormSection
+          title={t("settings.settingsGroupReminder")}
+          description={t("settingsGuide.groups.reminder.description")}
+        >
+          <div className="space-y-5">
             <label className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-secondary">
                 {t("settings.reminderEnabled")}
@@ -739,15 +774,22 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
           </div>
         </FormSection>
 
-        <FormSection title={t("settings.settingsGroupAdvanced")}>
-          <div className="space-y-2">
+        <FormSection
+          title={t("settings.settingsGroupAdvanced")}
+          description={t("settingsGuide.groups.advanced.description")}
+        >
+          <div className="space-y-3">
             <Row
               title={t("settings.projectOpenRow")}
               summary={t("settings.projectOpenSummary", {
                 ide: preferredIdeLabel,
                 custom: settings.custom_open_commands.length,
               })}
-              onClick={() => setProjectOpenOpen(true)}
+              guideId="projectOpen"
+              onInfo={(id) =>
+                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
+              }
+              onEdit={() => setProjectOpenOpen(true)}
             />
             <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
               <div className="text-sm font-semibold text-secondary">
@@ -794,6 +836,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         </FormSection>
       </div>
 
+      <SettingsInfoDialog
+        open={infoEntry !== null}
+        entry={infoEntry}
+        onClose={() => setInfoEntry(null)}
+      />
       <IgnoreRulesDialog
         open={ignoreOpen}
         initial={settings.ignore_rules}

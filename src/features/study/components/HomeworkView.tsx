@@ -221,11 +221,11 @@ export function HomeworkView({
           <EmptyState title={t("study.noMatchingHomework")} />
         </div>
       ) : (
-        <ul className="mt-4 space-y-2">
+        <ul className="mt-4 space-y-2.5">
           {sections.map((section) => (
             <Fragment key={section.key}>
               {section.label && (
-                <li className="px-1 pt-1.5 text-xs font-semibold text-secondary">
+                <li className="px-1 pt-2 text-xs font-semibold text-secondary">
                   {section.label}
                 </li>
               )}

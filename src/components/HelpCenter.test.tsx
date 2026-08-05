@@ -61,6 +61,15 @@ describe("HelpCenter", () => {
     );
   });
 
+  it("设置说明分区按分组展示设置项说明", () => {
+    renderCenter();
+    fireEvent.click(screen.getByRole("button", { name: "open-help" }));
+    fireEvent.click(screen.getByRole("button", { name: "设置说明" }));
+    expect(screen.getByText("监控与分类")).toBeInTheDocument();
+    expect(screen.getByText("忽略规则")).toBeInTheDocument();
+    expect(screen.getByText(/临时文件/)).toBeInTheDocument();
+  });
+
   it("显示当前检测到的工具", async () => {
     renderCenter();
     fireEvent.click(screen.getByText("open-help"));

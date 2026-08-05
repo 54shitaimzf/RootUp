@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, GraduationCap, Search } from "lucide-react";
+import { ExternalLink, GraduationCap, Search, Settings2 } from "lucide-react";
 import { Modal } from "./Modal";
 import { SectionLabel } from "./SectionLabel";
 import { SyntaxTable } from "./SyntaxTable";
@@ -14,9 +14,10 @@ import { Button } from "./Button";
 import { InlineNotice } from "./InlineNotice";
 import { OnboardingDialog, OnboardingSteps, isOnboardingDone } from "./OnboardingDialog";
 import { IDE_GUIDE, LANGUAGE_IDE_RECOMMENDATION } from "../lib/ideGuide";
+import { SETTINGS_GUIDE, SETTINGS_GUIDE_GROUPS } from "../lib/settingsGuide";
 import { listDetectedTools, logEvent, openUrl } from "../lib/tauri";
 
-export type HelpSection = "guide" | "syntax";
+export type HelpSection = "guide" | "syntax" | "settings";
 
 interface HelpContextValue {
   openHelp: (section?: HelpSection) => void;
@@ -126,6 +127,7 @@ function HelpCenterDialog({
           [
             ["guide", "help.sectionGuide"],
             ["syntax", "help.sectionSyntax"],
+            ["settings", "help.sectionSettings"],
           ] as [HelpSection, string][]
         ).map(([key, labelKey]) => (
           <button
@@ -140,6 +142,8 @@ function HelpCenterDialog({
           >
             {key === "guide" ? (
               <GraduationCap className="size-3.5" />
+            ) : key === "settings" ? (
+              <Settings2 className="size-3.5" />
             ) : (
               <Search className="size-3.5" />
             )}
@@ -211,6 +215,43 @@ function HelpCenterDialog({
               </InlineNotice>
             )}
           </div>
+        </div>
+      ) : section === "settings" ? (
+        <div className="mt-4 space-y-5">
+          {SETTINGS_GUIDE_GROUPS.map((group) => {
+            const entries = SETTINGS_GUIDE.filter(
+              (entry) => entry.group === group.id,
+            );
+            return (
+              <div key={group.id}>
+                <SectionLabel>{t(group.titleKey)}</SectionLabel>
+                <p className="mt-0.5 text-xs text-muted">
+                  {t(group.descriptionKey)}
+                </p>
+                <div className="mt-2 space-y-2.5">
+                  {entries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800"
+                    >
+                      <div className="text-sm font-medium text-secondary">
+                        {t(entry.titleKey)}
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">
+                        {t(entry.introKey)}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">
+                        {t("settings.infoExample")}: {t(entry.exampleKey)}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">
+                        {t("settings.infoTips")}: {t(entry.tipsKey)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="mt-4 space-y-4">

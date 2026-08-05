@@ -179,6 +179,85 @@ export default {
     homeworkFormInvalid:
       "Check the form: title is required (≤60 chars); due time is required; note ≤200 chars and details ≤5000 chars.",
   },
+  settingsGuide: {
+    groups: {
+      general: { title: "General", description: "Appearance, language and close behavior." },
+      watch: { title: "Monitoring & classification", description: "Choose which folders RootUp watches and how files are grouped." },
+      archive: { title: "Archive", description: "Controlled file moves with undo support." },
+      reminder: { title: "Study reminders", description: "Homework deadline reminders and quick entry." },
+      advanced: { title: "Advanced", description: "Smart open, logs and reset." },
+    },
+    theme: {
+      intro: "Choose light, dark, or follow the system appearance.",
+      example: "Switch to dark while studying at night to reduce glare.",
+      tips: "Theme can also be switched from the tray menu and persists across restarts.",
+    },
+    language: {
+      intro: "Switch the interface language; it applies immediately and persists.",
+      example: "Switch to English and the whole UI updates at once.",
+      tips: "Adding a language requires syncing the frontend dictionary, registry and backend whitelist.",
+    },
+    closeAction: {
+      intro: "Set the default behavior when closing the window.",
+      example: "Pick “Run in background” to stay in the tray without being asked again.",
+      tips: "You can also tick “Remember my choice” in the close dialog to update this setting.",
+    },
+    watchedDirs: {
+      intro: "Files inside watched folders are scanned, indexed and tracked in real time.",
+      example: "Add “Downloads” and “Desktop” so new files appear within seconds.",
+      tips: "Drop a folder or use “Browse…” to add; removing a folder also cleans its index (disk files are untouched and can be restored by re-adding).",
+    },
+    scheme: {
+      intro: "A scheme is a named snapshot of ignore rules plus classification mapping.",
+      example: "Save a “Development” scheme and reapply the whole combo later.",
+      tips: "Applying a scheme replaces current rules; theme, language and watched folders stay unchanged.",
+    },
+    ignoreRules: {
+      intro: "Configure which extensions, prefixes or file names are not indexed.",
+      example: "Transient files like `.crdownload` are ignored by default.",
+      tips: "Ignoring only affects indexing; disk files are never deleted.",
+    },
+    classifyMapping: {
+      intro: "Map extensions to categories such as documents, images or video.",
+      example: "Map `psd` and `ai` to “Images” so design assets sort automatically.",
+      tips: "Overrides take priority and take effect after a restart.",
+    },
+    labels: {
+      intro: "Manage display names, icons and colors of custom labels.",
+      example: "Create a “Course materials” label that shows once files match.",
+      tips: "Built-in categories are read-only; labels appear in filters only after being carried by files.",
+    },
+    archive: {
+      intro: "Archiving moves files into the archive root and records undoable batches.",
+      example: "Tidy finished projects into “Archive root/Projects/” while keeping desktop shortcuts working.",
+      tips: "The archive root must be on the same drive; name conflicts auto-increment and never overwrite.",
+    },
+    reminder: {
+      intro: "When enabled, pending homework is grouped as overdue or due soon.",
+      example: "With 3 lead days, due homework is pinned in the list and the tray shows a count.",
+      tips: "Only pending homework is included; system notifications are not enabled yet.",
+    },
+    homeworkShortcut: {
+      intro: "Create an “Open homework” shortcut on the desktop.",
+      example: "Double-click it to open the study page homework view with active tasks.",
+      tips: "Creating again produces a numbered shortcut without overwriting.",
+    },
+    projectOpen: {
+      intro: "Configure how detected projects open, including custom commands.",
+      example: "Auto-detect IDEs, or always open Rust projects in VS Code.",
+      tips: "If no tool is found, it falls back to File Explorer instead of failing.",
+    },
+    logDir: {
+      intro: "View and copy the log directory for troubleshooting.",
+      example: "Share the log path and the latest entries when reporting an issue.",
+      tips: "Logs rotate by size and keep the latest three files.",
+    },
+    reset: {
+      intro: "Restore rules and appearance to defaults while keeping watched folders and projects.",
+      example: "Return to a clean start when settings get messy.",
+      tips: "Disk files and archive records are never deleted; check the watched-folder list before resetting.",
+    },
+  },
   settings: {
     theme: "Theme",
     themeSystem: "System",
@@ -227,6 +306,10 @@ export default {
     logDirHint:
       "Logs record scans, indexing and queries for troubleshooting and verification.",
     copyPath: "Copy path",
+    infoIntro: "What it does",
+    infoExample: "Example",
+    infoTips: "Notes",
+    infoClose: "Close",
     dirAdded: "Folder added, scanning started",
     presetDefault: "Default (Student)",
     presetDev: "Developer",
@@ -470,6 +553,7 @@ export default {
     title: "Help & getting started",
     sectionGuide: "Getting started",
     sectionSyntax: "Search & advanced",
+    sectionSettings: "Settings guide",
     onboardingTitle: "Welcome to RootUp",
     onboardingIntro: "Three steps to get started:",
     onboardingStep1Title: "Pick theme & language",
