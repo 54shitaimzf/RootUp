@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Info, Lightbulb, Sparkles } from "lucide-react";
 import { Modal } from "./Modal";
 import { SectionLabel } from "./SectionLabel";
 import { Button } from "./Button";
@@ -28,25 +29,38 @@ export function SettingsInfoDialog({
       }
     >
       {entry && (
-        <div className="space-y-4">
-          <div>
-            <SectionLabel>{t("settings.infoIntro")}</SectionLabel>
-            <p className="mt-1 text-sm leading-relaxed text-secondary">
+        <div className="space-y-5">
+          <section>
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="size-4 shrink-0 text-brand-600 dark:text-brand-400" />
+              <SectionLabel tone="strong">
+                {t("settings.infoIntro")}
+              </SectionLabel>
+            </div>
+            <p className="mt-1.5 text-sm leading-relaxed text-secondary">
               {t(entry.introKey)}
             </p>
-          </div>
-          <div>
-            <SectionLabel>{t("settings.infoExample")}</SectionLabel>
-            <p className="mt-1 text-sm leading-relaxed text-secondary">
+          </section>
+          <section>
+            <div className="flex items-center gap-1.5">
+              <Lightbulb className="size-4 shrink-0 text-amber-500 dark:text-amber-400" />
+              <SectionLabel tone="strong">
+                {t("settings.infoExample")}
+              </SectionLabel>
+            </div>
+            <div className="mt-1.5 rounded-lg border-l-2 border-brand-400 bg-slate-50 px-3 py-2.5 text-sm leading-relaxed text-secondary dark:border-brand-500/50 dark:bg-slate-800">
               {t(entry.exampleKey)}
-            </p>
-          </div>
-          <div>
-            <SectionLabel>{t("settings.infoTips")}</SectionLabel>
-            <p className="mt-1 text-sm leading-relaxed text-secondary">
+            </div>
+          </section>
+          <section>
+            <div className="flex items-center gap-1.5">
+              <Info className="size-4 shrink-0 text-slate-400 dark:text-slate-500" />
+              <SectionLabel>{t("settings.infoTips")}</SectionLabel>
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
               {t(entry.tipsKey)}
             </p>
-          </div>
+          </section>
         </div>
       )}
     </Modal>

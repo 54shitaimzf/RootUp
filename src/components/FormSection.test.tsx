@@ -16,7 +16,8 @@ describe("FormSection", () => {
     const section = container.querySelector("section");
     expect(section?.className).toContain("border-t");
     expect(section?.className).toContain("first:border-t-0");
-    expect(section?.className).toContain("pt-4");
+    expect(section?.className).toContain("pt-5");
+    expect(section?.className).toContain("pb-2");
     expect(section?.className).toContain("first:pt-0");
     expect(container.querySelector(".bg-brand-500")).not.toBeNull();
     expect(screen.getByText("基本信息").className).toContain("text-strong");

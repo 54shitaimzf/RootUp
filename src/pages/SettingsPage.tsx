@@ -444,7 +444,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         </Banner>
       )}
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-card dark:border-slate-800 dark:bg-slate-900">
         <FormSection
           title={t("settings.settingsGroupGeneral")}
           description={t("settingsGuide.groups.general.description")}
