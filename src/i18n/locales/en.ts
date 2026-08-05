@@ -208,7 +208,17 @@ export default {
       "Add download or study folders; existing files are scanned and new files are indexed in real time.",
     addDir: "Add",
     dirPlaceholder: "Folder path, e.g. D:\\Downloads",
+    browse: "Browse…",
+    dragDropHint:
+      "You can also drop a folder here; dropping a file uses its parent folder.",
+    commonDirs: "Common folders:",
+    commonDirDownloads: "Downloads",
+    commonDirDesktop: "Desktop",
+    commonDirDocuments: "Documents",
     remove: "Remove",
+    removeDir: "Remove watched folder",
+    removeCleanupConfirm:
+      "Removing “{{dir}}” will hide about {{count}} indexed file(s) from the Files page (disk files are untouched; re-adding and rescanning restores them). Remove?",
     dirEmpty: "No watched folders yet",
     rescanAll: "Rescan all",
     scanStarted: "Scanning all watched folders started",

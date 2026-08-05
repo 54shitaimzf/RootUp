@@ -8,7 +8,7 @@ use crate::infra::scanner::{ScanService, ScanStatus};
 use crate::infra::storage;
 use crate::infra::watcher::WatchService;
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
@@ -21,6 +21,14 @@ const DEFAULT_LIST_LIMIT: i64 = 50;
 pub struct AddDirOutcome {
     pub message: Option<String>,
     pub dir: String,
+}
+
+/// 常用目录条目（下载 / 桌面 / 文档，仅返回存在项）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommonDirEntry {
+    pub path: String,
+    pub kind: String,
 }
 
 /// 内置扩展名 → 类别映射条目（设置页只读展示用，单一来源在后端）。
@@ -112,8 +120,88 @@ pub fn remove_watched_dir(app: AppHandle, dir: String) -> Result<(), String> {
     if let Ok(scanner) = app.state::<Mutex<ScanService>>().lock() {
         scanner.remove_dir(&dir);
     }
-    log::info!("watch: 移除 {dir}");
+    // 移除即清理：该目录（含子目录）下已索引记录标记 deleted（不动磁盘，可重扫恢复）。
+    let store = app.state::<Arc<Mutex<dyn IndexStore>>>();
+    let removed = store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .mark_under_roots_deleted(std::slice::from_ref(&dir))?;
+    log::info!("watch: 移除 {dir} 清理索引 count={removed}");
     Ok(())
+}
+
+/// 某目录（含子目录）下非 deleted 的索引记录数（移除确认用）。
+#[tauri::command]
+pub fn count_under_root(
+    store: State<'_, Arc<Mutex<dyn IndexStore>>>,
+    root: String,
+) -> Result<i64, String> {
+    let root = normalize_path(&root);
+    if root.is_empty() {
+        return Err("目录不能为空".into());
+    }
+    store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .count_under_root(&root)
+}
+
+/// 拖拽/粘贴路径解析：目录原样返回；文件返回其父目录；不存在报错。
+#[tauri::command]
+pub fn resolve_dir_target(path: String) -> Result<String, String> {
+    resolve_dir_target_inner(&path)
+}
+
+fn resolve_dir_target_inner(path: &str) -> Result<String, String> {
+    let path = normalize_path(path);
+    if path.is_empty() {
+        return Err("路径不能为空".into());
+    }
+    let p = Path::new(&path);
+    if p.is_dir() {
+        return Ok(path);
+    }
+    if p.is_file() {
+        let parent = p
+            .parent()
+            .map(|d| normalize_path(&d.to_string_lossy()))
+            .filter(|d| !d.is_empty())
+            .ok_or_else(|| "无法确定父目录".to_string())?;
+        return Ok(parent);
+    }
+    Err("路径不存在".into())
+}
+
+/// 从用户目录推导常用目录（仅返回存在项，按 下载→桌面→文档 排序）。
+fn common_dirs_from(base: &Path) -> Vec<CommonDirEntry> {
+    let candidates = [
+        ("downloads", "Downloads"),
+        ("desktop", "Desktop"),
+        ("documents", "Documents"),
+    ];
+    let mut result = Vec::new();
+    for (kind, name) in candidates {
+        let path = base.join(name);
+        if path.is_dir() {
+            result.push(CommonDirEntry {
+                path: normalize_path(&path.to_string_lossy()),
+                kind: kind.to_string(),
+            });
+        }
+    }
+    result
+}
+
+/// 常用目录（下载 / 桌面 / 文档）一键添加候选。
+#[tauri::command]
+pub fn list_common_dirs() -> Vec<CommonDirEntry> {
+    let Some(base) = std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+    else {
+        return Vec::new();
+    };
+    common_dirs_from(&base)
 }
 
 /// 当前监控目录列表。
@@ -228,5 +316,53 @@ pub fn log_event(level: String, message: String) {
         "warn" => log::warn!("[frontend] {message}"),
         "debug" => log::debug!("[frontend] {message}"),
         _ => log::info!("[frontend] {message}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("rootup_files_cmd_{tag}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn resolve_dir_target_handles_dir_file_and_missing() {
+        let dir = temp_dir("resolve");
+        let sub = dir.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        let file = sub.join("a.pdf");
+        fs::write(&file, "x").unwrap();
+
+        assert_eq!(
+            resolve_dir_target_inner(&sub.to_string_lossy()).unwrap(),
+            normalize_path(&sub.to_string_lossy())
+        );
+        assert_eq!(
+            resolve_dir_target_inner(&file.to_string_lossy()).unwrap(),
+            normalize_path(&sub.to_string_lossy())
+        );
+        assert!(resolve_dir_target_inner("C:/not-exist-xyz").is_err());
+        assert!(resolve_dir_target_inner("").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn common_dirs_only_returns_existing_in_order() {
+        let base = temp_dir("common");
+        fs::create_dir_all(base.join("Downloads")).unwrap();
+        fs::create_dir_all(base.join("Desktop")).unwrap();
+        // Documents 不创建 → 应被跳过
+        let dirs = common_dirs_from(&base);
+        let kinds: Vec<&str> = dirs.iter().map(|d| d.kind.as_str()).collect();
+        assert_eq!(kinds, vec!["downloads", "desktop"]);
+        assert!(dirs.iter().all(|d| Path::new(&d.path).is_dir()));
+        let _ = fs::remove_dir_all(&base);
     }
 }

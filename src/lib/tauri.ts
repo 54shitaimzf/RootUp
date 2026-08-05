@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { StudyData } from "./studyStore";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -175,6 +176,12 @@ export interface AddDirOutcome {
   dir: string;
 }
 
+/** 常用目录条目（下载 / 桌面 / 文档）。 */
+export interface CommonDirEntry {
+  path: string;
+  kind: "downloads" | "desktop" | "documents";
+}
+
 export interface ScanProgress {
   dir: string;
   discovered: number;
@@ -259,6 +266,24 @@ export function addWatchedDir(dir: string): Promise<AddDirOutcome> {
 
 export function removeWatchedDir(dir: string): Promise<void> {
   return invoke<void>("remove_watched_dir", { dir });
+}
+
+export function countUnderRoot(root: string): Promise<number> {
+  return invoke<number>("count_under_root", { root });
+}
+
+export function resolveDirTarget(path: string): Promise<string> {
+  return invoke<string>("resolve_dir_target", { path });
+}
+
+export function listCommonDirs(): Promise<CommonDirEntry[]> {
+  return invoke<CommonDirEntry[]>("list_common_dirs");
+}
+
+/** 原生目录选择器；取消返回 null。 */
+export async function openDirectoryDialog(): Promise<string | null> {
+  const selected = await open({ directory: true, multiple: false });
+  return typeof selected === "string" ? selected : null;
 }
 
 export function listWatchedDirs(): Promise<string[]> {

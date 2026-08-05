@@ -1,7 +1,7 @@
 {
   "name": "rootup",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.8.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@tauri-apps/plugin-dialog": "^2.7.2",
     "i18next": "^26.3.6",
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",

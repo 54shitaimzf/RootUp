@@ -78,6 +78,10 @@ pub trait IndexStore: Send + Sync {
     fn upsert_many(&mut self, records: &[FileRecord]) -> Result<(), String>;
     /// 返回某目录（含子目录）下非 deleted 的路径列表（差集快照用）。
     fn paths_with_prefix(&self, dir: &str) -> Result<Vec<String>, String>;
+    /// 某目录（含子目录）下非 deleted 的记录数（移除确认/清理计数用）。
+    fn count_under_root(&self, root: &str) -> Result<i64, String> {
+        Ok(self.paths_with_prefix(root)?.len() as i64)
+    }
     /// 批量标记 deleted（单事务），返回实际变更数。
     fn mark_missing(&mut self, paths: &[String]) -> Result<i64, String>;
     /// 库中现存标签 key 列表（去重排序）。

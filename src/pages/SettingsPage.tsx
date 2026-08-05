@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
-import { Check, Copy, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, Copy, FolderOpen, RefreshCw, RotateCcw } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useSettings } from "../hooks/useSettings";
 import type { ScanController } from "../hooks/useScan";
 import { isComposing } from "../lib/ime";
@@ -8,6 +9,7 @@ import { applyPreset, RULE_PRESETS } from "../lib/presets";
 import { LANGUAGE_OPTIONS } from "../lib/languages";
 import {
   addWatchedDir,
+  countUnderRoot,
   createHomeworkShortcut,
   getLogDir,
   listCategories,
@@ -15,11 +17,15 @@ import {
   listLabelDefs,
   listSchemes,
   listWatchedDirs,
+  listCommonDirs,
+  openDirectoryDialog,
   removeWatchedDir,
+  resolveDirTarget,
   resetSettings,
   type ClassifyDefaultEntry,
   type ClassifyRule,
   type CloseAction,
+  type CommonDirEntry,
   type IgnoreRules,
   type LabelDef,
   type Language,
@@ -27,6 +33,7 @@ import {
   type Settings,
   type ThemeMode,
 } from "../lib/tauri";
+import { cleanPathInput } from "../lib/paths";
 import {
   resolveCurrentScheme,
   summarizeIgnoreRules,
@@ -65,6 +72,10 @@ const CLOSE_ACTION_OPTIONS: { value: CloseAction; labelKey: string }[] = [
 ];
 
 const REMINDER_LEAD_OPTIONS = [1, 2, 3, 5, 7, 14];
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 function cloneRules(source: {
   ignore_rules: IgnoreRules;
@@ -155,6 +166,12 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [projectOpenOpen, setProjectOpenOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [customLabels, setCustomLabels] = useState<LabelDef[]>([]);
+  const [commonDirs, setCommonDirs] = useState<CommonDirEntry[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{
+    dir: string;
+    count: number;
+  } | null>(null);
 
   useEffect(() => {
     listWatchedDirs()
@@ -175,6 +192,39 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     listLabelDefs()
       .then(setCustomLabels)
       .catch(() => setCustomLabels([]));
+    listCommonDirs()
+      .then(setCommonDirs)
+      .catch(() => setCommonDirs([]));
+  }, []);
+
+  // 文件夹拖拽：目录直接添加，文件取其父目录。
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    try {
+      getCurrentWindow()
+        .onDragDropEvent((event) => {
+          if (event.payload.type === "over") {
+            setDragActive(true);
+          } else if (event.payload.type === "leave") {
+            setDragActive(false);
+          } else if (event.payload.type === "drop") {
+            setDragActive(false);
+            const first = event.payload.paths[0];
+            if (first) {
+              void submitDir(first, true);
+            }
+          }
+        })
+        .then((fn) => {
+          unlisten = fn;
+        })
+        .catch(() => {});
+    } catch {
+      // 非 Tauri 环境（测试/浏览器预览）下拖拽不可用，静默跳过
+    }
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   const refreshLabels = () => {
@@ -189,9 +239,18 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   };
 
   const handleAddDir = async () => {
-    const dir = newDir.trim();
+    const dir = cleanPathInput(newDir);
+    if (!dir) return;
+    await submitDir(dir, false);
+  };
+
+  const submitDir = async (value: string, allowFileParent: boolean) => {
+    let dir = cleanPathInput(value);
     if (!dir) return;
     try {
+      if (allowFileParent) {
+        dir = await resolveDirTarget(dir);
+      }
       const outcome = await addWatchedDir(dir);
       setWatchedDirs((prev) => [...new Set([...prev, outcome.dir])]);
       setNewDir("");
@@ -203,11 +262,32 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     }
   };
 
-  const handleRemoveDir = async (dir: string) => {
+  const handleRemoveClick = async (dir: string) => {
+    try {
+      const count = await countUnderRoot(dir);
+      setRemoveTarget({ dir, count });
+    } catch (err) {
+      setDirError(String(err));
+    }
+  };
+
+  const handleRemoveConfirm = async () => {
+    if (!removeTarget) return;
+    const dir = removeTarget.dir;
+    setRemoveTarget(null);
     try {
       await removeWatchedDir(dir);
       setWatchedDirs((prev) => prev.filter((d) => d !== dir));
       setDirError(null);
+    } catch (err) {
+      setDirError(String(err));
+    }
+  };
+
+  const handleBrowse = async () => {
+    try {
+      const dir = await openDirectoryDialog();
+      if (dir) await submitDir(dir, false);
     } catch (err) {
       setDirError(String(err));
     }
@@ -447,25 +527,61 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               <p className="mt-1 text-xs text-muted">
                 {t("settings.watchedDirsDesc")}
               </p>
-              <div className="mt-2.5 flex gap-2">
-                <Input
-                  type="text"
-                  value={newDir}
-                  onChange={(event) => setNewDir(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (isComposing(event)) return;
-                    if (event.key === "Enter") void handleAddDir();
-                  }}
-                  placeholder={t("settings.dirPlaceholder")}
-                  className="flex-1"
-                />
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => void handleAddDir()}
-                >
-                  {t("settings.addDir")}
-                </Button>
+              <div
+                className={`mt-2.5 rounded-lg border border-dashed px-3 py-2.5 transition-colors ${
+                  dragActive
+                    ? "border-brand-400 bg-brand-50/70 dark:border-brand-500/50 dark:bg-brand-500/10"
+                    : "border-slate-200 dark:border-slate-700"
+                }`}
+              >
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    value={newDir}
+                    onChange={(event) => setNewDir(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (isComposing(event)) return;
+                      if (event.key === "Enter") void handleAddDir();
+                    }}
+                    placeholder={t("settings.dirPlaceholder")}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    icon={FolderOpen}
+                    onClick={() => void handleBrowse()}
+                  >
+                    {t("settings.browse")}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={() => void handleAddDir()}
+                  >
+                    {t("settings.addDir")}
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-xs text-muted">
+                  {t("settings.dragDropHint")}
+                </p>
+                {commonDirs.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted">
+                      {t("settings.commonDirs")}
+                    </span>
+                    {commonDirs.map((entry) => (
+                      <button
+                        key={entry.kind}
+                        type="button"
+                        onClick={() => void submitDir(entry.path, false)}
+                        className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-brand-100 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
+                      >
+                        {t(`settings.commonDir${capitalize(entry.kind)}`)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <ul className="mt-2.5 space-y-1">
                 {watchedDirs.length === 0 ? (
@@ -481,7 +597,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                       <span className="min-w-0 flex-1 truncate">{dir}</span>
                       <button
                         type="button"
-                        onClick={() => void handleRemoveDir(dir)}
+                        onClick={() => void handleRemoveClick(dir)}
                         className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
                       >
                         {t("settings.remove")}
@@ -727,6 +843,18 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
           void handleReset();
         }}
         onCancel={() => setResetOpen(false)}
+      />
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title={t("settings.removeDir")}
+        description={t("settings.removeCleanupConfirm", {
+          dir: removeTarget?.dir ?? "",
+          count: removeTarget?.count ?? 0,
+        })}
+        confirmLabel={t("settings.remove")}
+        danger
+        onConfirm={() => void handleRemoveConfirm()}
+        onCancel={() => setRemoveTarget(null)}
       />
       <ProjectOpenDialog
         open={projectOpenOpen}

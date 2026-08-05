@@ -6,6 +6,24 @@ import { ThemeProvider } from "../theme/ThemeProvider";
 import type { ScanController } from "../hooks/useScan";
 import type { Settings } from "../lib/tauri";
 
+const dragMock = vi.hoisted(() => ({
+  handler: undefined as
+    | ((event: {
+        type: string;
+        payload: { type: string; paths: string[] };
+      }) => void)
+    | undefined,
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onDragDropEvent: vi.fn(async (handler: typeof dragMock.handler) => {
+      dragMock.handler = handler;
+      return () => {};
+    }),
+  }),
+}));
+
 vi.mock("../lib/tauri", () => ({
   defaultSettings: {
     version: 1,
@@ -23,8 +41,12 @@ vi.mock("../lib/tauri", () => ({
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
   addWatchedDir: vi.fn(),
-  createHomeworkShortcut: vi.fn(),
   removeWatchedDir: vi.fn(),
+  countUnderRoot: vi.fn(),
+  listCommonDirs: vi.fn(),
+  resolveDirTarget: vi.fn(),
+  openDirectoryDialog: vi.fn(),
+  createHomeworkShortcut: vi.fn(),
   resetSettings: vi.fn(),
   getLogDir: vi.fn(),
   listCategories: vi.fn(),
@@ -39,7 +61,12 @@ vi.mock("../lib/tauri", () => ({
 
 import {
   addWatchedDir,
+  countUnderRoot,
   createHomeworkShortcut,
+  listCommonDirs,
+  openDirectoryDialog,
+  removeWatchedDir,
+  resolveDirTarget,
   getLogDir,
   getSettings,
   listCategories,
@@ -103,6 +130,15 @@ describe("SettingsPage", () => {
     vi.mocked(listClassifyDefaults).mockResolvedValue([]);
     vi.mocked(listSchemes).mockResolvedValue([]);
     vi.mocked(listArchiveBatches).mockResolvedValue([]);
+    vi.mocked(listCommonDirs).mockResolvedValue([]);
+    vi.mocked(countUnderRoot).mockResolvedValue(0);
+    vi.mocked(resolveDirTarget).mockImplementation(async (path) => path);
+    vi.mocked(openDirectoryDialog).mockResolvedValue(null);
+    vi.mocked(removeWatchedDir).mockResolvedValue(undefined);
+    vi.mocked(addWatchedDir).mockImplementation(async (dir) => ({
+      dir,
+      message: null,
+    }));
     vi.mocked(undoArchive).mockResolvedValue({
       batchId: 1,
       archived: 1,
@@ -150,6 +186,72 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "创建快捷方式" }));
     expect(createHomeworkShortcut).toHaveBeenCalled();
     expect(await screen.findByText("已创建桌面快捷方式")).toBeInTheDocument();
+  });
+
+  it("常用目录一键添加", async () => {
+    vi.mocked(listCommonDirs).mockResolvedValue([
+      { path: "C:/Users/x/Downloads", kind: "downloads" },
+    ]);
+    renderPage();
+    const chip = await screen.findByText("下载");
+    fireEvent.click(chip);
+    await waitFor(() =>
+      expect(addWatchedDir).toHaveBeenCalledWith("C:/Users/x/Downloads"),
+    );
+  });
+
+  it("浏览目录选择后直接添加", async () => {
+    vi.mocked(openDirectoryDialog).mockResolvedValue("C:/Picked");
+    renderPage();
+    await screen.findByLabelText("语言");
+    fireEvent.click(screen.getByRole("button", { name: "浏览…" }));
+    await waitFor(() =>
+      expect(addWatchedDir).toHaveBeenCalledWith("C:/Picked"),
+    );
+  });
+
+  it("拖拽文件夹触发添加（文件取父目录由后端解析）", async () => {
+    renderPage();
+    await screen.findByLabelText("语言");
+    await waitFor(() => expect(dragMock.handler).toBeDefined());
+    dragMock.handler?.({
+      type: "drop",
+      payload: { type: "drop", paths: ["C:/Drop/notes.pdf"] },
+    });
+    await waitFor(() =>
+      expect(resolveDirTarget).toHaveBeenCalledWith("C:/Drop/notes.pdf"),
+    );
+    await waitFor(() =>
+      expect(addWatchedDir).toHaveBeenCalledWith("C:/Drop/notes.pdf"),
+    );
+  });
+
+  it("移除目录先取数再确认，确认后调用移除", async () => {
+    vi.mocked(listWatchedDirs).mockResolvedValue(["C:/Watch"]);
+    vi.mocked(countUnderRoot).mockResolvedValue(3);
+    renderPage();
+    const removeButtons = await screen.findAllByRole("button", {
+      name: "移除",
+    });
+    fireEvent.click(removeButtons[0]);
+    expect(await screen.findByText(/约 3 个文件/)).toBeInTheDocument();
+    const confirms = screen.getAllByRole("button", { name: "移除" });
+    fireEvent.click(confirms[confirms.length - 1]);
+    await waitFor(() =>
+      expect(removeWatchedDir).toHaveBeenCalledWith("C:/Watch"),
+    );
+  });
+
+  it("取消移除不调用移除命令", async () => {
+    vi.mocked(listWatchedDirs).mockResolvedValue(["C:/Watch"]);
+    renderPage();
+    const removeButtons = await screen.findAllByRole("button", {
+      name: "移除",
+    });
+    fireEvent.click(removeButtons[0]);
+    await screen.findByText(/约 0 个文件/);
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(removeWatchedDir).not.toHaveBeenCalled();
   });
 
   it("忽略规则与分类映射弹窗可开关", async () => {

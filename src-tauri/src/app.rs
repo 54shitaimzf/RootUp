@@ -134,6 +134,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // 设置持久化存储
         .plugin(tauri_plugin_store::Builder::default().build())
+        // 原生目录选择器（添加监控目录“浏览…”）
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             archive_commands::archive_files,
             archive_commands::archive_filtered,
@@ -158,6 +160,9 @@ pub fn run() {
             labels_commands::delete_label_def,
             files_commands::add_watched_dir,
             files_commands::remove_watched_dir,
+            files_commands::count_under_root,
+            files_commands::resolve_dir_target,
+            files_commands::list_common_dirs,
             files_commands::list_watched_dirs,
             files_commands::query_files,
             files_commands::list_labels,

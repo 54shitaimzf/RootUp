@@ -381,6 +381,19 @@ impl IndexStore for SqliteIndexStore {
             .map_err(|e| e.to_string())
     }
 
+    fn count_under_root(&self, root: &str) -> Result<i64, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let prefix = format!("{}/%", escape_like(root));
+        conn.query_row(
+            "SELECT COUNT(*) FROM files \
+             WHERE state != ?1 \
+               AND (LOWER(path) = LOWER(?2) OR LOWER(path) LIKE LOWER(?3) ESCAPE '\\')",
+            params![FileState::Deleted.as_str(), root, prefix],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())
+    }
+
     fn mark_missing(&mut self, paths: &[String]) -> Result<i64, String> {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -1168,6 +1181,21 @@ mod tests {
                 .state,
             "indexed"
         );
+    }
+
+    #[test]
+    fn count_under_root_counts_non_deleted_subtree() {
+        let mut s = store();
+        s.upsert(&record("C:/Watch/a.pdf", 1, 1)).unwrap();
+        s.upsert(&record("C:/Watch/sub/b.txt", 1, 2)).unwrap();
+        s.upsert(&record("C:/Other/c.txt", 1, 3)).unwrap();
+        s.upsert(&record("C:/Watch/gone.pdf", 1, 4)).unwrap();
+        s.mark_deleted("C:/Watch/gone.pdf").unwrap();
+
+        assert_eq!(s.count_under_root("C:/Watch").unwrap(), 2);
+        assert_eq!(s.count_under_root("c:/watch").unwrap(), 2);
+        assert_eq!(s.count_under_root("C:/Other").unwrap(), 1);
+        assert_eq!(s.count_under_root("C:/None").unwrap(), 0);
     }
 
     #[test]
