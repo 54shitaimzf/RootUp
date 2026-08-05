@@ -126,7 +126,9 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
                     → core/settings.rs（模型与默认值）
 ```
 
-**版本化与向前兼容**：`CURRENT_VERSION` 为配置版本（当前 1）；新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`；结构性升级在 `Settings::migrate()` 中按版本号逐级迁移。旧版本配置文件永远可被新版本读取（未知字段容忍 + 缺省字段取默认）。
+**版本化与向前兼容**：`CURRENT_VERSION` 为配置版本（当前 3，v2 起含 archive_root/auto_archive，v3 起含 close_action/reminder_enabled/reminder_lead_days）；新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`；结构性升级在 `Settings::migrate()` 中按版本号逐级迁移。旧版本配置文件永远可被新版本读取（未知字段容忍 + 缺省字段取默认）。
+
+**语言三处约定**：新增语言必须同步三处——前端字典（`src/i18n/locales/`）、前端语言注册表（`src/lib/languages.ts`，下拉与后续语言相关 UI 的单一来源）、后端 `Language` 白名单（`core/settings.rs` 校验）；任何一处缺失即视为未完成，i18n 一致性测试覆盖字典成对。
 
 **损坏容错**：`infra/storage.rs` 的 `backup_corrupt_settings` 在加载前校验 JSON，损坏文件改名为 `settings.corrupt-<时间戳>.bak` 并回退默认。
 
@@ -228,6 +230,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 -- **学业页课程表布局约定**：时间刻度移到表格外左侧页边距（中文 48px / 英文 64px），与整点横线共用 `axisTopPercent` 计算保证对齐，表格内部不再有左列；课程卡 `rounded-sm`、内部徽章与色条 `rounded-xs`；卡片内容按高度降级（≥64px full / ≥40px standard / <40px compact），最小高度 28px。时段排布由 `layoutDayCourses` 承载：时间连通分量 → 贪心分列（同列课程周次互斥）→ 同起止错周课折叠为堆叠卡（层叠边缘 + “共 N 门”角标），点击后每张课程卡作为独立固定元素围绕点击位置摊开（无容器/滚动框/面板，展开期间原堆叠卡隐藏），大卡完整展示信息，最多 4 张并用 +N 收口，deal-in 逐张动效，Esc/点外部/浮动关闭按钮收起；堆叠卡不设更高层级，层叠边缘可轻微越界，由其它课程卡渲染在其上层盖住、不同起止错周课 6px 叠放偏移、同周重叠最多 2 列并折叠为 “+N”（`SlotCoursesDialog` 列出该时段全部课程）；同周冲突卡使用弱玫瑰色描边。点击课程卡打开 `CourseDetailDialog`（完整信息 + 作业列表），编辑/删除/查看作业均需显式操作。
 - 学期生命周期：`Semester` 模型（i18n 名称/起止日期/周数），工具栏分层展示——主行 学期选择 + 周步进 + 回到本周，次行 周起始/全部周次；当前周按学期起始推算并可手动预览，`clampWeek` 限制 1..weekCount；学期选择随偏好持久化。
 - 学业数据链路（v1：后端 study.json）：`core/study.rs` 模型/校验/种子 + `infra/study_store.rs`（原子写、损坏备份）+ `commands/study.rs`（get/save/exists/reapply）；课程携带稳定 `course-<id>` 标签键；`StudyClassifier` 追加进分类链（完整课程名匹配、长名优先、≥2 字符）；`save_study_data` 保存后执行定向重分类（`IndexStore::all_records/update_labels` 只刷新 labels 列）；旧 localStorage `rootup.study.data.v1` 首次启动一次性迁移并删除；迁移时并入“演示：边界场景”学期。
+- 学业截止提醒：判定规则为“自然日差 ≤ lead_days 且未逾期”即临期、差值为负即逾期，仅待办参与；前端 `lib/study.ts`（`isDueSoon`/`homeworkReminderGroup`）与后端 `core/reminder.rs`（`reminder_items`）共用同一语义；`reminder_enabled` 默认关闭、`reminder_lead_days` 1–14（默认 3）。
 - 课程标签展示：文件列表/筛选 chips/搜索自动补全通过 `buildCourseLabelDefs` 把 `course-<key>` 映射为课程名与课程色；搜索语法 `label:course-<key>` 直接可用。
 - 学业页工具栏布局：主行 = 学期选择/管理/周步进，次行 = 视图切换 + “添加课程”（紧贴课表上方右侧）。
 - 长标题边界样例：示例 `c-demo-5`（周二全周）用于目验课表截断、铺开浮层换行、详情全文与筛选 chips 截断。
@@ -250,7 +253,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **帮助中心与新手引导**：`HelpCenterProvider` 全局装配（侧栏入口 + 首次欢迎 + 分组帮助弹窗）；首次欢迎用 localStorage `rootup.onboarding.v1` 一次性标记，帮助中心可重看；IDE 指导数据在 `lib/ideGuide.ts`（仅官方链接）；后端 `list_detected_tools` 返回已检测工具 key，`open_url` 仅允许 https 且命中 `core/tools.rs` 白名单域名（`ALLOWED_DOWNLOAD_DOMAINS`），非法 URL 拒绝并记日志。
 - **打包与发布约定**：`tauri.conf.json` 启用 NSIS（`installMode: currentUser`、中英语言选择、开始菜单 RootUp），图标由 `npm run tauri icon resources/icons/rootup-sprout.svg` 生成全套；发布前必须 `npm run check:version` 全绿（规则见"版本号规则与发布纪律"）；发布验证统一走 `scripts/verify-installer.ps1`（静默安装 → 冒烟 → 卸载），日常 CI 为 `ci.yml`（构建 + smoke + 架构校验），发布为 `release.yml`（打 `v*` tag 构建安装包 → 验证 → 上传 GitHub Release）；不签名、不启用 updater，SmartScreen 提示写入发布说明。
 - **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/components/`（页面级组件与测试），`pages/` 只保留入口。
-- **托盘菜单**：在 `infra/tray.rs` 中扩展菜单项与事件处理。
+- **托盘菜单**：在 `infra/tray.rs` 中扩展菜单项与事件处理。菜单模型由纯函数生成（`core/tray_menu.rs`：临期/逾期作业前 8 项、自动归档与主题勾选态、tooltip 计数），在启动、`save_study_data`、`set_settings` 后经 `refresh_tray` 动态重建（`TrayIcon::set_menu/set_tooltip`），不轮询；左键单击打开主窗口；临期作业项与 `--open-homework` 启动参数均通过 `study-homework-open` 事件深链到学业页（App 层监听并转发一次性 `focusHomework` 意图）。
 - **后端命令**：在 `commands/` 新增模块，并在 `app.rs` 的 `invoke_handler` 中注册。
 
 ## 演进规则
