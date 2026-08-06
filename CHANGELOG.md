@@ -13,6 +13,9 @@
 - 项目识别修复：特征矩阵扩充 C++（CMake）、PHP、Ruby、Dart、Flutter、Kotlin、Swift、Android 八类；向上查找项目根跳过噪音目录（node_modules/target/dist/.git/__pycache__ 等）；`ProjectInfo` 新增 `source` 与 `detectedBy` 字段；新类型 IDE 候选与项目徽章同步补齐。
 - 托盘图标：多尺寸 ICO（16/20/24/32/48/64）替换单张 PNG，临期/逾期作业时托盘红点角标随 `refresh_tray` 切换（数量仍由 tooltip 承担）。
 - 设置与帮助中心观感统一：设置弹窗品牌标题 + 等高竖线、帮助中心分区标题统一层级、分区装饰分隔线（渐隐发丝线）、搜索语法表正文层级修正。
+- 发布门禁：新增 `scripts/pre-release-check.ps1`，将 AI 真实全链路验收（`--open-project` / `--open-homework` 深链意图领取、截图与日志断言）纳入版本提交前的强制检查；修复首次启动深链事件早于网页监听器就绪导致不跳转的问题。
+- 打开链路加固：PATH 查找只接受 Windows 可执行扩展名（跳过 VS Code 等无扩展名 shell shim），`.cmd/.bat` 经 `cmd /C` 包装启动，修复 `code.cmd` 无法打开 IDE 的问题；项目唤醒（`--open-project`）不再调起前台窗口（运行中不抢焦点、首次启动隐藏驻留托盘），作业唤醒保持聚焦。
+- 性能基准体系（自研唯一标准，零新依赖）：引擎 harness（`cargo bench --features bench`：扫描 10k/100k、10 万条查询、标签重分类、归档撤销）+ 系统基准（`scripts/benchmark.ps1`：冷启动/扫描/内存/产物体积，5 轮中位数）+ `scripts/render-benchmarks.ps1`（README 对比表与 SVG 趋势图）+ `perf.yml`（tag/手动触发，15% 警示）；0.8.3 初始基线已入库。
 
 ## [0.8.2] - 2026-08-06
 

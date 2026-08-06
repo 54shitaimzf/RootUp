@@ -20,6 +20,8 @@ dist-ssr
 
 # Smoke test report (generated locally)
 scripts/smoke-summary.log
+# Release gate report (generated locally)
+scripts/release-gate-report.log
 # Installer verification report (generated locally)
 scripts/installer-verify.log
 

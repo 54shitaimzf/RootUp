@@ -10,6 +10,15 @@ edition = "2021"
 name = "rootup_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = []
+bench = []
+
+[[bench]]
+name = "engine_bench"
+harness = false
+required-features = ["bench"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -27,7 +27,7 @@
 - 项目页体验：原生“浏览…”、文件夹拖拽、常用目录一键添加、来源标记（手动 / 自动发现）、粘贴清洗与实时校验（复用 0.8.2 监控目录体验组件）。
 - 项目识别修复：向上查找跳过噪声目录（node_modules / target / dist / .git / __pycache__ 等）；特征矩阵扩充（CMake / PHP / Ruby / Dart / Flutter / Kotlin / Swift / Android 等）；项目卡片显示识别依据（命中的特征文件）。
 - 托盘图标：多尺寸 ICO（16/20/24/32/48/64）替换单张 PNG；待办角标随 `refresh_tray` 切换。
-- 验收：项目页与监控目录体验一致；识别修复全矩阵测试；托盘深浅主题清晰；无 schema 变更。
+- 验收：项目页与监控目录体验一致；识别修复全矩阵测试；托盘深浅主题清晰；无 schema 变更；版本提交前强制运行 `pre-release-check.ps1`（含 AI 真实全链路深链验收）；性能基准体系建立（自研 harness，0.8.3 初始基线入库）。
 
 ### v0.8.4「存储与扫描地基」（架构）
 
@@ -41,15 +41,15 @@
 - NTFS 快速基线扫描（MFT/USN）+ 增量对账（USN 变更日志）+ 枚举兜底（`FindFirstFileEx` + `FIND_FIRST_EX_LARGE_FETCH` 或 `NtQueryDirectoryFile`）；拒权 / 非 NTFS / 网络盘自动降级 walkdir；硬链接去重、不跟随重解析点；依赖评估后引入 `ntfs-core` / `usn-journal-rs`。
 - 索引与查询优化：keyset 分页替代 OFFSET、组合索引、COUNT 治理或延迟总数、标签过滤实测（逗号串 + LIKE vs 拆表 / 生成列）、FTS5 trigram 评估（CJK 单 / 双字保留 LIKE 回退）。
 - 分类 / 规则匹配加速：Aho-Corasick 多模式匹配（课程名、忽略规则、文件名模式一次同时匹配）。
-- 验收：5–10 万文件量级查询 / 扫描 / 滚动流畅；MFT 与 walkdir 结果一致；现有功能零回归。
+- 验收：5–10 万文件量级查询 / 扫描 / 滚动流畅；MFT 与 walkdir 结果一致；现有功能零回归；性能基准对比报告（自研 harness，15% 警示）。
 
 ### v0.8.6「规模与体积」（性能）
 
 - 前端渲染：文件列表虚拟滚动（只渲染可视行）。
 - 应用体积压缩（Rust）：`[profile.release]` 启用 `lto` / `codegen-units=1` / `strip` / `panic=abort` / `opt-level=s|z`；cargo-bloat 审计并精简 feature；UPX 仅对照实验不作为默认。
 - 前端体积（路线 A 落地）：React.lazy 页面级分割（首包仅文件页）、语言包按需加载、Vite manualChunks 与构建产物压缩（gzip / brotli 评估）、首屏 JS ≤200KB。
-- 性能基线与测量：十万文件合成目录夹具（criterion + 扫描 RSS）、启动耗时（setup 各阶段 + 首帧 / 可交互）、空闲 RSS / CPU；可选 mimalloc 对照，仅基准证明收益后引入。
-- 验收：体积 / 内存 / 启动指标达到基线。
+- 性能基线与测量：自研基准 harness（引擎：扫描/查询/分类/归档；系统：启动/内存/扫描 RSS/产物体积），仅本地运行并记录 host 指纹，结果以 JSON 历史入库并由脚本渲染 README 表格与 SVG 趋势图（0.8.3 已建初始基线，同一台机器跨版本对比）；可选 mimalloc 对照，仅基准证明收益后引入。
+- 验收：体积 / 内存 / 启动指标达到基线；性能基准对比报告（自研 harness，15% 警示）。
 
 ### v0.8.7「单元同构」（架构，允许 schema v3 迁移）
 

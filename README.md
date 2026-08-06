@@ -53,11 +53,14 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 质量检查
 
-- 前端测试：`npm test`（纯函数 + 组件交互，约 377 用例）
-- Rust 测试：`cargo test`（约 262 用例）
+- 前端测试：`npm test`（纯函数 + 组件交互，约 389 用例）
+- Rust 测试：`cargo test`（约 270 用例）
 - 架构依赖校验：`npm run check:arch`（单向依赖防回归）
 - Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
 - 日志驱动冒烟：`scripts/smoke.ps1`（需先 `npm run tauri build -- --no-bundle`）
+- Agent 引导验收：`scripts/agent-acceptance.ps1`（真实夹具 + 带参启动 + 主窗口/托盘截图核对清单）
+- 发布门禁（版本提交前强制）：`scripts/pre-release-check.ps1`（全部单测/构建/冒烟 + AI 真实全链路深链验收，需桌面会话与提权）
+- 性能基准（自研唯一标准，仅本地运行）：`scripts/bench-all.ps1` 一键执行引擎 + 系统基准并渲染（README 对比表与 SVG 趋势图），同一台机器跨版本对比；结果见 [benchmarks/README.md](benchmarks/README.md)
 - 安装包验证：`scripts/verify-installer.ps1 -InstallerPath <nsis-setup.exe>`（静默安装 → 冒烟 → 卸载）
 
 ### 安装与发布
