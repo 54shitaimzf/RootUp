@@ -27,6 +27,7 @@ use crate::infra::tray;
 use crate::infra::watcher::WatchService;
 use crate::infra::window as window_lifecycle;
 use log::LevelFilter;
+use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -38,6 +39,43 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 /// 这会让"后台运行（关闭即销毁）"失效。因此事件循环中默认阻止退出，
 /// 仅当用户明确选择退出（托盘菜单 / 确认弹窗）并先置位此标志时才放行。
 pub struct QuitFlag(pub Arc<AtomicBool>);
+
+/// 首次启动深链意图：网页监听器就绪前事件会丢失，改为暂存由前端主动领取。
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum StartupIntent {
+    Project { path: String },
+    Homework,
+}
+
+/// 解析启动参数为深链意图（--open-homework 优先，其次 --open-project）。
+fn startup_intent_from_args(args: &[String]) -> Option<StartupIntent> {
+    if args.iter().any(|a| a == "--open-homework") {
+        return Some(StartupIntent::Homework);
+    }
+    if let Some(pos) = args.iter().position(|a| a == "--open-project") {
+        if let Some(path) = args.get(pos + 1) {
+            return Some(StartupIntent::Project { path: path.clone() });
+        }
+    }
+    None
+}
+
+/// 深链是否需要把 RootUp 调到前台：项目唤醒保持后台（不抢焦点），
+/// 作业唤醒与普通启动照常聚焦。
+fn startup_intent_focuses_window(intent: Option<&StartupIntent>) -> bool {
+    !matches!(intent, Some(StartupIntent::Project { .. }))
+}
+
+/// 前端领取首次启动深链意图（领取后清空，单实例热唤起仍走事件）。
+#[tauri::command]
+pub fn take_startup_intent(
+    state: tauri::State<'_, Mutex<Option<StartupIntent>>>,
+) -> Option<StartupIntent> {
+    let intent = state.lock().ok().and_then(|mut intent| intent.take());
+    log::info!("startup: 前端领取意图 {:?}", intent);
+    intent
+}
 
 /// 重算系统托管区（单元根 + 归档根）并同步到监听/扫描/自动归档服务，
 /// 同时把历史已索引的托管区文件一次性标为 deleted（幂等）。
@@ -87,7 +125,6 @@ fn open_project_from_args(app: &AppHandle, args: &[String]) {
                         path,
                         outcome.opened_with
                     );
-                    let _ = app.emit("project-open", path.clone());
                 }
                 Err(e) => log::warn!("project: 启动参数打开失败 {e}"),
             }
@@ -95,12 +132,17 @@ fn open_project_from_args(app: &AppHandle, args: &[String]) {
     }
 }
 
-/// 解析 `--open-homework` 启动参数：唤起窗口并让前端打开学业页作业视图。
-fn open_homework_from_args(app: &AppHandle, args: &[String]) {
-    if args.iter().any(|a| a == "--open-homework") {
-        let _ = window_lifecycle::ensure_main_window(app);
-        let _ = app.emit("study-homework-open", Option::<String>::None);
-        log::info!("study: 启动参数打开未完成作业");
+/// 单实例热唤起：前端监听器已就绪，直接事件通知。
+fn emit_startup_intent(app: &AppHandle, args: &[String]) {
+    match startup_intent_from_args(args) {
+        Some(StartupIntent::Project { path }) => {
+            let _ = app.emit("project-open", path);
+        }
+        Some(StartupIntent::Homework) => {
+            let _ = app.emit("study-homework-open", Option::<String>::None);
+            log::info!("study: 启动参数打开未完成作业");
+        }
+        None => {}
     }
 }
 
@@ -126,9 +168,12 @@ pub fn run() {
     tauri::Builder::default()
         // 单实例：重复启动时唤起已有窗口并处理 --open-project 参数
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let _ = window_lifecycle::ensure_main_window(app);
+            let intent = startup_intent_from_args(&args);
+            if startup_intent_focuses_window(intent.as_ref()) {
+                let _ = window_lifecycle::ensure_main_window(app);
+            }
             open_project_from_args(app, &args);
-            open_homework_from_args(app, &args);
+            emit_startup_intent(app, &args);
         }))
         // 文件/目录默认程序打开与资源管理器定位（ShellExecuteW）
         .plugin(tauri_plugin_opener::init())
@@ -186,8 +231,10 @@ pub fn run() {
             projects_commands::open_url,
             window_commands::hide_to_tray,
             window_commands::quit_app,
+            take_startup_intent,
         ])
         .manage(QuitFlag(Arc::new(AtomicBool::new(false))))
+        .manage(Mutex::new(None::<StartupIntent>))
         // 关闭请求：拦截并通知前端弹出确认弹窗，由用户决定后台运行或退出
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -220,6 +267,22 @@ pub fn run() {
             let _ = log::set_logger(logger);
             log::set_max_level(LevelFilter::Info);
             log::info!("RootUp 启动");
+
+            // 深链意图必须在 WebView 加载完成前就绪，否则前端领取时仍为 None
+            let startup_args: Vec<String> = std::env::args().collect();
+            if let Some(intent) = startup_intent_from_args(&startup_args) {
+                let hide_window = !startup_intent_focuses_window(Some(&intent));
+                *app.state::<Mutex<Option<StartupIntent>>>()
+                    .lock()
+                    .map_err(|e| e.to_string())? = Some(intent);
+                log::info!("startup: 暂存深链意图");
+                if hide_window {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                        log::info!("startup: 项目唤醒保持后台（窗口隐藏）");
+                    }
+                }
+            }
 
             // 文件索引库
             let data_dir = app
@@ -370,12 +433,10 @@ pub fn run() {
 
             refresh_managed_state(app.handle())?;
 
-            // 首次启动携带 --open-project 时，在服务就绪后执行打开
-            let args: Vec<String> = std::env::args().collect();
-            if args.iter().any(|a| a == "--open-project") {
-                open_project_from_args(app.handle(), &args);
+            // 首次启动：项目打开照常执行（跳转由前端领取意图完成）
+            if startup_args.iter().any(|a| a == "--open-project") {
+                open_project_from_args(app.handle(), &startup_args);
             }
-            open_homework_from_args(app.handle(), &args);
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -387,4 +448,47 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn startup_intent_parsing() {
+        let args = |values: &[&str]| {
+            values
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            startup_intent_from_args(&args(&["--open-project", "C:/x"])),
+            Some(StartupIntent::Project {
+                path: "C:/x".into()
+            })
+        );
+        assert!(matches!(
+            startup_intent_from_args(&args(&["--open-homework"])),
+            Some(StartupIntent::Homework)
+        ));
+        assert_eq!(startup_intent_from_args(&args(&[])), None);
+        assert!(matches!(
+            startup_intent_from_args(&args(&["--open-homework", "--open-project", "C:/x"])),
+            Some(StartupIntent::Homework)
+        ));
+    }
+
+    #[test]
+    fn startup_intent_focus_matrix() {
+        assert!(startup_intent_focuses_window(None));
+        assert!(startup_intent_focuses_window(Some(
+            &StartupIntent::Homework
+        )));
+        assert!(!startup_intent_focuses_window(Some(
+            &StartupIntent::Project {
+                path: "C:/x".into()
+            }
+        )));
+    }
 }

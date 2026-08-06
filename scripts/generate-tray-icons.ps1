@@ -3,8 +3,9 @@ param(
     [string]$OutDir = "resources\icons"
 )
 
-# 生成托盘多尺寸 ICO（16/20/24/32/48/64，PNG 帧内嵌）与红点角标版。
-# 仅构建期工具（Windows System.Drawing），产物提交仓库，运行时零依赖。
+# Generates tray multi-size ICO (16/20/24/32/48/64, PNG frames), the red-dot
+# badge variant and small menu icons. Build-time only (Windows System.Drawing);
+# generated assets are committed and the runtime has zero extra dependencies.
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
@@ -14,7 +15,7 @@ $OutPath = Join-Path $Repo $OutDir
 $Sizes = 16, 20, 24, 32, 48, 64
 
 if (-not (Test-Path $BasePath)) {
-    throw "未找到基础图标: $BasePath"
+    throw "Base icon not found: $BasePath"
 }
 
 $Base = [System.Drawing.Image]::FromFile($BasePath)
@@ -76,15 +77,46 @@ function Write-TrayIco([string]$FilePath, [bool]$WithBadge) {
     $Out.Dispose()
 }
 
+function Write-MenuIcon([string]$FilePath, [bool]$IsQuit) {
+    $Bmp = New-Object System.Drawing.Bitmap 16, 16
+    $G = [System.Drawing.Graphics]::FromImage($Bmp)
+    $G.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $G.Clear([System.Drawing.Color]::Transparent)
+    if ($IsQuit) {
+        # Power symbol: outer circle + top stem (brand green)
+        $Brand = [System.Drawing.Color]::FromArgb(16, 185, 129)
+        $Brush = [System.Drawing.SolidBrush]::new($Brand)
+        $Pen = [System.Drawing.Pen]::new($Brush, 2)
+        $Pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $Pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $G.DrawEllipse($Pen, 3, 3, 10, 10)
+        $G.DrawLine($Pen, 8, 2, 8, 8)
+        $Pen.Dispose()
+        $Brush.Dispose()
+    } else {
+        $G.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $G.DrawImage($Base, 0, 0, 16, 16)
+    }
+    $Bmp.Save($FilePath, [System.Drawing.Imaging.ImageFormat]::Png)
+    $G.Dispose()
+    $Bmp.Dispose()
+}
+
 try {
     New-Item -ItemType Directory -Force -Path $OutPath | Out-Null
     $Plain = Join-Path $OutPath "rootup-tray.ico"
     $Badge = Join-Path $OutPath "rootup-tray-badge.ico"
+    $MenuOpen = Join-Path $OutPath "rootup-menu-open.png"
+    $MenuQuit = Join-Path $OutPath "rootup-menu-quit.png"
     Write-TrayIco $Plain $false
     Write-TrayIco $Badge $true
-    Write-Host "已生成:"
+    Write-MenuIcon $MenuOpen $false
+    Write-MenuIcon $MenuQuit $true
+    Write-Host "Generated:"
     Write-Host "  $Plain"
     Write-Host "  $Badge"
+    Write-Host "  $MenuOpen"
+    Write-Host "  $MenuQuit"
 } finally {
     $Base.Dispose()
 }

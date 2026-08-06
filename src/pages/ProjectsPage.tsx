@@ -267,25 +267,28 @@ export function ProjectsPage({
           </Banner>
         )}
 
-      <div className="mt-4 flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <DirectoryAdder
-            placeholder={t("projects.addPlaceholder")}
-            hint={t("projects.addHint")}
-            addLabel={t("projects.add")}
-            browseLabel={t("settings.browse")}
-            commonDirs={commonDirs}
-            onAdd={handleAddProject}
-          />
+      <div className="mt-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-secondary">
+            {t("projects.addTitle")}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={RefreshCw}
+            onClick={() => void load()}
+          >
+            {t("projects.rescan")}
+          </Button>
         </div>
-        <Button
-          variant="secondary"
-          size="md"
-          icon={RefreshCw}
-          onClick={() => void load()}
-        >
-          {t("projects.rescan")}
-        </Button>
+        <DirectoryAdder
+          placeholder={t("projects.addPlaceholder")}
+          hint={t("projects.addHint")}
+          addLabel={t("projects.add")}
+          browseLabel={t("settings.browse")}
+          commonDirs={commonDirs}
+          onAdd={handleAddProject}
+        />
       </div>
 
       <div className="mt-4 space-y-2">

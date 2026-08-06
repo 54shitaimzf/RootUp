@@ -544,6 +544,7 @@ export default {
     ideHintAction: "Learn how to install an IDE",
     ideLearnMore: "Learn how to install an IDE",
     dismiss: "Got it",
+    addTitle: "Add project",
     addHint: "Paste a path, drop a folder, or pick one with “Browse…”",
     sourceManual: "Manual",
     sourceAuto: "Auto",

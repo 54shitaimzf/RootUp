@@ -14,6 +14,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { StudyPage } from "./pages/StudyPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { HelpCenterProvider } from "./components/HelpCenter";
+import { takeStartupIntent } from "./lib/tauri";
 
 function renderPage(
   page: PageKey,
@@ -79,17 +80,45 @@ function Shell() {
   const scan = useScan();
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenHomework: (() => void) | undefined;
+    let unlistenProject: (() => void) | undefined;
     listen<string | null>("study-homework-open", (event) => {
       setPage("study");
       setStudyFocus(event.payload ? { homeworkId: event.payload } : {});
     })
       .then((fn) => {
-        unlisten = fn;
+        unlistenHomework = fn;
+      })
+      .catch(() => {});
+    listen<string>("project-open", () => {
+      setPage("projects");
+    })
+      .then((fn) => {
+        unlistenProject = fn;
       })
       .catch(() => {});
     return () => {
-      unlisten?.();
+      unlistenHomework?.();
+      unlistenProject?.();
+    };
+  }, []);
+
+  // 首次启动深链：事件可能在监听器就绪前发出，改为启动后领取一次
+  useEffect(() => {
+    let cancelled = false;
+    takeStartupIntent()
+      .then((intent) => {
+        if (cancelled || !intent) return;
+        if (intent.kind === "project") {
+          setPage("projects");
+        } else {
+          setPage("study");
+          setStudyFocus({});
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
     };
   }, []);
 

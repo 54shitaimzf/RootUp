@@ -69,6 +69,16 @@ describe("DirectoryAdder", () => {
     expect(onAdd).not.toHaveBeenCalled();
   });
 
+  it("仅引号视为空输入不提交", () => {
+    const onAdd = vi.fn(async () => null);
+    renderAdder(onAdd);
+    fireEvent.change(screen.getByPlaceholderText("输入目录路径"), {
+      target: { value: '""' },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "添加" }));
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
   it("浏览选择目录后提交", async () => {
     const onAdd = vi.fn(async () => null);
     vi.mocked(openDirectoryDialog).mockResolvedValue("D:/picked");
@@ -112,5 +122,44 @@ describe("DirectoryAdder", () => {
       target: { value: "C:/ok" },
     });
     expect(screen.queryByText("目录不存在: C:/nope")).not.toBeInTheDocument();
+  });
+
+  it("输入法组合期间 Enter 不触发提交", () => {
+    const onAdd = vi.fn(async () => null);
+    renderAdder(onAdd);
+    const input = screen.getByPlaceholderText("输入目录路径");
+    fireEvent.change(input, { target: { value: "C:/ime" } });
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+    });
+    Object.defineProperty(event, "isComposing", { value: true });
+    fireEvent(input, event);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("拖入文件解析父目录失败时显示错误", async () => {
+    const onAdd = vi.fn(async () => null);
+    vi.mocked(resolveDirTarget).mockRejectedValue("解析目录失败");
+    renderAdder(onAdd);
+    await waitFor(() => expect(dragMock.handler).toBeDefined());
+    dragMock.handler?.({
+      type: "drop",
+      payload: { type: "drop", paths: ["C:/Drop/notes.pdf"] },
+    });
+    expect(await screen.findByText("解析目录失败")).toBeInTheDocument();
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("onAdd 抛异常时显示错误", async () => {
+    const onAdd = vi.fn(async () => {
+      throw new Error("网络错误");
+    });
+    renderAdder(onAdd);
+    fireEvent.change(screen.getByPlaceholderText("输入目录路径"), {
+      target: { value: "C:/err" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "添加" }));
+    expect(await screen.findByText("Error: 网络错误")).toBeInTheDocument();
   });
 });

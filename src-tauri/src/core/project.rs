@@ -483,6 +483,12 @@ mod tests {
     }
 
     #[test]
+    fn find_root_at_filesystem_root_returns_none() {
+        let detector = FeatureDetector;
+        assert!(find_project_root(std::path::Path::new("/"), 3, &detector).is_none());
+    }
+
+    #[test]
     fn discover_skips_noise_and_manual_generic() {
         let root = temp_dir("discover");
         fs::create_dir_all(root.join("proj-a")).unwrap();

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { Select } from "./Select";
 
 const OPTIONS = [
@@ -7,6 +8,29 @@ const OPTIONS = [
   { value: "b", label: "Beta" },
   { value: "c", label: "Gamma" },
 ];
+
+function Harness({
+  initial = "a",
+  onChange = () => {},
+  options = OPTIONS,
+}: {
+  initial?: string;
+  onChange?: (value: string) => void;
+  options?: { value: string; label: string; disabled?: boolean }[];
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <Select
+      value={value}
+      onChange={(next) => {
+        onChange(next);
+        setValue(next);
+      }}
+      options={options}
+      searchable={false}
+    />
+  );
+}
 
 describe("Select", () => {
   it("点击打开列表，点选选项后回调并关闭", () => {
@@ -149,5 +173,56 @@ describe("Select", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Alpha" }));
     expect(screen.queryByPlaceholderText("搜索选项…")).not.toBeInTheDocument();
+  });
+
+  it("Home/End 跳转首尾后 Enter 选中", () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Alpha" }));
+    fireEvent.keyDown(window, { key: "End" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith("c");
+    fireEvent.click(screen.getByRole("button", { name: "Gamma" }));
+    fireEvent.keyDown(window, { key: "Home" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith("a");
+  });
+
+  it("禁用选项不可被 Enter 选中", () => {
+    const onChange = vi.fn();
+    render(
+      <Select
+        value="a"
+        onChange={onChange}
+        searchable={false}
+        options={[
+          { value: "a", label: "Alpha" },
+          { value: "b", label: "Beta", disabled: true },
+          { value: "c", label: "Gamma" },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Alpha" }));
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith("c");
+  });
+
+  it("空选项时显示无匹配占位并可正常关闭", () => {
+    render(
+      <Select
+        value=""
+        onChange={() => {}}
+        options={[]}
+        searchable={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "—" }));
+    expect(screen.getByText("无匹配选项")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });

@@ -46,4 +46,29 @@ describe("dropdownPosition", () => {
     );
     expect(position.width).toBe(240);
   });
+
+  it("左侧越界时钳制到边距", () => {
+    const position = dropdownPosition(
+      { ...anchor, left: -30 },
+      viewport,
+      240,
+    );
+    expect(position.left).toBe(8);
+  });
+
+  it("极小视口高度下高度上限（60% 视口）优先于下限", () => {
+    const position = dropdownPosition(
+      anchor,
+      { width: 1024, height: 40 },
+      240,
+    );
+    expect(position.maxHeight).toBe(Math.round(40 * 0.6));
+    expect(position.top).toBeGreaterThanOrEqual(8);
+  });
+
+  it("极窄视口压缩宽度且不越界", () => {
+    const position = dropdownPosition(anchor, { width: 20, height: 768 }, 240);
+    expect(position.width).toBe(4);
+    expect(position.left + position.width).toBeLessThanOrEqual(20);
+  });
 });

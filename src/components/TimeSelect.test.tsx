@@ -67,4 +67,23 @@ describe("TimeSelect", () => {
       "border-red-400",
     );
   });
+
+  it("非法值回退到默认 08:00", () => {
+    const onChange = vi.fn();
+    render(
+      <TimeSelect value="xx:yy" onChange={onChange} ariaLabel="开始时间" />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "开始时间" }));
+    fireEvent.click(screen.getByRole("button", { name: "+5" }));
+    expect(onChange).toHaveBeenCalledWith("08:05");
+  });
+
+  it("输入法组合期间 Esc 不关闭", () => {
+    render(<TimeSelect value="08:00" onChange={() => {}} ariaLabel="开始时间" />);
+    fireEvent.click(screen.getByRole("button", { name: "开始时间" }));
+    const event = new KeyboardEvent("keydown", { key: "Escape" });
+    Object.defineProperty(event, "isComposing", { value: true });
+    fireEvent(window, event);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
 });

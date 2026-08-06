@@ -397,6 +397,15 @@ export function listProjects(): Promise<ProjectInfo[]> {
   return invoke<ProjectInfo[]>("list_projects");
 }
 
+/** 首次启动深链意图（kind: project 带路径 / homework 直达作业视图） */
+export type StartupIntent =
+  | { kind: "project"; path: string }
+  | { kind: "homework" };
+
+export function takeStartupIntent(): Promise<StartupIntent | null> {
+  return invoke<StartupIntent | null>("take_startup_intent");
+}
+
 export function addProjectDir(dir: string): Promise<void> {
   return invoke<void>("add_project_dir", { dir });
 }

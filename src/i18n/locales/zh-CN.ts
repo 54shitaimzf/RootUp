@@ -533,6 +533,7 @@ export default {
     ideHintAction: "了解如何安装 IDE",
     ideLearnMore: "了解如何安装 IDE",
     dismiss: "知道了",
+    addTitle: "添加项目",
     addHint: "支持粘贴路径、拖入文件夹，或点击“浏览…”选择",
     sourceManual: "手动",
     sourceAuto: "自动",

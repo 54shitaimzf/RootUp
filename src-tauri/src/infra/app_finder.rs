@@ -294,16 +294,16 @@ pub fn find_app(
     for name in spec.path_names {
         for dir in env.path_var().split(';').filter(|d| !d.is_empty()) {
             let base = PathBuf::from(dir);
-            let mut candidate = base.join(name);
-            if !env.is_file(&candidate) {
-                candidate = base.join(format!("{name}.exe"));
-            }
-            if env.is_file(&candidate) {
-                return Some(AppCandidate {
-                    exe: candidate,
-                    args: Vec::new(),
-                    source: "path",
-                });
+            // 只接受真正的 Windows 可执行扩展名，跳过无扩展名的 shell 脚本（如 VS Code 的 code shim）
+            for ext in ["exe", "com", "cmd", "bat"] {
+                let candidate = base.join(format!("{name}.{ext}"));
+                if env.is_file(&candidate) {
+                    return Some(AppCandidate {
+                        exe: candidate,
+                        args: Vec::new(),
+                        source: "path",
+                    });
+                }
             }
         }
     }
@@ -395,10 +395,26 @@ pub trait CommandRunner {
 
 pub struct SystemRunner;
 
+/// 构造进程启动命令：`.cmd/.bat` 需经 `cmd /C` 包装，其余直接启动。
+pub fn process_command(exe: &Path, args: &[String]) -> (PathBuf, Vec<String>) {
+    let ext = exe
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if ext == "cmd" || ext == "bat" {
+        let mut wrapped = vec!["/C".into(), exe.to_string_lossy().to_string()];
+        wrapped.extend(args.iter().cloned());
+        (PathBuf::from("cmd.exe"), wrapped)
+    } else {
+        (exe.to_path_buf(), args.to_vec())
+    }
+}
+
 impl CommandRunner for SystemRunner {
     fn run(&self, exe: &Path, args: &[String]) -> Result<(), String> {
-        std::process::Command::new(exe)
-            .args(args)
+        let (program, process_args) = process_command(exe, args);
+        std::process::Command::new(program)
+            .args(process_args)
             .spawn()
             .map(|_| ())
             .map_err(|e| e.to_string())
@@ -461,6 +477,27 @@ mod tests {
         let found = find_app(tools::TOOL_VSCODE, &[], &env).unwrap();
         assert_eq!(found.exe, exe);
         assert_eq!(found.source, "path");
+    }
+
+    #[test]
+    fn path_lookup_skips_extensionless_script_and_uses_cmd_shim() {
+        let mut env = FakeEnv::new();
+        env.file(PathBuf::from("C:/tools/code")); // shell 脚本（不能直接启动）
+        env.file(PathBuf::from("C:/tools/code.cmd"));
+        env.path = "C:/tools".into();
+        let found = find_app(tools::TOOL_VSCODE, &[], &env).unwrap();
+        assert_eq!(found.exe, PathBuf::from("C:/tools/code.cmd"));
+        assert_eq!(found.source, "path");
+    }
+
+    #[test]
+    fn path_lookup_prefers_exe_over_cmd() {
+        let mut env = FakeEnv::new();
+        env.file(PathBuf::from("C:/tools/code.exe"));
+        env.file(PathBuf::from("C:/tools/code.cmd"));
+        env.path = "C:/tools".into();
+        let found = find_app(tools::TOOL_VSCODE, &[], &env).unwrap();
+        assert_eq!(found.exe, PathBuf::from("C:/tools/code.exe"));
     }
 
     #[test]
@@ -568,5 +605,22 @@ mod tests {
             build_open_args(tools::TOOL_VSCODE, Path::new("C:/proj")),
             vec!["C:/proj"]
         );
+    }
+
+    #[test]
+    fn process_command_wraps_cmd_and_bat_but_passes_exe() {
+        let (program, args) =
+            process_command(Path::new("D:/VS Code/bin/code.cmd"), &["C:/proj".into()]);
+        assert_eq!(program, PathBuf::from("cmd.exe"));
+        assert_eq!(args, vec!["/C", "D:/VS Code/bin/code.cmd", "C:/proj"]);
+
+        let (program, args) = process_command(Path::new("D:/x.bat"), &["a".into()]);
+        assert_eq!(program, PathBuf::from("cmd.exe"));
+        assert_eq!(args, vec!["/C", "D:/x.bat", "a"]);
+
+        let (program, args) =
+            process_command(Path::new("D:/VS Code/Code.exe"), &["C:/proj".into()]);
+        assert_eq!(program, PathBuf::from("D:/VS Code/Code.exe"));
+        assert_eq!(args, vec!["C:/proj"]);
     }
 }

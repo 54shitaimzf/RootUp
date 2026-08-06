@@ -60,6 +60,7 @@ import {
   queryFiles,
   revealInExplorer,
   saveHabits,
+  undoArchive,
 } from "../lib/tauri";
 import { listen } from "@tauri-apps/api/event";
 
@@ -187,6 +188,8 @@ describe("FilePage 行操作", () => {
       expect(archiveFiles).toHaveBeenCalledWith(["C:/docs/notes.pdf"]),
     );
     expect(await screen.findByText(/已归档 1 个文件/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    await waitFor(() => expect(undoArchive).toHaveBeenCalledWith(1));
   });
 
   it("批量模式复选后严格确认再归档所选", async () => {

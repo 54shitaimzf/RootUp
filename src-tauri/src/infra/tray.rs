@@ -6,13 +6,15 @@ use crate::core::tray_menu::{tray_icon_has_badge, tray_menu_model, TrayMenuModel
 use crate::infra::storage;
 use crate::infra::study_store::{JsonStudyStore, StudyStore};
 use std::sync::atomic::Ordering;
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, IconMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, AppHandle, Emitter, Manager};
 
 const TRAY_ID: &str = "rootup-tray";
 const TRAY_ICON: &[u8] = include_bytes!("../../../resources/icons/rootup-tray.ico");
 const TRAY_ICON_BADGE: &[u8] = include_bytes!("../../../resources/icons/rootup-tray-badge.ico");
+const TRAY_MENU_ICON_OPEN: &[u8] = include_bytes!("../../../resources/icons/rootup-menu-open.png");
+const TRAY_MENU_ICON_QUIT: &[u8] = include_bytes!("../../../resources/icons/rootup-menu-quit.png");
 
 struct TrayLabels {
     open: String,
@@ -62,9 +64,23 @@ fn build_menu(
     model: &TrayMenuModel,
     labels: &TrayLabels,
 ) -> tauri::Result<Menu<tauri::Wry>> {
-    let open = MenuItem::with_id(app, "open", &labels.open, true, None::<&str>)?;
+    let open = IconMenuItem::with_id(
+        app,
+        "open",
+        &labels.open,
+        true,
+        Some(tauri::image::Image::from_bytes(TRAY_MENU_ICON_OPEN)?),
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", &labels.quit, true, None::<&str>)?;
+    let quit = IconMenuItem::with_id(
+        app,
+        "quit",
+        &labels.quit,
+        true,
+        Some(tauri::image::Image::from_bytes(TRAY_MENU_ICON_QUIT)?),
+        None::<&str>,
+    )?;
     let auto_archive = CheckMenuItem::with_id(
         app,
         "auto-archive",
@@ -255,4 +271,24 @@ pub fn init(app: &App) -> tauri::Result<()> {
         log::error!("tray: 初始化菜单失败: {e}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tray_icon_assets_parse() {
+        for bytes in [
+            TRAY_ICON,
+            TRAY_ICON_BADGE,
+            TRAY_MENU_ICON_OPEN,
+            TRAY_MENU_ICON_QUIT,
+        ] {
+            assert!(
+                tauri::image::Image::from_bytes(bytes).is_ok(),
+                "托盘图标资产无法解析"
+            );
+        }
+    }
 }

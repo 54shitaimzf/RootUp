@@ -837,4 +837,91 @@ mod tests {
         service.cancel();
         fs::remove_dir_all(&dir).unwrap();
     }
+
+    #[test]
+    fn real_scenario_scan_study_labels_archive_undo_query() {
+        use crate::core::classify::{Classifier, ClassifierChain};
+        use crate::core::query::FileQuery;
+        use crate::core::study::seed_study_data;
+        use crate::core::study_classify::{reapply_labels, StudyClassifier};
+        use crate::infra::archive_engine::{archive_files, undo_file_batch};
+        use std::path::Path;
+
+        // 真实临时目录：两门课程文件 + 普通音频，模拟“扫描入库 → 课程标签 → 归档 → 撤销 → 查询”全链路
+        let dir = temp_dir("real_scenario");
+        fs::create_dir_all(dir.join("课程")).unwrap();
+        fs::write(dir.join("课程").join("高等数学-第1章.pdf"), b"x").unwrap();
+        fs::write(dir.join("课程").join("高等数学-作业3.docx"), b"x").unwrap();
+        fs::write(dir.join("music.mp3"), b"x").unwrap();
+        fs::write(dir.join("Cargo.toml"), b"x").unwrap();
+
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let (loop_body, _events) = make_loop(store.clone());
+        loop_body.scan_dir(&dir.to_string_lossy());
+        assert_eq!(store.lock().unwrap().count().unwrap(), 4);
+
+        // 课程标签重分类：只有课程文件获得 course-c-demo-1
+        let mut study = StudyClassifier::new();
+        study.refresh(&seed_study_data());
+        let mut chain = ClassifierChain::new(vec![
+            Box::new(ExtensionClassifier::new()) as Box<dyn Classifier>
+        ]);
+        chain.push(Box::new(study));
+        let changed = reapply_labels(&mut *store.lock().unwrap(), &chain).unwrap();
+        assert_eq!(changed, 2);
+
+        let course_page = |store: &Arc<Mutex<dyn IndexStore>>| {
+            store
+                .lock()
+                .unwrap()
+                .query(&FileQuery {
+                    labels: vec!["course-c-demo-1".into()],
+                    limit: 10,
+                    ..Default::default()
+                })
+                .unwrap()
+        };
+        assert_eq!(course_page(&store).total, 2);
+
+        // 归档课程 PDF：源文件消失、按课程标签仍能查到归档记录
+        let pdf_path = format!(
+            "{}/课程/高等数学-第1章.pdf",
+            dir.to_string_lossy().replace('\\', "/")
+        );
+        let archive_root = temp_dir("real_scenario_archive");
+        let outcome = archive_files(
+            &store,
+            &archive_root.to_string_lossy(),
+            std::slice::from_ref(&pdf_path),
+            42,
+        )
+        .unwrap();
+        assert_eq!(outcome.archived, 1);
+        assert!(!Path::new(&pdf_path).exists());
+        assert!(store
+            .lock()
+            .unwrap()
+            .get_by_path(&pdf_path)
+            .unwrap()
+            .is_none());
+        // 归档记录仍带课程标签：查询仍命中，但原路径已不存在
+        assert_eq!(course_page(&store).total, 2);
+
+        // 撤销恢复：文件回原位、课程标签查询恢复两条
+        let undo = undo_file_batch(&store, 42).unwrap();
+        assert_eq!(undo.archived, 1);
+        assert!(Path::new(&pdf_path).exists());
+        let restored = store
+            .lock()
+            .unwrap()
+            .get_by_path(&pdf_path)
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.state, "indexed");
+        assert_eq!(course_page(&store).total, 2);
+
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&archive_root);
+    }
 }
