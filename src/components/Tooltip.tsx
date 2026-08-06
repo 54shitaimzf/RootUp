@@ -18,6 +18,7 @@ export function Tooltip({
 }) {
   const hostRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<number | null>(null);
+  const visibleRef = useRef(false);
   const [visible, setVisible] = useState(false);
   const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
 
@@ -32,6 +33,7 @@ export function Tooltip({
         top: position === "top" ? r.top - 8 : r.bottom + 8,
         left: r.left + r.width / 2,
       });
+      visibleRef.current = true;
       setVisible(true);
     }, delay);
   };
@@ -41,6 +43,7 @@ export function Tooltip({
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    visibleRef.current = false;
     setVisible(false);
   };
 
@@ -52,13 +55,12 @@ export function Tooltip({
   );
 
   useEffect(() => {
-    if (!visible) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setVisible(false);
+      if (event.key === "Escape") hide();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible]);
+  }, []);
 
   return (
     <span
