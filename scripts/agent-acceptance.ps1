@@ -55,6 +55,20 @@ $Args = @()
 if ($OpenProject) { $Args += "--open-project `"$Project`"" }
 if ($OpenHomework) { $Args += "--open-homework" }
 
+$KnownIdePids = @(Get-Process -Name Code,Cursor,idea64,devenv -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+function Stop-TestProcesses {
+    Get-Process -Name Code,Cursor,idea64,devenv -ErrorAction SilentlyContinue |
+        Where-Object { $KnownIdePids -notcontains $_.Id } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+}
+function Get-SpawnedIdeCount {
+    return @(Get-Process -Name Code,Cursor,idea64,devenv -ErrorAction SilentlyContinue |
+        Where-Object { $KnownIdePids -notcontains $_.Id }).Count
+}
+
+try {
 if (-not $SkipLaunch) {
     if ($Args.Count -gt 0) {
         Start-Process -FilePath $Exe -ArgumentList $Args
@@ -170,6 +184,9 @@ if ($Verify) {
         Warn-Check "Tray area screenshot non-empty" $TrayOk
     }
 
+    Stop-TestProcesses
+    Assert-Check "No test-spawned IDE processes remain" ((Get-SpawnedIdeCount) -eq 0)
+
     if (-not $ReportPath) { $ReportPath = Join-Path $OutDir "gate-report.txt" }
     $Summary = "Agent acceptance: $($Results.Count - $Failures)/$($Results.Count) passed"
     $Report = $Results + $Summary
@@ -178,4 +195,7 @@ if ($Verify) {
     Write-Host $Summary
     Write-Host "Report: $ReportPath"
     if ($Failures -gt 0) { exit 1 }
+}
+} finally {
+    Stop-TestProcesses
 }

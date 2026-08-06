@@ -4,6 +4,9 @@ use crate::core::settings::CustomOpenCommand;
 use crate::core::tools;
 use std::path::{Path, PathBuf};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 /// 找到的应用。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppCandidate {
@@ -413,11 +416,12 @@ pub fn process_command(exe: &Path, args: &[String]) -> (PathBuf, Vec<String>) {
 impl CommandRunner for SystemRunner {
     fn run(&self, exe: &Path, args: &[String]) -> Result<(), String> {
         let (program, process_args) = process_command(exe, args);
-        std::process::Command::new(program)
-            .args(process_args)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        let mut command = std::process::Command::new(program);
+        command.args(process_args);
+        #[cfg(windows)]
+        // 隐藏 cmd /C 包装（.cmd/.bat 工具）产生的控制台窗口，目标 GUI 窗口不受影响。
+        command.creation_flags(0x0800_0000);
+        command.spawn().map(|_| ()).map_err(|e| e.to_string())
     }
 }
 
