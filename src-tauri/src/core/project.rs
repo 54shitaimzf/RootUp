@@ -21,6 +21,14 @@ pub enum ProjectKind {
     CSharp,
     Go,
     Unity,
+    Cpp,
+    Php,
+    Ruby,
+    Dart,
+    Flutter,
+    Kotlin,
+    Swift,
+    Android,
     Generic,
 }
 
@@ -35,9 +43,25 @@ impl ProjectKind {
             ProjectKind::CSharp => "csharp",
             ProjectKind::Go => "go",
             ProjectKind::Unity => "unity",
+            ProjectKind::Cpp => "cpp",
+            ProjectKind::Php => "php",
+            ProjectKind::Ruby => "ruby",
+            ProjectKind::Dart => "dart",
+            ProjectKind::Flutter => "flutter",
+            ProjectKind::Kotlin => "kotlin",
+            ProjectKind::Swift => "swift",
+            ProjectKind::Android => "android",
             ProjectKind::Generic => "generic",
         }
     }
+}
+
+/// 项目来源：手动添加 / 监控目录自动发现。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProjectSource {
+    Manual,
+    Auto,
 }
 
 /// 项目信息（前端列表与快捷方式共用）。
@@ -46,6 +70,8 @@ pub struct ProjectInfo {
     pub path: String,
     pub name: String,
     pub kind: ProjectKind,
+    pub source: ProjectSource,
+    pub detected_by: Option<String>,
 }
 
 /// 项目识别接口（AI 后续 = 新实现插入）。
@@ -62,58 +88,111 @@ impl ProjectDetector for FeatureDetector {
     }
 }
 
-fn has_any_file(dir: &Path, names: &[&str]) -> bool {
-    names.iter().any(|name| dir.join(name).is_file())
+fn find_first_file(dir: &Path, names: &[&str]) -> Option<String> {
+    names
+        .iter()
+        .find(|name| dir.join(name).is_file())
+        .map(|name| (*name).to_string())
 }
 
-fn has_any_ext(dir: &Path, exts: &[&str]) -> bool {
+fn first_file_with_ext(dir: &Path, exts: &[&str]) -> Option<String> {
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return false;
+        return None;
     };
-    entries.flatten().any(|entry| {
+    entries.flatten().find_map(|entry| {
         let path = entry.path();
         if !path.is_file() {
-            return false;
+            return None;
         }
-        let Some(ext) = path.extension() else {
-            return false;
-        };
-        let ext = ext.to_string_lossy().to_lowercase();
-        exts.iter().any(|e| ext == *e)
+        let ext = path.extension()?.to_string_lossy().to_lowercase();
+        if exts.contains(&ext.as_str()) {
+            path.file_name()
+                .map(|name| name.to_string_lossy().to_string())
+        } else {
+            None
+        }
     })
 }
 
-/// 特征文件探测（优先级：Unity → Rust → Go → Java → C# → Node → Python）。
-pub fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
+/// 特征文件探测（返回项目类型 + 命中特征文件名）。
+/// 优先级：Unity → Flutter → Android → Kotlin → Rust → Go → Java → C# → Node →
+/// Python → Cpp → PHP → Ruby → Dart → Swift。
+pub fn detect_project_kind_with_feature(dir: &Path) -> Option<(ProjectKind, String)> {
     if dir
         .join("ProjectSettings")
         .join("ProjectVersion.txt")
         .is_file()
     {
-        return Some(ProjectKind::Unity);
+        return Some((ProjectKind::Unity, "ProjectVersion.txt".into()));
+    }
+    if dir.join("pubspec.yaml").is_file() && dir.join("lib").join("main.dart").is_file() {
+        return Some((ProjectKind::Flutter, "lib/main.dart".into()));
+    }
+    if dir.join("AndroidManifest.xml").is_file() {
+        return Some((ProjectKind::Android, "AndroidManifest.xml".into()));
+    }
+    if dir.join("settings.gradle.kts").is_file() {
+        return Some((ProjectKind::Kotlin, "settings.gradle.kts".into()));
+    }
+    if let Some(file) = first_file_with_ext(dir, &["kt"]) {
+        return Some((ProjectKind::Kotlin, file));
     }
     if dir.join("Cargo.toml").is_file() {
-        return Some(ProjectKind::Rust);
+        return Some((ProjectKind::Rust, "Cargo.toml".into()));
     }
     if dir.join("go.mod").is_file() {
-        return Some(ProjectKind::Go);
+        return Some((ProjectKind::Go, "go.mod".into()));
     }
-    if has_any_file(dir, &["pom.xml", "build.gradle", "settings.gradle"]) {
-        return Some(ProjectKind::Java);
+    if let Some(file) = find_first_file(dir, &["pom.xml", "build.gradle", "settings.gradle"]) {
+        return Some((ProjectKind::Java, file));
     }
-    if has_any_ext(dir, &["sln", "csproj"]) {
-        return Some(ProjectKind::CSharp);
+    if let Some(file) = first_file_with_ext(dir, &["sln", "csproj"]) {
+        return Some((ProjectKind::CSharp, file));
     }
     if dir.join("package.json").is_file() {
-        return Some(ProjectKind::Node);
+        return Some((ProjectKind::Node, "package.json".into()));
     }
-    if has_any_file(dir, &["pyproject.toml", "requirements.txt", "setup.py"]) {
-        return Some(ProjectKind::Python);
+    if let Some(file) = find_first_file(dir, &["pyproject.toml", "requirements.txt", "setup.py"]) {
+        return Some((ProjectKind::Python, file));
+    }
+    if dir.join("CMakeLists.txt").is_file() {
+        return Some((ProjectKind::Cpp, "CMakeLists.txt".into()));
+    }
+    if dir.join("composer.json").is_file() {
+        return Some((ProjectKind::Php, "composer.json".into()));
+    }
+    if let Some(file) = first_file_with_ext(dir, &["php"]) {
+        return Some((ProjectKind::Php, file));
+    }
+    if dir.join("Gemfile").is_file() {
+        return Some((ProjectKind::Ruby, "Gemfile".into()));
+    }
+    if let Some(file) = first_file_with_ext(dir, &["rb"]) {
+        return Some((ProjectKind::Ruby, file));
+    }
+    if dir.join("pubspec.yaml").is_file() {
+        return Some((ProjectKind::Dart, "pubspec.yaml".into()));
+    }
+    if dir.join("Package.swift").is_file() {
+        return Some((ProjectKind::Swift, "Package.swift".into()));
+    }
+    if let Some(file) = first_file_with_ext(dir, &["swift"]) {
+        return Some((ProjectKind::Swift, file));
     }
     None
 }
 
-fn project_info(dir: &Path, kind: ProjectKind) -> ProjectInfo {
+/// 特征文件探测（仅类型，供既有调用方使用）。
+pub fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
+    detect_project_kind_with_feature(dir).map(|(kind, _)| kind)
+}
+
+fn project_info(
+    dir: &Path,
+    kind: ProjectKind,
+    source: ProjectSource,
+    detected_by: Option<String>,
+) -> ProjectInfo {
     let normalized = normalize_path(&dir.to_string_lossy());
     let name = dir
         .file_name()
@@ -124,7 +203,14 @@ fn project_info(dir: &Path, kind: ProjectKind) -> ProjectInfo {
         path: normalized,
         name,
         kind,
+        source,
+        detected_by,
     }
+}
+
+/// 目录名是否为噪音目录（自动发现与向上查找跳过）。
+pub fn is_noise_dir_name(name: &str) -> bool {
+    name.starts_with('.') || NOISE_DIRS.contains(&name)
 }
 
 /// 从任意文件/目录向上找最近项目根（最多 `max_depth` 层）。
@@ -139,8 +225,17 @@ pub fn find_project_root(
         start
     };
     for _ in 0..=max_depth {
+        let name = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if is_noise_dir_name(&name) {
+            dir = dir.parent()?;
+            continue;
+        }
         if let Some(kind) = detector.detect(dir) {
-            return Some(project_info(dir, kind));
+            let detected_by = detect_project_kind_with_feature(dir).map(|(_, feature)| feature);
+            return Some(project_info(dir, kind, ProjectSource::Manual, detected_by));
         }
         dir = dir.parent()?;
     }
@@ -170,18 +265,20 @@ pub fn discover_projects(
     let mut seen: HashSet<String> = HashSet::new();
     let mut out: Vec<ProjectInfo> = Vec::new();
 
-    let mut push = |dir: &Path, kind: Option<ProjectKind>| {
-        let kind = kind.unwrap_or(ProjectKind::Generic);
+    let mut push = |dir: &Path, source: ProjectSource| {
+        let (kind, detected_by) = detect_project_kind_with_feature(dir)
+            .map(|(kind, feature)| (kind, Some(feature)))
+            .unwrap_or((ProjectKind::Generic, None));
         let key = path_key(&normalize_path(&dir.to_string_lossy()));
         if seen.insert(key) {
-            out.push(project_info(dir, kind));
+            out.push(project_info(dir, kind, source, detected_by));
         }
     };
 
     for dir in manual {
         let path = PathBuf::from(dir);
         if path.is_dir() {
-            push(&path, detector.detect(&path));
+            push(&path, ProjectSource::Manual);
         }
     }
 
@@ -199,8 +296,8 @@ pub fn discover_projects(
             if name.starts_with('.') || NOISE_DIRS.contains(&name.as_str()) {
                 continue;
             }
-            if let Some(kind) = detector.detect(&path) {
-                push(&path, Some(kind));
+            if detector.detect(&path).is_some() {
+                push(&path, ProjectSource::Auto);
             }
         }
     }
@@ -249,6 +346,17 @@ mod tests {
             ("go.mod", ProjectKind::Go),
             ("app.sln", ProjectKind::CSharp),
             ("app.csproj", ProjectKind::CSharp),
+            ("CMakeLists.txt", ProjectKind::Cpp),
+            ("composer.json", ProjectKind::Php),
+            ("main.php", ProjectKind::Php),
+            ("Gemfile", ProjectKind::Ruby),
+            ("main.rb", ProjectKind::Ruby),
+            ("pubspec.yaml", ProjectKind::Dart),
+            ("settings.gradle.kts", ProjectKind::Kotlin),
+            ("Main.kt", ProjectKind::Kotlin),
+            ("Package.swift", ProjectKind::Swift),
+            ("main.swift", ProjectKind::Swift),
+            ("AndroidManifest.xml", ProjectKind::Android),
         ];
         for (file, kind) in cases {
             let dir = temp_dir(file.replace('.', "_").as_str());
@@ -256,6 +364,46 @@ mod tests {
             assert_eq!(detect_project_kind(&dir), Some(*kind), "file={file}");
             let _ = fs::remove_dir_all(&dir);
         }
+    }
+
+    #[test]
+    fn flutter_wins_over_dart_and_android() {
+        let dir = temp_dir("flutter_priority");
+        fs::write(dir.join("pubspec.yaml"), "x").unwrap();
+        fs::create_dir_all(dir.join("lib")).unwrap();
+        fs::write(dir.join("lib").join("main.dart"), "x").unwrap();
+        fs::create_dir_all(dir.join("android").join("app")).unwrap();
+        fs::write(
+            dir.join("android").join("app").join("AndroidManifest.xml"),
+            "x",
+        )
+        .unwrap();
+        assert_eq!(
+            detect_project_kind_with_feature(&dir),
+            Some((ProjectKind::Flutter, "lib/main.dart".into()))
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn android_and_kotlin_beat_java() {
+        let android = temp_dir("android_priority");
+        fs::write(android.join("AndroidManifest.xml"), "x").unwrap();
+        fs::write(android.join("build.gradle"), "x").unwrap();
+        assert_eq!(
+            detect_project_kind_with_feature(&android),
+            Some((ProjectKind::Android, "AndroidManifest.xml".into()))
+        );
+        let _ = fs::remove_dir_all(&android);
+
+        let kotlin = temp_dir("kotlin_priority");
+        fs::write(kotlin.join("settings.gradle.kts"), "x").unwrap();
+        fs::write(kotlin.join("build.gradle"), "x").unwrap();
+        assert_eq!(
+            detect_project_kind_with_feature(&kotlin),
+            Some((ProjectKind::Kotlin, "settings.gradle.kts".into()))
+        );
+        let _ = fs::remove_dir_all(&kotlin);
     }
 
     #[test]
@@ -318,6 +466,23 @@ mod tests {
     }
 
     #[test]
+    fn find_root_skips_noise_dirs_while_walking_up() {
+        let root = temp_dir("find_noise");
+        fs::write(root.join("Cargo.toml"), "x").unwrap();
+        let noise = root.join("node_modules").join("pkg").join("src");
+        fs::create_dir_all(&noise).unwrap();
+        fs::write(noise.join("main.rs"), "x").unwrap();
+
+        let detector = FeatureDetector;
+        let found =
+            find_project_root(&noise.join("main.rs"), MAX_PROJECT_DEPTH, &detector).unwrap();
+        assert_eq!(found.kind, ProjectKind::Rust);
+        assert_eq!(found.source, ProjectSource::Manual);
+        assert_eq!(found.detected_by.as_deref(), Some("Cargo.toml"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn discover_skips_noise_and_manual_generic() {
         let root = temp_dir("discover");
         fs::create_dir_all(root.join("proj-a")).unwrap();
@@ -335,6 +500,10 @@ mod tests {
         let keys: Vec<&str> = projects.iter().map(|p| p.kind.key()).collect();
         assert_eq!(keys, vec!["generic", "rust"]);
         assert_eq!(projects[0].name, "notes");
+        assert_eq!(projects[0].source, ProjectSource::Manual);
+        assert_eq!(projects[0].detected_by, None);
+        assert_eq!(projects[1].source, ProjectSource::Auto);
+        assert_eq!(projects[1].detected_by.as_deref(), Some("Cargo.toml"));
         let _ = fs::remove_dir_all(&root);
     }
 

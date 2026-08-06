@@ -326,16 +326,13 @@ export function CourseFormDialog({
                 <Select
                   id="course-day"
                   value={form.day}
-                  onChange={(event) =>
-                    setForm({ ...form, day: event.target.value })
-                  }
-                >
-                  {DAY_KEYS.map((key, index) => (
-                    <option key={key} value={String(index + 1)}>
-                      {t(`study.${key}`)}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(next) => setForm({ ...form, day: next })}
+                  options={DAY_KEYS.map((key, index) => ({
+                    value: String(index + 1),
+                    label: t(`study.${key}`),
+                  }))}
+                  searchable={false}
+                />
               </Field>
               <div>
                 <TimeRangeField
@@ -389,18 +386,17 @@ export function CourseFormDialog({
                 <Select
                   id="course-week-rule"
                   value={form.weekRule}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      weekRule: event.target.value as WeekRule,
-                    })
+                  onChange={(next) =>
+                    setForm({ ...form, weekRule: next as WeekRule })
                   }
-                >
-                  <option value="all">{t("study.weekRuleAll")}</option>
-                  <option value="odd">{t("study.weekRuleOdd")}</option>
-                  <option value="even">{t("study.weekRuleEven")}</option>
-                  <option value="range">{t("study.weekRuleRange")}</option>
-                </Select>
+                  options={[
+                    { value: "all", label: t("study.weekRuleAll") },
+                    { value: "odd", label: t("study.weekRuleOdd") },
+                    { value: "even", label: t("study.weekRuleEven") },
+                    { value: "range", label: t("study.weekRuleRange") },
+                  ]}
+                  searchable={false}
+                />
               </Field>
               {form.weekRule === "range" && (
                 <Field

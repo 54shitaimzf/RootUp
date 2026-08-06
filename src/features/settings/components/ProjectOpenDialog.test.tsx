@@ -26,8 +26,8 @@ describe("ProjectOpenDialog", () => {
         onClose={onClose}
       />,
     );
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "vscode" } });
+    fireEvent.click(screen.getByRole("button", { name: "自动" }));
+    fireEvent.click(screen.getByRole("option", { name: /VS Code/ }));
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith({

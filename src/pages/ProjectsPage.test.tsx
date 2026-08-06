@@ -24,7 +24,10 @@ vi.mock("../lib/tauri", () => ({
   archiveProject: vi.fn(),
   undoArchive: vi.fn(),
   listProjects: vi.fn(),
+  listCommonDirs: vi.fn(),
   listDetectedTools: vi.fn(),
+  openDirectoryDialog: vi.fn(),
+  resolveDirTarget: vi.fn(),
   addProjectDir: vi.fn(),
   removeProjectDir: vi.fn(),
   openProject: vi.fn(),
@@ -37,15 +40,36 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(),
 }));
 
+const dragMock = vi.hoisted(() => ({
+  handler: undefined as
+    | ((event: {
+        type: string;
+        payload: { type: string; paths: string[] };
+      }) => void)
+    | undefined,
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onDragDropEvent: vi.fn(async (handler: typeof dragMock.handler) => {
+      dragMock.handler = handler;
+      return () => {};
+    }),
+  }),
+}));
+
 import {
   addProjectDir,
   archiveProject,
   createProjectShortcut,
   getSettings,
+  listCommonDirs,
   listProjects,
   listDetectedTools,
+  openDirectoryDialog,
   openProject,
   removeProjectDir,
+  resolveDirTarget,
   saveSettings,
   undoArchive,
 } from "../lib/tauri";
@@ -83,9 +107,24 @@ describe("ProjectsPage", () => {
     });
     vi.mocked(saveSettings).mockResolvedValue(undefined);
     vi.mocked(listProjects).mockResolvedValue([
-      { path: "C:/proj/rust-app", name: "rust-app", kind: "rust" },
-      { path: "E:/manual", name: "manual", kind: "generic" },
+      {
+        path: "C:/proj/rust-app",
+        name: "rust-app",
+        kind: "rust",
+        source: "auto",
+        detectedBy: "Cargo.toml",
+      },
+      {
+        path: "E:/manual",
+        name: "manual",
+        kind: "generic",
+        source: "manual",
+        detectedBy: null,
+      },
     ]);
+    vi.mocked(listCommonDirs).mockResolvedValue([]);
+    vi.mocked(openDirectoryDialog).mockResolvedValue(null);
+    vi.mocked(resolveDirTarget).mockImplementation(async (path) => path);
     vi.mocked(listDetectedTools).mockResolvedValue(["vscode"]);
     vi.mocked(openProject).mockResolvedValue({
       openedWith: "ide",
@@ -172,6 +211,61 @@ describe("ProjectsPage", () => {
       expect(addProjectDir).toHaveBeenCalledWith("D:/proj"),
     );
     expect(listProjects).toHaveBeenCalledTimes(2);
+  });
+
+  it("渲染来源徽章与识别依据", async () => {
+    renderPage();
+    await screen.findByText("rust-app");
+    expect(screen.getByText("自动")).toBeInTheDocument();
+    expect(screen.getByText("识别依据：Cargo.toml")).toBeInTheDocument();
+    expect(screen.getByText("手动")).toBeInTheDocument();
+    expect(screen.queryByText("识别依据：")).not.toBeInTheDocument();
+  });
+
+  it("浏览选择目录后添加项目", async () => {
+    vi.mocked(openDirectoryDialog).mockResolvedValue("D:/picked");
+    renderPage();
+    await screen.findByPlaceholderText("输入项目目录路径");
+    fireEvent.click(screen.getByRole("button", { name: "浏览…" }));
+    await waitFor(() =>
+      expect(addProjectDir).toHaveBeenCalledWith("D:/picked"),
+    );
+  });
+
+  it("拖拽文件夹触发添加（文件取父目录）", async () => {
+    renderPage();
+    await waitFor(() => expect(dragMock.handler).toBeDefined());
+    dragMock.handler?.({
+      type: "drop",
+      payload: { type: "drop", paths: ["C:/Drop/proj/notes.pdf"] },
+    });
+    await waitFor(() =>
+      expect(resolveDirTarget).toHaveBeenCalledWith("C:/Drop/proj/notes.pdf"),
+    );
+    await waitFor(() =>
+      expect(addProjectDir).toHaveBeenCalledWith("C:/Drop/proj/notes.pdf"),
+    );
+  });
+
+  it("常用目录一键添加项目", async () => {
+    vi.mocked(listCommonDirs).mockResolvedValue([
+      { path: "C:/Users/x/Downloads", kind: "downloads" },
+    ]);
+    renderPage();
+    const chip = await screen.findByText("下载");
+    fireEvent.click(chip);
+    await waitFor(() =>
+      expect(addProjectDir).toHaveBeenCalledWith("C:/Users/x/Downloads"),
+    );
+  });
+
+  it("添加项目失败显示错误", async () => {
+    vi.mocked(addProjectDir).mockRejectedValue("目录不存在: D:/nope");
+    renderPage();
+    const input = await screen.findByPlaceholderText("输入项目目录路径");
+    fireEvent.change(input, { target: { value: "D:/nope" } });
+    fireEvent.click(screen.getByRole("button", { name: "添加" }));
+    expect(await screen.findByText("目录不存在: D:/nope")).toBeInTheDocument();
   });
 
   it("打开项目调用 openProject", async () => {

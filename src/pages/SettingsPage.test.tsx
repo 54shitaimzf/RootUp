@@ -158,9 +158,8 @@ describe("SettingsPage", () => {
   it("语言下拉切换写回设置", async () => {
     renderPage();
     await screen.findByLabelText("语言");
-    fireEvent.change(screen.getByLabelText("语言"), {
-      target: { value: "en" },
-    });
+    fireEvent.click(screen.getByLabelText("语言"));
+    fireEvent.click(screen.getByRole("option", { name: /English/ }));
     await waitFor(() =>
       expect(saveSettings).toHaveBeenCalledWith(
         expect.objectContaining({ language: "en" }),
@@ -171,12 +170,15 @@ describe("SettingsPage", () => {
   it("学业提醒开关与桌面快捷方式", async () => {
     renderPage();
     await screen.findByText("作业截止提醒");
+    const leadSelect = screen.getByLabelText("提前提醒天数");
+    expect(leadSelect).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox"));
     await waitFor(() =>
       expect(saveSettings).toHaveBeenCalledWith(
         expect.objectContaining({ reminder_enabled: true }),
       ),
     );
+    await waitFor(() => expect(leadSelect).not.toBeDisabled());
 
     vi.mocked(createHomeworkShortcut).mockResolvedValue({
       path: "C:/Users/x/Desktop/打开未完成作业 (RootUp).lnk",

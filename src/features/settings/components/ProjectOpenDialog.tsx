@@ -110,6 +110,7 @@ export function ProjectOpenDialog({
       title={t("settings.projectOpenDialogTitle")}
       onClose={onClose}
       width="max-w-lg"
+      brandTitle
       footer={
         <>
           <Button variant="primary" size="md" onClick={() => void save()}>
@@ -132,15 +133,13 @@ export function ProjectOpenDialog({
           <SectionLabel>{t("settings.preferredIde")}</SectionLabel>
           <Select
             value={preferredIde}
-            onChange={(event) => setPreferredIde(event.target.value)}
+            onChange={setPreferredIde}
+            options={PREFERRED_IDE_OPTIONS.map((option) => ({
+              value: option.value,
+              label: t(option.labelKey),
+            }))}
             className="mt-1.5"
-          >
-            {PREFERRED_IDE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {t(option.labelKey)}
-              </option>
-            ))}
-          </Select>
+          />
           {detected && (
             <InlineNotice variant="info" className="mt-1.5">
               {detected.length > 0

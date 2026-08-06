@@ -10,6 +10,11 @@ import {
   DEMO_SEMESTERS,
 } from "../../../lib/study";
 
+function pick(label: string, optionText: string) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole("option", { name: new RegExp(optionText) }));
+}
+
 describe("CourseFormDialog", () => {
   it("空名称提交显示错误且不保存", () => {
     const onSave = vi.fn();
@@ -83,9 +88,7 @@ describe("CourseFormDialog", () => {
     expect(
       screen.queryByPlaceholderText("如：2-16 或 1,3,5-8"),
     ).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("周次规则"), {
-      target: { value: "range" },
-    });
+    pick("周次规则", "指定周次");
     expect(
       screen.getByPlaceholderText("如：2-16 或 1,3,5-8"),
     ).toBeInTheDocument();
@@ -112,9 +115,7 @@ describe("CourseFormDialog", () => {
         onClose={() => {}}
       />,
     );
-    fireEvent.change(screen.getByLabelText("周次规则"), {
-      target: { value: "range" },
-    });
+    pick("周次规则", "指定周次");
     fireEvent.change(screen.getByPlaceholderText("如：2-16 或 1,3,5-8"), {
       target: { value: "0" },
     });
@@ -135,7 +136,7 @@ describe("CourseFormDialog", () => {
     expect(screen.getByText("时间与周次")).toBeInTheDocument();
     expect(screen.getByText("颜色")).toBeInTheDocument();
     expect(document.querySelector(".divide-y")).toBeNull();
-    expect(document.querySelector("section.border-t")).not.toBeNull();
+    expect(document.querySelector(".form-section-divider")).not.toBeNull();
   });
 });
 
@@ -210,7 +211,7 @@ describe("HomeworkFormDialog", () => {
     expect(screen.getByText("截止时间")).toBeInTheDocument();
     expect(screen.getByText("作业详情")).toBeInTheDocument();
     expect(document.querySelector(".divide-y")).toBeNull();
-    expect(document.querySelector("section.border-t")).not.toBeNull();
+    expect(document.querySelector(".form-section-divider")).not.toBeNull();
   });
 });
 
@@ -624,9 +625,10 @@ describe("视图空态", () => {
         onWeekChange={onWeekChange}
       />,
     );
-    const select = screen.getByLabelText("学期") as HTMLSelectElement;
-    expect(select.value).toBe("fall-2026");
-    fireEvent.change(select, { target: { value: "spring-2027" } });
+    const trigger = screen.getByLabelText("学期");
+    expect(trigger.textContent).toContain("2026 秋季学期");
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("option", { name: /2027 春季学期/ }));
     expect(onSemesterChange).toHaveBeenCalledWith("spring-2027");
     fireEvent.click(screen.getByRole("button", { name: "下一周" }));
     expect(onWeekChange).toHaveBeenCalledWith(2);

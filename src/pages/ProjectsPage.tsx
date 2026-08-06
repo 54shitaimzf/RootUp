@@ -6,24 +6,24 @@ import {
   Code2,
   FolderOpen,
   Link2,
-  Plus,
   RefreshCw,
   Trash2,
 } from "lucide-react";
 import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
-import { isComposing } from "../lib/ime";
 import {
   addProjectDir,
   archiveProject,
   createProjectShortcut,
   listDetectedTools,
+  listCommonDirs,
   listProjects,
   logEvent,
   openProject,
   removeProjectDir,
   revealInExplorer,
   undoArchive,
+  type CommonDirEntry,
   type OpenOutcome,
   type ProjectInfo,
 } from "../lib/tauri";
@@ -34,9 +34,9 @@ import { ConfirmButton } from "../components/ConfirmButton";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
-import { Input } from "../components/Input";
 import { PageHeader } from "../components/PageHeader";
 import { useHelpCenter } from "../components/HelpCenter";
+import { DirectoryAdder } from "../components/DirectoryAdder";
 
 export function ProjectsPage({
   onNavigate,
@@ -51,8 +51,8 @@ export function ProjectsPage({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [lastOpen, setLastOpen] = useState<OpenOutcome | null>(null);
-  const [newDir, setNewDir] = useState("");
   const [detectedTools, setDetectedTools] = useState<string[] | null>(null);
+  const [commonDirs, setCommonDirs] = useState<CommonDirEntry[]>([]);
   const [hideIdeHint, setHideIdeHint] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<ProjectInfo | null>(null);
   const [archiveNotice, setArchiveNotice] = useState<{
@@ -60,8 +60,6 @@ export function ProjectsPage({
     count: number;
   } | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-
-  const manualDirs = new Set(settings?.project_dirs ?? []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +81,9 @@ export function ProjectsPage({
     listDetectedTools()
       .then(setDetectedTools)
       .catch(() => setDetectedTools([]));
+    listCommonDirs()
+      .then(setCommonDirs)
+      .catch(() => setCommonDirs([]));
   }, []);
 
   // 快捷方式唤起 RootUp 时自动切到本页并刷新
@@ -101,18 +102,15 @@ export function ProjectsPage({
     };
   }, [load, t]);
 
-  const handleAdd = async () => {
-    const dir = newDir.trim();
-    if (!dir) return;
+  const handleAddProject = async (dir: string): Promise<string | null> => {
     try {
       await addProjectDir(dir);
-      setNewDir("");
-      setError(null);
       setNotice(t("projects.added"));
       await load();
       void logEvent("info", `ui: 添加项目 dir=${dir}`);
+      return null;
     } catch (err) {
-      setError(String(err));
+      return String(err);
     }
   };
 
@@ -269,21 +267,17 @@ export function ProjectsPage({
           </Banner>
         )}
 
-      <div className="mt-4 flex gap-2">
-        <Input
-          type="text"
-          value={newDir}
-          onChange={(event) => setNewDir(event.target.value)}
-          onKeyDown={(event) => {
-            if (isComposing(event)) return;
-            if (event.key === "Enter") void handleAdd();
-          }}
-          placeholder={t("projects.addPlaceholder")}
-          className="flex-1"
-        />
-        <Button variant="primary" size="md" icon={Plus} onClick={() => void handleAdd()}>
-          {t("projects.add")}
-        </Button>
+      <div className="mt-4 flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <DirectoryAdder
+            placeholder={t("projects.addPlaceholder")}
+            hint={t("projects.addHint")}
+            addLabel={t("projects.add")}
+            browseLabel={t("settings.browse")}
+            commonDirs={commonDirs}
+            onAdd={handleAddProject}
+          />
+        </div>
         <Button
           variant="secondary"
           size="md"
@@ -316,7 +310,7 @@ export function ProjectsPage({
           </div>
         ) : (
           projects.map((project) => {
-            const isManual = manualDirs.has(project.path);
+            const isManual = project.source === "manual";
             return (
               <div
                 key={project.path}
@@ -332,9 +326,20 @@ export function ProjectsPage({
                       <span className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                         {t(PROJECT_KIND_LABEL_KEY[project.kind])}
                       </span>
-                      {isManual && (
+                      {isManual ? (
                         <span className="rounded bg-brand-50 px-1.5 py-px text-[10px] font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-                          {t("projects.manual")}
+                          {t("projects.sourceManual")}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          {t("projects.sourceAuto")}
+                        </span>
+                      )}
+                      {project.detectedBy && (
+                        <span className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          {t("projects.detectedBy", {
+                            feature: project.detectedBy,
+                          })}
                         </span>
                       )}
                     </div>

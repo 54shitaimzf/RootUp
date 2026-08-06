@@ -10,6 +10,7 @@ import { FormSection } from "../../../components/FormSection";
 import { Select } from "../../../components/Select";
 import { TextArea } from "../../../components/TextArea";
 import { TimeSelect } from "../../../components/TimeSelect";
+import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
   DEMO_SEMESTER_START,
   minToTime,
@@ -189,15 +190,16 @@ export function HomeworkFormDialog({
               <Select
                 id="homework-course"
                 value={courseId}
-                onChange={(event) => handleCourseChange(event.target.value)}
-              >
-                <option value="">{t("study.noCourse")}</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={handleCourseChange}
+                options={[
+                  { value: "", label: t("study.noCourse") },
+                  ...courses.map((course) => ({
+                    value: course.id,
+                    label: course.name,
+                    dotClass: LABEL_COLORS[course.color].dot,
+                  })),
+                ]}
+              />
             </Field>
           </div>
         </FormSection>

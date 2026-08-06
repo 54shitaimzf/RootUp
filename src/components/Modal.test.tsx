@@ -25,6 +25,20 @@ describe("Modal", () => {
     expect(scroller?.className).toContain("h-[65vh]");
   });
 
+  it("brandTitle 渲染品牌色标题与等高竖线", () => {
+    const { container } = render(
+      <Modal open title="品牌标题" onClose={() => {}} brandTitle>
+        <p>内容</p>
+      </Modal>,
+    );
+    const heading = screen.getByRole("heading", { name: "品牌标题" });
+    expect(heading.className).toContain("text-brand-700");
+    expect(heading.className).toContain("text-lg");
+    const bar = container.querySelector(".bg-brand-500");
+    expect(bar).not.toBeNull();
+    expect(bar?.className).toContain("h-[1em]");
+  });
+
   it("Esc 关闭", () => {
     const onClose = vi.fn();
     render(

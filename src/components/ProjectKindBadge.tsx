@@ -9,6 +9,14 @@ export const PROJECT_KIND_LABEL_KEY: Record<ProjectKind, string> = {
   csharp: "projects.kindCSharp",
   go: "projects.kindGo",
   unity: "projects.kindUnity",
+  cpp: "projects.kindCpp",
+  php: "projects.kindPhp",
+  ruby: "projects.kindRuby",
+  dart: "projects.kindDart",
+  flutter: "projects.kindFlutter",
+  kotlin: "projects.kindKotlin",
+  swift: "projects.kindSwift",
+  android: "projects.kindAndroid",
   generic: "projects.kindGeneric",
 };
 
@@ -20,6 +28,14 @@ const KIND_STYLE: Record<ProjectKind, { letter: string; className: string }> = {
   csharp: { letter: "C#", className: "bg-[#68217A] text-white" },
   go: { letter: "Go", className: "bg-[#00ADD8] text-white" },
   unity: { letter: "U", className: "bg-[#222C37] text-white" },
+  cpp: { letter: "C++", className: "bg-[#00599C] text-white" },
+  php: { letter: "PHP", className: "bg-[#777BB3] text-white" },
+  ruby: { letter: "Rb", className: "bg-[#CC342D] text-white" },
+  dart: { letter: "D", className: "bg-[#0175C2] text-white" },
+  flutter: { letter: "Fl", className: "bg-[#02569B] text-white" },
+  kotlin: { letter: "Kt", className: "bg-[#7F52FF] text-white" },
+  swift: { letter: "Sw", className: "bg-[#F05138] text-white" },
+  android: { letter: "A", className: "bg-[#3DDC84] text-black" },
   generic: { letter: "F", className: "bg-slate-400 text-white" },
 };
 

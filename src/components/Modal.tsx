@@ -16,6 +16,7 @@ export function Modal({
   contentHeight,
   children,
   footer,
+  brandTitle = false,
 }: {
   open: boolean;
   title: string;
@@ -24,6 +25,8 @@ export function Modal({
   contentHeight?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** 设置类弹窗标题：品牌色 + 左侧等高竖线（与设置页分区标题同风格） */
+  brandTitle?: boolean;
 }) {
   const { t } = useTranslation();
   useEffect(() => {
@@ -51,7 +54,17 @@ export function Modal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-strong">{title}</h2>
+          {brandTitle ? (
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-brand-700 dark:text-brand-300">
+              <span
+                aria-hidden="true"
+                className="h-[1em] w-0.5 shrink-0 rounded-sm bg-brand-500"
+              />
+              {title}
+            </h2>
+          ) : (
+            <h2 className="text-lg font-semibold text-strong">{title}</h2>
+          )}
           <IconButton
             label={t("settings.dialogClose")}
             icon={X}

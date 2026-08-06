@@ -2,7 +2,7 @@
 use crate::app::QuitFlag;
 use crate::core::reminder::ReminderKind;
 use crate::core::settings::{THEME_DARK, THEME_LIGHT, THEME_SYSTEM};
-use crate::core::tray_menu::{tray_menu_model, TrayMenuModel};
+use crate::core::tray_menu::{tray_icon_has_badge, tray_menu_model, TrayMenuModel};
 use crate::infra::storage;
 use crate::infra::study_store::{JsonStudyStore, StudyStore};
 use std::sync::atomic::Ordering;
@@ -11,6 +11,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{App, AppHandle, Emitter, Manager};
 
 const TRAY_ID: &str = "rootup-tray";
+const TRAY_ICON: &[u8] = include_bytes!("../../../resources/icons/rootup-tray.ico");
+const TRAY_ICON_BADGE: &[u8] = include_bytes!("../../../resources/icons/rootup-tray-badge.ico");
 
 struct TrayLabels {
     open: String,
@@ -168,11 +170,19 @@ pub fn refresh_tray(app: &AppHandle) -> Result<(), String> {
     let model = tray_menu_model(&study, &settings, today);
     let labels = tray_labels(&settings.language);
     let menu = build_menu(app, &model, &labels).map_err(|e| e.to_string())?;
+    let icon = tauri::image::Image::from_bytes(if tray_icon_has_badge(model.due_count) {
+        TRAY_ICON_BADGE
+    } else {
+        TRAY_ICON
+    })
+    .map_err(|e| format!("tray: 加载图标失败 {e}"))?;
     let tooltip = if model.due_count > 0 {
         format!("RootUp · {} {}", model.due_count, labels.tooltip_due)
     } else {
         "RootUp".to_string()
     };
+    tray.set_icon(Some(icon))
+        .map_err(|e| format!("tray: 设置图标失败 {e}"))?;
     tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
     tray.set_tooltip(Some(&tooltip))
         .map_err(|e| e.to_string())?;
@@ -181,9 +191,7 @@ pub fn refresh_tray(app: &AppHandle) -> Result<(), String> {
 
 /// 初始化托盘：无菜单创建（菜单由 [`refresh_tray`] 立即填充）。
 pub fn init(app: &App) -> tauri::Result<()> {
-    let icon = tauri::image::Image::from_bytes(include_bytes!(
-        "../../../resources/icons/rootup-sprout.png"
-    ))?;
+    let icon = tauri::image::Image::from_bytes(TRAY_ICON)?;
 
     let _tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)

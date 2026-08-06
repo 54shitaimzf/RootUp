@@ -53,6 +53,14 @@ export type ProjectKind =
   | "csharp"
   | "go"
   | "unity"
+  | "cpp"
+  | "php"
+  | "ruby"
+  | "dart"
+  | "flutter"
+  | "kotlin"
+  | "swift"
+  | "android"
   | "generic";
 
 /** 项目信息 */
@@ -60,6 +68,10 @@ export interface ProjectInfo {
   path: string;
   name: string;
   kind: ProjectKind;
+  /** 手动添加 / 监控目录自动发现 */
+  source: "manual" | "auto";
+  /** 命中特征文件名（如 Cargo.toml），无识别依据时为 null */
+  detectedBy: string | null;
 }
 
 /** 打开结果 */

@@ -32,6 +32,11 @@ pub fn tray_menu_model(data: &StudyData, settings: &Settings, today: NaiveDate) 
     }
 }
 
+/// 托盘图标是否切换为红点角标版：有临期/逾期待办时显示。
+pub fn tray_icon_has_badge(due_count: usize) -> bool {
+    due_count > 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +78,12 @@ mod tests {
         let model = tray_menu_model(&data, &s, today);
         assert_eq!(model.due_count, 0);
         assert!(model.items.is_empty());
+    }
+
+    #[test]
+    fn tray_icon_has_badge_boundaries() {
+        assert!(!tray_icon_has_badge(0));
+        assert!(tray_icon_has_badge(1));
+        assert!(tray_icon_has_badge(8));
     }
 }

@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -281,17 +282,19 @@ export function CourseScheduleView({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Select
-            aria-label={t("study.semester")}
+            ariaLabel={t("study.semester")}
             value={semester.id}
-            onChange={(event) => onSemesterChange(event.target.value)}
+            onChange={onSemesterChange}
+            options={semesters.map((item) => ({
+              value: item.id,
+              label: item.name,
+              icon: <CalendarDays aria-hidden className="size-3.5" />,
+              description: item.startDate
+                ? `${item.startDate}${item.endDate ? ` ~ ${item.endDate}` : ""}`
+                : undefined,
+            }))}
             className="w-44"
-          >
-            {semesters.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
+          />
           <IconButton
             label={t("study.manageSemesters")}
             icon={Settings2}

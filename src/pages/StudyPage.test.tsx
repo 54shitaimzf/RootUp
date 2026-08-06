@@ -34,6 +34,11 @@ function renderStudy() {
   return render(<StudyPage today={TODAY} initialData={createSeedStudyData()} />);
 }
 
+function pick(label: string, optionText: string) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole("option", { name: new RegExp(optionText) }));
+}
+
 describe("StudyPage", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -58,9 +63,9 @@ describe("StudyPage", () => {
     expect(screen.getByText("大学物理")).toBeInTheDocument();
     expect(screen.getByText("程序设计")).toBeInTheDocument();
     expect(screen.getByText("第 1 周 · 单周")).toBeInTheDocument();
-    expect(
-      (screen.getByLabelText("学期") as HTMLSelectElement).value,
-    ).toBe("fall-2026");
+    expect(screen.getByLabelText("学期").textContent).toContain(
+      "2026 秋季学期",
+    );
     expect(
       container.querySelector('[data-testid="day-header-1"]'),
     ).toBeInTheDocument();
@@ -117,9 +122,7 @@ describe("StudyPage", () => {
     fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
       target: { value: "大学英语" },
     });
-    fireEvent.change(screen.getByLabelText("星期"), {
-      target: { value: "2" },
-    });
+    pick("星期", "周二");
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByText("大学英语")).toBeInTheDocument();
   });
@@ -341,9 +344,10 @@ describe("StudyPage", () => {
 
   it("学期切换与当前周预览", () => {
     renderStudy();
-    const select = screen.getByLabelText("学期") as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "spring-2027" } });
-    expect(select.value).toBe("spring-2027");
+    pick("学期", "2027 春季学期");
+    expect(screen.getByLabelText("学期").textContent).toContain(
+      "2027 春季学期",
+    );
     fireEvent.click(screen.getByRole("button", { name: "下一周" }));
     expect(screen.getByText("第 2 周 · 双周")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "回到本周" }));
@@ -355,14 +359,12 @@ describe("StudyPage", () => {
 
   it("偏好记忆：学期选择持久化", () => {
     const first = renderStudy();
-    fireEvent.change(screen.getByLabelText("学期"), {
-      target: { value: "spring-2027" },
-    });
+    pick("学期", "2027 春季学期");
     first.unmount();
     renderStudy();
-    expect(
-      (screen.getByLabelText("学期") as HTMLSelectElement).value,
-    ).toBe("spring-2027");
+    expect(screen.getByLabelText("学期").textContent).toContain(
+      "2027 春季学期",
+    );
   });
 
   it("学期管理：新建并切换为空课表且自动保存", () => {
@@ -379,8 +381,9 @@ describe("StudyPage", () => {
       target: { value: "20" },
     });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
-    const select = screen.getByLabelText("学期") as HTMLSelectElement;
-    expect(select.selectedOptions[0].text).toBe("2028 春季学期");
+    expect(screen.getByLabelText("学期").textContent).toContain(
+      "2028 春季学期",
+    );
     expect(screen.getByText("还没有课程")).toBeInTheDocument();
     const calls = vi.mocked(saveStudyData).mock.calls;
     const lastSave = calls[calls.length - 1]?.[0] as {
@@ -398,8 +401,7 @@ describe("StudyPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByText("高等数学")).toBeInTheDocument();
     expect(
-      (screen.getByLabelText("学期") as HTMLSelectElement).selectedOptions[0]
-        .text,
+      screen.getByLabelText("学期").textContent,
     ).toContain("副本");
     fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     expect(screen.getByText("还没有作业")).toBeInTheDocument();
@@ -413,9 +415,9 @@ describe("StudyPage", () => {
       name: "删除学期",
     });
     fireEvent.click(confirms[confirms.length - 1]);
-    expect(
-      (screen.getByLabelText("学期") as HTMLSelectElement).value,
-    ).toBe("spring-2027");
+    expect(screen.getByLabelText("学期").textContent).toContain(
+      "2027 春季学期",
+    );
     expect(screen.getByText("还没有课程")).toBeInTheDocument();
   });
 
@@ -448,9 +450,7 @@ describe("StudyPage", () => {
     fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
       target: { value: "新课程" },
     });
-    fireEvent.change(screen.getByLabelText("星期"), {
-      target: { value: "2" },
-    });
+    pick("星期", "周二");
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByText("新课程")).toBeInTheDocument();
     await waitFor(() => expect(saveStudyData).toHaveBeenCalled());
@@ -498,7 +498,6 @@ describe("StudyPage", () => {
       target: { value: "20" },
     });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
-    const newId = (screen.getByLabelText("学期") as HTMLSelectElement).value;
 
     fireEvent.click(
       screen.getAllByRole("button", { name: "添加课程" })[0],
@@ -520,17 +519,13 @@ describe("StudyPage", () => {
     expect(screen.getByText("新作业")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^课程表/ }));
-    fireEvent.change(screen.getByLabelText("学期"), {
-      target: { value: "fall-2026" },
-    });
+    pick("学期", "2026 秋季学期");
     expect(screen.queryByText("新课")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     expect(screen.queryByText("新作业")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^课程表/ }));
-    fireEvent.change(screen.getByLabelText("学期"), {
-      target: { value: newId },
-    });
+    pick("学期", "隔离测试学期");
     expect(screen.getByText("新课")).toBeInTheDocument();
     const calls = vi.mocked(saveStudyData).mock.calls;
     const lastSave = calls[calls.length - 1]?.[0] as {
@@ -552,8 +547,7 @@ describe("StudyPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(
-      (screen.getByLabelText("学期") as HTMLSelectElement).selectedOptions[0]
-        .text,
+      screen.getByLabelText("学期").textContent,
     ).toBe("2026 秋季（修订）");
   });
 
@@ -565,9 +559,9 @@ describe("StudyPage", () => {
       name: "删除学期",
     });
     fireEvent.click(confirms[confirms.length - 1]);
-    expect(
-      (screen.getByLabelText("学期") as HTMLSelectElement).value,
-    ).toBe("fall-2026");
+    expect(screen.getByLabelText("学期").textContent).toContain(
+      "2026 秋季学期",
+    );
     expect(screen.getByText("高等数学")).toBeInTheDocument();
   });
 

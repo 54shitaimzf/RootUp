@@ -160,6 +160,7 @@ export function LabelManageDialog({
         title={t("settings.labelDialogTitle")}
         onClose={onClose}
         width="max-w-lg"
+        brandTitle
         footer={
           formOpen ? (
             <>

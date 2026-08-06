@@ -85,6 +85,14 @@ pub fn ide_candidates_for(kind: ProjectKind) -> &'static [&'static str] {
         ProjectKind::CSharp => &[TOOL_VSCODE, TOOL_IDEA],
         ProjectKind::Go => &[TOOL_GOLAND, TOOL_VSCODE],
         ProjectKind::Unity => &[TOOL_UNITY_HUB, TOOL_UNITY_EDITOR],
+        ProjectKind::Cpp => &[TOOL_VSCODE],
+        ProjectKind::Php => &[TOOL_VSCODE],
+        ProjectKind::Ruby => &[TOOL_VSCODE],
+        ProjectKind::Dart => &[TOOL_VSCODE, TOOL_CURSOR],
+        ProjectKind::Flutter => &[TOOL_VSCODE, TOOL_CURSOR],
+        ProjectKind::Kotlin => &[TOOL_IDEA, TOOL_VSCODE],
+        ProjectKind::Swift => &[TOOL_VSCODE],
+        ProjectKind::Android => &[TOOL_IDEA, TOOL_VSCODE],
         ProjectKind::Generic => &[TOOL_VSCODE],
     }
 }
@@ -140,6 +148,14 @@ mod tests {
             ProjectKind::CSharp,
             ProjectKind::Go,
             ProjectKind::Unity,
+            ProjectKind::Cpp,
+            ProjectKind::Php,
+            ProjectKind::Ruby,
+            ProjectKind::Dart,
+            ProjectKind::Flutter,
+            ProjectKind::Kotlin,
+            ProjectKind::Swift,
+            ProjectKind::Android,
             ProjectKind::Generic,
         ] {
             assert!(!ide_candidates_for(kind).is_empty());

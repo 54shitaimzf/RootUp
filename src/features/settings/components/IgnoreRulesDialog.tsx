@@ -71,6 +71,7 @@ export function IgnoreRulesDialog({
       title={t("settings.ignoreDialogTitle")}
       onClose={onClose}
       width="max-w-xl"
+      brandTitle
       footer={
         <>
           <Button variant="primary" size="md" onClick={() => void save()}>

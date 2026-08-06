@@ -1,7 +1,16 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
-import { Check, Copy, FolderOpen, RefreshCw, RotateCcw } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  Check,
+  Copy,
+  Globe,
+  HelpCircle,
+  Languages,
+  LogOut,
+  Minimize2,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 import { useSettings } from "../hooks/useSettings";
 import type { ScanController } from "../hooks/useScan";
 import { isComposing } from "../lib/ime";
@@ -18,9 +27,7 @@ import {
   listSchemes,
   listWatchedDirs,
   listCommonDirs,
-  openDirectoryDialog,
   removeWatchedDir,
-  resolveDirTarget,
   resetSettings,
   type ClassifyDefaultEntry,
   type ClassifyRule,
@@ -33,7 +40,6 @@ import {
   type Settings,
   type ThemeMode,
 } from "../lib/tauri";
-import { cleanPathInput } from "../lib/paths";
 import { SETTINGS_GUIDE, type SettingsGuideEntry } from "../lib/settingsGuide";
 import {
   resolveCurrentScheme,
@@ -42,6 +48,7 @@ import {
 import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
 import { FormSection } from "../components/FormSection";
+import { DirectoryAdder } from "../components/DirectoryAdder";
 import { Select } from "../components/Select";
 import { SettingsInfoDialog } from "../components/SettingsInfoDialog";
 import { IgnoreRulesDialog } from "../features/settings/components/IgnoreRulesDialog";
@@ -58,7 +65,6 @@ import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { IconButton } from "../components/IconButton";
-import { Input } from "../components/Input";
 import { PageHeader } from "../components/PageHeader";
 
 const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
@@ -67,17 +73,21 @@ const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "dark", labelKey: "settings.themeDark" },
 ];
 
-const CLOSE_ACTION_OPTIONS: { value: CloseAction; labelKey: string }[] = [
-  { value: "ask", labelKey: "settings.closeActionAsk" },
-  { value: "background", labelKey: "settings.closeActionBackground" },
-  { value: "quit", labelKey: "settings.closeActionQuit" },
+const CLOSE_ACTION_OPTIONS: {
+  value: CloseAction;
+  labelKey: string;
+  icon: typeof HelpCircle;
+}[] = [
+  { value: "ask", labelKey: "settings.closeActionAsk", icon: HelpCircle },
+  {
+    value: "background",
+    labelKey: "settings.closeActionBackground",
+    icon: Minimize2,
+  },
+  { value: "quit", labelKey: "settings.closeActionQuit", icon: LogOut },
 ];
 
 const REMINDER_LEAD_OPTIONS = [1, 2, 3, 5, 7, 14];
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
 
 function cloneRules(source: {
   ignore_rules: IgnoreRules;
@@ -152,7 +162,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const { settings, update, replace } = useSettings();
   const language = settings?.language ?? "zh-CN";
   const [watchedDirs, setWatchedDirs] = useState<string[]>([]);
-  const [newDir, setNewDir] = useState("");
   const [dirError, setDirError] = useState<string | null>(null);
   const [ruleError, setRuleError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -173,7 +182,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [customLabels, setCustomLabels] = useState<LabelDef[]>([]);
   const [commonDirs, setCommonDirs] = useState<CommonDirEntry[]>([]);
-  const [dragActive, setDragActive] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{
     dir: string;
     count: number;
@@ -204,36 +212,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       .catch(() => setCommonDirs([]));
   }, []);
 
-  // 文件夹拖拽：目录直接添加，文件取其父目录。
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    try {
-      getCurrentWindow()
-        .onDragDropEvent((event) => {
-          if (event.payload.type === "over") {
-            setDragActive(true);
-          } else if (event.payload.type === "leave") {
-            setDragActive(false);
-          } else if (event.payload.type === "drop") {
-            setDragActive(false);
-            const first = event.payload.paths[0];
-            if (first) {
-              void submitDir(first, true);
-            }
-          }
-        })
-        .then((fn) => {
-          unlisten = fn;
-        })
-        .catch(() => {});
-    } catch {
-      // 非 Tauri 环境（测试/浏览器预览）下拖拽不可用，静默跳过
-    }
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
   const refreshLabels = () => {
     listLabelDefs()
       .then(setCustomLabels)
@@ -245,27 +223,15 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     setSchemes(next);
   };
 
-  const handleAddDir = async () => {
-    const dir = cleanPathInput(newDir);
-    if (!dir) return;
-    await submitDir(dir, false);
-  };
-
-  const submitDir = async (value: string, allowFileParent: boolean) => {
-    let dir = cleanPathInput(value);
-    if (!dir) return;
+  const handleAddDir = async (dir: string): Promise<string | null> => {
     try {
-      if (allowFileParent) {
-        dir = await resolveDirTarget(dir);
-      }
       const outcome = await addWatchedDir(dir);
       setWatchedDirs((prev) => [...new Set([...prev, outcome.dir])]);
-      setNewDir("");
-      setDirError(null);
       setNotice(outcome.message ?? t("settings.dirAdded"));
+      return null;
     } catch (err) {
-      setDirError(String(err));
       setNotice(null);
+      return String(err);
     }
   };
 
@@ -286,15 +252,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       await removeWatchedDir(dir);
       setWatchedDirs((prev) => prev.filter((d) => d !== dir));
       setDirError(null);
-    } catch (err) {
-      setDirError(String(err));
-    }
-  };
-
-  const handleBrowse = async () => {
-    try {
-      const dir = await openDirectoryDialog();
-      if (dir) await submitDir(dir, false);
     } catch (err) {
       setDirError(String(err));
     }
@@ -448,13 +405,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         <FormSection
           title={t("settings.settingsGroupGeneral")}
           description={t("settingsGuide.groups.general.description")}
+          indentContent
         >
-          <div className="space-y-5">
-            <div>
-              <span className="text-xs font-medium text-secondary">
+          <div className="space-y-3">
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <span className="block text-sm font-medium text-strong">
                 {t("settings.theme")}
               </span>
-              <div className="mt-1.5 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {THEME_OPTIONS.map(({ value, labelKey }) => (
                   <button
                     key={value}
@@ -471,49 +429,50 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 ))}
               </div>
             </div>
-            <div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
               <label
                 htmlFor="settings-language"
-                className="text-xs font-medium text-secondary"
+                className="block text-sm font-medium text-strong"
               >
                 {t("settings.language")}
               </label>
               <Select
                 id="settings-language"
                 value={language}
-                onChange={(event) =>
-                  update({ language: event.target.value as Language })
-                }
-                className="mt-1.5 w-44"
-              >
-                {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
-                  <option key={value} value={value}>
-                    {t(labelKey)}
-                  </option>
-                ))}
-              </Select>
+                onChange={(next) => update({ language: next as Language })}
+                options={LANGUAGE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: t(option.labelKey),
+                  icon:
+                    option.value === "zh-CN" ? (
+                      <Languages aria-hidden className="size-3.5" />
+                    ) : (
+                      <Globe aria-hidden className="size-3.5" />
+                    ),
+                }))}
+                searchable={false}
+                className="mt-2 w-44"
+              />
             </div>
-            <div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
               <label
                 htmlFor="settings-close-action"
-                className="text-xs font-medium text-secondary"
+                className="block text-sm font-medium text-strong"
               >
                 {t("settings.closeAction")}
               </label>
               <Select
                 id="settings-close-action"
                 value={settings.close_action}
-                onChange={(event) =>
-                  update({ close_action: event.target.value as CloseAction })
-                }
-                className="mt-1.5 w-44"
-              >
-                {CLOSE_ACTION_OPTIONS.map(({ value, labelKey }) => (
-                  <option key={value} value={value}>
-                    {t(labelKey)}
-                  </option>
-                ))}
-              </Select>
+                onChange={(next) => update({ close_action: next as CloseAction })}
+                options={CLOSE_ACTION_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: t(option.labelKey),
+                  icon: <option.icon aria-hidden className="size-3.5" />,
+                }))}
+                searchable={false}
+                className="mt-2 w-44"
+              />
             </div>
           </div>
         </FormSection>
@@ -521,6 +480,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         <FormSection
           title={t("settings.settingsGroupWatch")}
           description={t("settingsGuide.groups.watch.description")}
+          indentContent
         >
           <div className="space-y-4">
             <div>
@@ -540,62 +500,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               <p className="mt-1 text-xs text-muted">
                 {t("settings.watchedDirsDesc")}
               </p>
-              <div
-                className={`mt-2.5 rounded-lg border border-dashed px-3 py-2.5 transition-colors ${
-                  dragActive
-                    ? "border-brand-400 bg-brand-50/70 dark:border-brand-500/50 dark:bg-brand-500/10"
-                    : "border-slate-200 dark:border-slate-700"
-                }`}
-              >
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    value={newDir}
-                    onChange={(event) => setNewDir(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (isComposing(event)) return;
-                      if (event.key === "Enter") void handleAddDir();
-                    }}
-                    placeholder={t("settings.dirPlaceholder")}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    icon={FolderOpen}
-                    onClick={() => void handleBrowse()}
-                  >
-                    {t("settings.browse")}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="md"
-                    onClick={() => void handleAddDir()}
-                  >
-                    {t("settings.addDir")}
-                  </Button>
-                </div>
-                <p className="mt-1.5 text-xs text-muted">
-                  {t("settings.dragDropHint")}
-                </p>
-                {commonDirs.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-muted">
-                      {t("settings.commonDirs")}
-                    </span>
-                    {commonDirs.map((entry) => (
-                      <button
-                        key={entry.kind}
-                        type="button"
-                        onClick={() => void submitDir(entry.path, false)}
-                        className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-brand-100 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
-                      >
-                        {t(`settings.commonDir${capitalize(entry.kind)}`)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <DirectoryAdder
+                placeholder={t("settings.dirPlaceholder")}
+                hint={t("settings.dragDropHint")}
+                addLabel={t("settings.addDir")}
+                browseLabel={t("settings.browse")}
+                commonDirs={commonDirs}
+                onAdd={handleAddDir}
+              />
               <ul className="mt-2.5 space-y-1">
                 {watchedDirs.length === 0 ? (
                   <li className="text-xs text-slate-400 dark:text-slate-500">
@@ -698,6 +610,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         <FormSection
           title={t("settings.settingsGroupArchive")}
           description={t("settingsGuide.groups.archive.description")}
+          indentContent
         >
           <Row
             title={t("settings.archiveRow")}
@@ -718,49 +631,86 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         <FormSection
           title={t("settings.settingsGroupReminder")}
           description={t("settingsGuide.groups.reminder.description")}
+          indentContent
         >
-          <div className="space-y-5">
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-secondary">
-                {t("settings.reminderEnabled")}
-              </span>
-              <input
-                type="checkbox"
-                checked={settings.reminder_enabled}
-                onChange={(event) =>
-                  update({ reminder_enabled: event.target.checked })
-                }
-                className="size-4 accent-brand-600"
-              />
-            </label>
-            <div>
-              <label
-                htmlFor="settings-reminder-lead"
-                className="text-xs font-medium text-secondary"
+          <div className="space-y-3">
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-strong">
+                    {t("settings.reminderEnabled")}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted">
+                    {t("settings.reminderLeadDaysHint")}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                      settings.reminder_enabled
+                        ? "bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+                        : "bg-slate-200/70 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    {t(
+                      settings.reminder_enabled
+                        ? "settings.stateOn"
+                        : "settings.stateOff",
+                    )}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.reminder_enabled}
+                    onChange={(event) =>
+                      update({ reminder_enabled: event.target.checked })
+                    }
+                    aria-label={t("settings.reminderEnabled")}
+                    className="size-4 accent-brand-600"
+                  />
+                </div>
+              </div>
+              <div
+                className={`mt-3 border-t border-slate-100 pt-3 dark:border-slate-800 ${
+                  settings.reminder_enabled ? "" : "opacity-50"
+                }`}
               >
-                {t("settings.reminderLeadDays")}
-              </label>
-              <Select
-                id="settings-reminder-lead"
-                value={String(settings.reminder_lead_days)}
-                onChange={(event) =>
-                  update({ reminder_lead_days: Number(event.target.value) })
-                }
-                className="mt-1.5 w-44"
-              >
-                {REMINDER_LEAD_OPTIONS.map((days) => (
-                  <option key={days} value={days}>
-                    {days}
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-1 text-xs text-muted">
-                {t("settings.reminderLeadDaysHint")}
-              </p>
+                <label
+                  htmlFor="settings-reminder-lead"
+                  className="block text-xs font-medium text-secondary"
+                >
+                  {t("settings.reminderLeadDays")}
+                </label>
+                <Select
+                  id="settings-reminder-lead"
+                  value={String(settings.reminder_lead_days)}
+                  onChange={(next) =>
+                    update({ reminder_lead_days: Number(next) })
+                  }
+                  options={REMINDER_LEAD_OPTIONS.map((days) => ({
+                    value: String(days),
+                    label: String(days),
+                  }))}
+                  searchable={false}
+                  disabled={!settings.reminder_enabled}
+                  className="mt-1.5 w-44"
+                />
+                <p className="mt-1 text-xs text-muted">
+                  {t(
+                    settings.reminder_enabled
+                      ? "settings.reminderLeadDaysHint"
+                      : "settings.reminderLeadDaysDisabled",
+                  )}
+                </p>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
-              <div className="min-w-0 text-sm font-semibold text-secondary">
-                {t("settings.homeworkShortcut")}
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-strong">
+                  {t("settings.homeworkShortcut")}
+                </div>
+                <div className="mt-0.5 text-xs text-muted">
+                  {t("settingsGuide.homeworkShortcut.tips")}
+                </div>
               </div>
               <Button
                 variant="secondary"
@@ -777,6 +727,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         <FormSection
           title={t("settings.settingsGroupAdvanced")}
           description={t("settingsGuide.groups.advanced.description")}
+          indentContent
         >
           <div className="space-y-3">
             <Row

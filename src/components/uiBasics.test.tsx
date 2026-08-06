@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { Input } from "./Input";
 import { Select } from "./Select";
 import { InlineNotice } from "./InlineNotice";
@@ -20,14 +20,22 @@ describe("共享基础组件", () => {
     expect(container.querySelector("input")?.className).toContain("text-xs");
   });
 
-  it("Select 渲染选项", () => {
+  it("Select 自定义下拉渲染选项并可选中", () => {
+    const onChange = vi.fn();
     render(
-      <Select>
-        <option value="a">A</option>
-      </Select>,
+      <Select
+        value="a"
+        onChange={onChange}
+        searchable={false}
+        options={[
+          { value: "a", label: "A" },
+          { value: "b", label: "B" },
+        ]}
+      />,
     );
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
-    expect(screen.getByText("A")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+    fireEvent.click(screen.getByRole("option", { name: "B" }));
+    expect(onChange).toHaveBeenCalledWith("b");
   });
 
   it("InlineNotice 三种变体渲染文本", () => {

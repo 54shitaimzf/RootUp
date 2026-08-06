@@ -73,6 +73,7 @@ export function ArchiveSettingsDialog({
       title={t("settings.archiveDialogTitle")}
       onClose={onClose}
       width="max-w-lg"
+      brandTitle
       footer={
         <>
           <Button variant="primary" size="md" disabled={saving} onClick={() => void save()}>

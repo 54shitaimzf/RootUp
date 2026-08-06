@@ -58,6 +58,14 @@ pub fn shortcut_icon_name(kind: ProjectKind) -> &'static str {
         ProjectKind::CSharp => "csharp.ico",
         ProjectKind::Go => "go.ico",
         ProjectKind::Unity => "unity.ico",
+        ProjectKind::Cpp
+        | ProjectKind::Php
+        | ProjectKind::Ruby
+        | ProjectKind::Dart
+        | ProjectKind::Flutter
+        | ProjectKind::Kotlin
+        | ProjectKind::Swift
+        | ProjectKind::Android => "generic.ico",
         ProjectKind::Generic => "generic.ico",
     }
 }
@@ -183,6 +191,7 @@ pub fn rewrite_project_shortcut_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::project::ProjectSource;
 
     fn temp_root(name: &str) -> PathBuf {
         let dir =
@@ -227,6 +236,8 @@ mod tests {
             path: "C:/proj/rust-app".into(),
             name: "rust-app".into(),
             kind: ProjectKind::Rust,
+            source: ProjectSource::Manual,
+            detected_by: Some("Cargo.toml".into()),
         };
         let result = create_project_shortcut(&project, &exe, &desktop, &icons);
         assert!(result.is_ok(), "{result:?}");
@@ -247,6 +258,8 @@ mod tests {
             path: "C:/proj/x".into(),
             name: "x".into(),
             kind: ProjectKind::Generic,
+            source: ProjectSource::Manual,
+            detected_by: None,
         };
         assert!(create_project_shortcut(
             &project,
@@ -270,6 +283,8 @@ mod tests {
             path: "C:/proj/rust-app".into(),
             name: "rust-app".into(),
             kind: ProjectKind::Rust,
+            source: ProjectSource::Manual,
+            detected_by: Some("Cargo.toml".into()),
         };
         let lnk = create_project_shortcut(&project, &exe, &desktop, &icons).unwrap();
         assert!(lnk.exists());

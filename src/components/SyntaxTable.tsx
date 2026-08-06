@@ -21,7 +21,7 @@ export function SyntaxTable() {
           <div className="font-mono text-[11px] font-semibold text-brand-700 dark:text-brand-300">
             {line.key}
           </div>
-          <div className="mt-0.5 leading-relaxed text-slate-500 dark:text-slate-400">
+          <div className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
             {line.desc}
           </div>
         </div>

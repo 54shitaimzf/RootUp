@@ -6,6 +6,11 @@ import { DEMO_COURSES } from "../../../lib/study";
 
 const TODAY = new Date("2026-08-04T12:00:00");
 
+function pick(label: string, optionText: string) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole("option", { name: new RegExp(optionText) }));
+}
+
 function renderCourseForm(
   props: Partial<Parameters<typeof CourseFormDialog>[0]> = {},
 ) {
@@ -86,9 +91,7 @@ describe("CourseFormDialog 智能表单", () => {
     fireEvent.change(screen.getByPlaceholderText("如：高等数学"), {
       target: { value: "大学物理" },
     });
-    fireEvent.change(screen.getByLabelText("周次规则"), {
-      target: { value: "even" },
-    });
+    pick("周次规则", "双周");
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     const draft = onSave.mock.calls[0][0] as { color: string };
     expect(draft.color).not.toBe("sky");
@@ -97,9 +100,7 @@ describe("CourseFormDialog 智能表单", () => {
   it("周次范围失焦时归一化全角与“周”字", () => {
     const onSave = vi.fn();
     renderCourseForm({ onSave });
-    fireEvent.change(screen.getByLabelText("周次规则"), {
-      target: { value: "range" },
-    });
+    pick("周次规则", "指定周次");
     const input = screen.getByPlaceholderText("如：2-16 或 1,3,5-8");
     fireEvent.change(input, { target: { value: "2－16 周" } });
     fireEvent.blur(input);
@@ -153,9 +154,7 @@ describe("HomeworkFormDialog 智能截止", () => {
 
   it("选中课程且未手动修改时建议下次上课日 23:59", () => {
     renderHomework();
-    fireEvent.change(screen.getByLabelText("课程（可选）"), {
-      target: { value: DEMO_COURSES[0].id },
-    });
+    pick("课程（可选）", DEMO_COURSES[0].name);
     expect(screen.getByLabelText("日期")).toHaveValue("2026-08-10");
     expect(screen.getByLabelText("时间")).toHaveTextContent("23:59");
     expect(

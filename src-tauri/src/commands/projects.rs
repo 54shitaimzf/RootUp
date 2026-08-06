@@ -2,8 +2,8 @@
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{
-    detect_project_kind, discover_projects, find_project_root, FeatureDetector, ProjectInfo,
-    ProjectKind, MAX_PROJECT_DEPTH,
+    detect_project_kind_with_feature, discover_projects, find_project_root, FeatureDetector,
+    ProjectInfo, ProjectKind, ProjectSource, MAX_PROJECT_DEPTH,
 };
 use crate::core::settings::PREFERRED_IDE_NONE;
 use crate::core::tools::{self, extension_of};
@@ -55,10 +55,14 @@ fn resolve_project(path: &str) -> Result<ProjectInfo, String> {
     let detector = FeatureDetector;
     let p = PathBuf::from(path);
     if p.is_dir() {
+        let (kind, detected_by) =
+            detect_project_kind_with_feature(&p).unwrap_or((ProjectKind::Generic, String::new()));
         return Ok(ProjectInfo {
             path: normalize_path(path),
             name: dir_name(&p),
-            kind: detect_project_kind(&p).unwrap_or(ProjectKind::Generic),
+            kind,
+            source: ProjectSource::Manual,
+            detected_by: (!detected_by.is_empty()).then_some(detected_by),
         });
     }
     if p.is_file() {
@@ -70,6 +74,8 @@ fn resolve_project(path: &str) -> Result<ProjectInfo, String> {
             path: normalize_path(&dir.to_string_lossy()),
             name: dir_name(&dir),
             kind: ProjectKind::Generic,
+            source: ProjectSource::Manual,
+            detected_by: None,
         });
     }
     Err("路径不存在".to_string())

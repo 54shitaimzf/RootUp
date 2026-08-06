@@ -22,6 +22,7 @@ export function SettingsInfoDialog({
       title={entry ? t(entry.titleKey) : ""}
       onClose={onClose}
       width="max-w-md"
+      brandTitle
       footer={
         <Button variant="primary" size="md" onClick={onClose}>
           {t("settings.infoClose")}
@@ -33,7 +34,10 @@ export function SettingsInfoDialog({
           <section>
             <div className="flex items-center gap-1.5">
               <Sparkles className="size-4 shrink-0 text-brand-600 dark:text-brand-400" />
-              <SectionLabel tone="strong">
+              <SectionLabel
+                tone="strong"
+                className="text-brand-700 dark:text-brand-300"
+              >
                 {t("settings.infoIntro")}
               </SectionLabel>
             </div>
@@ -44,7 +48,10 @@ export function SettingsInfoDialog({
           <section>
             <div className="flex items-center gap-1.5">
               <Lightbulb className="size-4 shrink-0 text-amber-500 dark:text-amber-400" />
-              <SectionLabel tone="strong">
+              <SectionLabel
+                tone="strong"
+                className="text-brand-700 dark:text-brand-300"
+              >
                 {t("settings.infoExample")}
               </SectionLabel>
             </div>

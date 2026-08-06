@@ -66,6 +66,7 @@ describe("HelpCenter", () => {
     fireEvent.click(screen.getByRole("button", { name: "open-help" }));
     fireEvent.click(screen.getByRole("button", { name: "设置说明" }));
     expect(screen.getByText("监控与分类")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("监控与分类"));
     expect(screen.getByText("忽略规则")).toBeInTheDocument();
     expect(screen.getByText(/临时文件/)).toBeInTheDocument();
   });

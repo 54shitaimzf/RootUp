@@ -10,29 +10,44 @@ import type { ReactNode } from "react";
 export function FormSection({
   title,
   description,
+  indentContent = false,
   className = "",
   children,
 }: {
   title: string;
   description?: string;
+  /** 内容区整体缩进 + 左侧引导线（设置页分区层级用，弹窗保持默认） */
+  indentContent?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <section
-      className={`border-t border-slate-100 pb-2 pt-5 first:border-t-0 first:pt-0 dark:border-slate-800 ${className}`}
-    >
-      <div className="flex items-center gap-2">
+    <section className={`${indentContent ? "pb-9" : "pb-[30px]"} ${className}`}>
+      <div
+        aria-hidden="true"
+        className={`form-section-divider mx-auto h-px w-[calc(100%-3rem)] bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-slate-700/70 ${
+          indentContent ? "mb-9" : "mb-[30px]"
+        }`}
+      />
+      <h3 className="flex items-center gap-2 text-base font-semibold text-brand-700 dark:text-brand-300">
         <span
-          className="h-3.5 w-0.5 shrink-0 rounded-sm bg-brand-500"
+          className="h-[1em] w-0.5 shrink-0 rounded-sm bg-brand-500"
           aria-hidden="true"
         />
-        <h3 className="text-base font-semibold text-strong">{title}</h3>
-      </div>
+        {title}
+      </h3>
       {description && (
         <p className="mt-0.5 pl-[10px] text-xs text-muted">{description}</p>
       )}
-      <div className="mt-3">{children}</div>
+      <div
+        className={
+          indentContent
+            ? "mt-4 border-l border-dashed border-slate-200 pl-4 dark:border-slate-700/60"
+            : "mt-3"
+        }
+      >
+        {children}
+      </div>
     </section>
   );
 }

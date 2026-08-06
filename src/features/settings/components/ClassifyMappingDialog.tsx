@@ -9,6 +9,7 @@ import {
 import type { ClassifyDefaultEntry, ClassifyRule } from "../../../lib/tauri";
 import { Button } from "../../../components/Button";
 import { Chip } from "../../../components/Chip";
+import { FilterIcon } from "../../../components/FilterIcon";
 import { InlineNotice } from "../../../components/InlineNotice";
 import { Input } from "../../../components/Input";
 import { Modal } from "../../../components/Modal";
@@ -127,6 +128,7 @@ export function ClassifyMappingDialog({
       onClose={onClose}
       width="max-w-3xl"
       contentHeight="h-[65vh]"
+      brandTitle
       footer={
         <>
           <Button variant="primary" size="md" onClick={() => void save()}>
@@ -241,19 +243,18 @@ export function ClassifyMappingDialog({
             </div>
             <Select
               value={editing.category}
-              onChange={(event) =>
+              onChange={(next) =>
                 setEditing((prev) =>
-                  prev ? { ...prev, category: event.target.value } : prev,
+                  prev ? { ...prev, category: next } : prev,
                 )
               }
+              options={categories.map((category) => ({
+                value: category,
+                label: t(`filter.${category}`),
+                icon: <FilterIcon kind="category" value={category} />,
+              }))}
               className="mt-2"
-            >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {t(`filter.${category}`)}
-                </option>
-              ))}
-            </Select>
+            />
             <div className="mt-3 flex items-center justify-between gap-2">
               {effective.overridden.has(editing.ext) ? (
                 <button

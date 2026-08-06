@@ -1,6 +1,6 @@
 [package]
 name = "rootup"
-version = "0.8.2"
+version = "0.8.3"
 description = "RootUp - 面向学生的智能文件整理工具"
 authors = ["余烬"]
 license = "GPL-3.0-or-later"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"] }
 tauri-plugin-store = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"

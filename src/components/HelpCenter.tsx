@@ -6,7 +6,15 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, GraduationCap, Search, Settings2 } from "lucide-react";
+import {
+  ChevronDown,
+  ExternalLink,
+  GraduationCap,
+  Info,
+  Lightbulb,
+  Search,
+  Settings2,
+} from "lucide-react";
 import { Modal } from "./Modal";
 import { SectionLabel } from "./SectionLabel";
 import { SyntaxTable } from "./SyntaxTable";
@@ -105,6 +113,24 @@ function HelpCenterDialog({
   onShowOnboarding: () => void;
 }) {
   const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () =>
+      new Set(
+        SETTINGS_GUIDE_GROUPS.slice(1).map((group) => group.id),
+      ),
+  );
+
+  const toggleGroup = (id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const openIdeUrl = async (url: string, key: string) => {
     try {
@@ -121,6 +147,7 @@ function HelpCenterDialog({
       title={t("help.title")}
       onClose={onClose}
       width="max-w-xl"
+      brandTitle
     >
       <div className="flex gap-1 rounded-md bg-slate-100 p-1 dark:bg-slate-800">
         {(
@@ -155,7 +182,9 @@ function HelpCenterDialog({
       {section === "guide" ? (
         <div className="mt-4 space-y-4">
           <div>
-            <SectionLabel>{t("help.onboardingTitle")}</SectionLabel>
+            <SectionLabel tone="brand" bar>
+              {t("help.onboardingTitle")}
+            </SectionLabel>
             <p className="mt-1 text-xs text-muted">
               {t("help.onboardingIntro")}
             </p>
@@ -173,7 +202,9 @@ function HelpCenterDialog({
           </div>
 
           <div>
-            <SectionLabel>{t("help.ideGuideTitle")}</SectionLabel>
+            <SectionLabel tone="brand" bar>
+              {t("help.ideGuideTitle")}
+            </SectionLabel>
             <p className="mt-1 text-xs text-muted">{t("help.ideGuideIntro")}</p>
             <div className="mt-2 space-y-1.5">
               {LANGUAGE_IDE_RECOMMENDATION.map((rec) => (
@@ -222,33 +253,77 @@ function HelpCenterDialog({
             const entries = SETTINGS_GUIDE.filter(
               (entry) => entry.group === group.id,
             );
+            const isCollapsed = collapsed.has(group.id);
             return (
-              <div key={group.id}>
-                <SectionLabel>{t(group.titleKey)}</SectionLabel>
-                <p className="mt-0.5 text-xs text-muted">
-                  {t(group.descriptionKey)}
-                </p>
-                <div className="mt-2 space-y-2.5">
-                  {entries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800"
-                    >
-                      <div className="text-sm font-medium text-secondary">
-                        {t(entry.titleKey)}
+              <div
+                key={group.id}
+                className="overflow-hidden rounded-xl border border-slate-100 dark:border-slate-800"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  aria-expanded={!isCollapsed}
+                  className="flex w-full items-center gap-2 bg-slate-50/60 px-3 py-2.5 text-left transition-colors hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-300">
+                      <span
+                        aria-hidden="true"
+                        className="h-[1em] w-0.5 shrink-0 rounded-sm bg-brand-500"
+                      />
+                      <span className="min-w-0">{t(group.titleKey)}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted">
+                      {t(group.descriptionKey)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-md bg-slate-200/70 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                    {entries.length}
+                  </span>
+                  <ChevronDown
+                    className={`size-4 shrink-0 text-muted transition-transform duration-[var(--duration-fast)] ${
+                      isCollapsed ? "" : "rotate-180"
+                    }`}
+                  />
+                </button>
+                {!isCollapsed && (
+                  <div className="space-y-2 border-t border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+                    {entries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-lg bg-slate-50 px-3 py-3 ring-1 ring-transparent transition-colors hover:bg-slate-100 hover:ring-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/70 dark:hover:ring-slate-700"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="size-1.5 shrink-0 rounded-full bg-brand-500" />
+                          <span className="text-sm font-semibold text-strong">
+                            {t(entry.titleKey)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs leading-relaxed text-secondary">
+                          {t(entry.introKey)}
+                        </p>
+                        <div className="mt-2 flex items-start gap-1.5">
+                          <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-amber-500 dark:text-amber-400" />
+                          <p className="text-xs leading-relaxed text-muted">
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              {t("settings.infoExample")}
+                            </span>
+                            : {t(entry.exampleKey)}
+                          </p>
+                        </div>
+                        <div className="mt-1 flex items-start gap-1.5">
+                          <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                          <p className="text-xs leading-relaxed text-muted">
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              {t("settings.infoTips")}
+                            </span>
+                            : {t(entry.tipsKey)}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs leading-relaxed text-muted">
-                        {t(entry.introKey)}
-                      </p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted">
-                        {t("settings.infoExample")}: {t(entry.exampleKey)}
-                      </p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted">
-                        {t("settings.infoTips")}: {t(entry.tipsKey)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -256,20 +331,26 @@ function HelpCenterDialog({
       ) : (
         <div className="mt-4 space-y-4">
           <div>
-            <SectionLabel>{t("help.syntaxTitle")}</SectionLabel>
+            <SectionLabel tone="brand" bar>
+              {t("help.syntaxTitle")}
+            </SectionLabel>
             <p className="mt-1 text-xs text-muted">{t("files.syntaxHelpIntro")}</p>
             <div className="mt-2">
               <SyntaxTable />
             </div>
           </div>
           <div>
-            <SectionLabel>{t("help.customCommandsTitle")}</SectionLabel>
+            <SectionLabel tone="brand" bar>
+              {t("help.customCommandsTitle")}
+            </SectionLabel>
             <p className="mt-1 text-xs leading-relaxed text-muted">
               {t("help.customCommandsNote")}
             </p>
           </div>
           <div>
-            <SectionLabel>{t("help.logTitle")}</SectionLabel>
+            <SectionLabel tone="brand" bar>
+              {t("help.logTitle")}
+            </SectionLabel>
             <p className="mt-1 text-xs leading-relaxed text-muted">
               {t("help.logNote")}
             </p>

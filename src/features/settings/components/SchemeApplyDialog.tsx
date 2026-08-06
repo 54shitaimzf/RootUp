@@ -51,6 +51,7 @@ export function SchemeApplyDialog({
       title={t("settings.applySchemeMenuTitle")}
       onClose={onClose}
       width="max-w-md"
+      brandTitle
       footer={
         <>
           <ConfirmButton

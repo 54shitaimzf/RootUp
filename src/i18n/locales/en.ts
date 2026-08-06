@@ -274,6 +274,10 @@ export default {
     reminderLeadDays: "Remind days before due",
     reminderLeadDaysHint:
       "Start reminding 1–14 days before the deadline; pending homework only.",
+    reminderLeadDaysDisabled:
+      "Enable reminders first to configure the lead days.",
+    stateOn: "On",
+    stateOff: "Off",
     homeworkShortcut: "Desktop “Open homework” shortcut",
     homeworkShortcutCreate: "Create shortcut",
     homeworkShortcutCreated: "Desktop shortcut created",
@@ -540,6 +544,10 @@ export default {
     ideHintAction: "Learn how to install an IDE",
     ideLearnMore: "Learn how to install an IDE",
     dismiss: "Got it",
+    addHint: "Paste a path, drop a folder, or pick one with “Browse…”",
+    sourceManual: "Manual",
+    sourceAuto: "Auto",
+    detectedBy: "Detected via: {{feature}}",
     kindRust: "Rust",
     kindNode: "Node",
     kindPython: "Python",
@@ -547,6 +555,14 @@ export default {
     kindCSharp: "C#",
     kindGo: "Go",
     kindUnity: "Unity",
+    kindCpp: "C++",
+    kindPhp: "PHP",
+    kindRuby: "Ruby",
+    kindDart: "Dart",
+    kindFlutter: "Flutter",
+    kindKotlin: "Kotlin",
+    kindSwift: "Swift",
+    kindAndroid: "Android",
     kindGeneric: "Generic folder",
   },
   help: {
@@ -575,6 +591,10 @@ export default {
     customCommandsNote: "Advanced: add a command in Settings → Projects & open with. Set Purpose to a tool key (e.g. vscode, typora) to prefer it; leave empty for a generic fallback.",
     logTitle: "Logs",
     logNote: "Scan, watch and open actions are recorded in the log directory; the path is shown in Settings.",
+  },
+  dropdown: {
+    searchPlaceholder: "Search options…",
+    noResults: "No matching options",
   },
   close: {
     title: "Close RootUp?",

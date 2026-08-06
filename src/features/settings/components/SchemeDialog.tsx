@@ -115,6 +115,7 @@ export function SchemeDialog({
       title={t("settings.schemeDialogTitle")}
       onClose={onClose}
       width="max-w-md"
+      brandTitle
       footer={
         <Button variant="ghost" size="md" onClick={onClose}>
           {t("settings.dialogClose")}

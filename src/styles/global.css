@@ -93,6 +93,15 @@
   display: none;
 }
 
+/* 分区装饰分隔线：两端收尖、中间微鼓，仅非首个分区显示（替代原 border-t 语义） */
+.form-section-divider {
+  display: none;
+}
+
+section:not(:first-child) > .form-section-divider {
+  display: block;
+}
+
 /* 浮窗轻盈化：淡入 + 上移 + 轻微缩放，帮助与补全弹层共用 */
 @keyframes pop-in {
   from {
