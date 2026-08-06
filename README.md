@@ -6,7 +6,7 @@
 
 RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
 
-### 当前能力（v0.8.1 已发布；v0.8.2 功能已冻结，待发布）
+### 当前能力（v0.8.3 已发布）
 
 - Tauri v2 + React 桌面应用框架
 - 系统托盘驻留（打开 / 退出）
@@ -21,12 +21,13 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 可配置规则：忽略规则与分类映射各自独立弹窗编辑，附默认/编程开发/素材创作三套模板，支持保存为自定义方案随时套用（重启生效）
 - 标签管理：自定义标签的显示名/图标/预设色板，内置大类只读，筛选与搜索统一显示
 - 受控归档与撤销：单文件/批量/筛选结果归档、项目单元整体归档（桌面快捷方式自动联动）、自动归档开关（仅分类明确的新文件），全部可撤销
-- 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity 项目，自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
+- 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity/C++/PHP/Ruby/Dart/Flutter/Kotlin/Swift/Android 项目（卡片显示命中特征文件），自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
 - 新手引导与帮助中心：首次启动欢迎弹窗、侧栏全局帮助入口（新手入门 / 搜索与高级用法）、IDE 选择与官方下载指导、检测到代码项目但无 IDE 时按需引导
 - 首个公开发布：NSIS 安装包（per-user、免管理员、中英语言选择）、品牌图标全套、安装包自动验证
 - 学业页（v0.8.0）：课程表（时间轴周视图、日期与“今天”标识、当前时间线、单双周 / 指定周次、周起始日切换、堆叠卡与铺开查看）与作业（截止排序、状态 / 课程筛选、短备注 + 可展开详情、逾期/剩余天数、标记完成确认、默认只看活跃）；学期即课表，支持新建/编辑/复制/删除，数据持久化到后端 `study.json`，课程名自动纳入文件分类标签；全应用按钮遵循 Windows“是左否右”
 - 学业提醒与设置（v0.8.1）：作业截止提醒（默认关闭、可设提前量，学业页提示条 + 列表分组 + 托盘计数直达）；关闭默认行为持久化（每次询问 / 后台运行 / 退出）；语言下拉与 i18n 注册表；设置页按常规/监控与分类/归档/学业提醒/高级分组；托盘左键打开、动态菜单（临期作业直达、自动归档与主题快速切换）；桌面“打开未完成作业”快捷方式
 - 监控体验与视觉（v0.8.2）：移除监控目录即清理索引（可重扫恢复）；原生“浏览…”目录选择器、文件夹拖拽、常用目录一键添加；动效令牌与全局“减少动画”降级、按钮微动、悬浮提示体系；设置项“点行看说明 / 编辑按钮才编辑”，说明中心新增“设置说明”分区
+- 体验补课（v0.8.3）：自绘下拉与输入过滤（替换全部原生下拉）；项目页原生浏览/拖拽/常用目录/粘贴清洗，来源（手动/自动）与识别依据展示，向上查找跳过噪音目录；托盘多尺寸图标与临期/逾期红点角标；设置与帮助中心观感统一
 
 ### 搜索语法
 
@@ -41,7 +42,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 规划能力
 
-已固定版本规划：v0.8.1 学业提醒与设置稳固（作业截止提醒、语言下拉、关闭默认行为持久化）、v0.8.2 灵动视觉与反馈（动效令牌、反馈动画、提示增强）、v0.8.3 文件治理闭环（智能解压、项目生命周期、分类变更日志）、v0.9.0 AI 能力。详见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+已固定版本规划：v0.8.4 存储与扫描地基（扫描器重构、SQLite 调优、启动与后台优化）、v0.8.5 快速扫描与查询、v0.8.6 规模与体积、v0.8.7 单元同构，后续至 v2.0 的完整路线见 [docs/ROADMAP.md](docs/ROADMAP.md)；架构与皮肤约定见 [docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ### 技术栈
 
@@ -52,8 +53,8 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 质量检查
 
-- 前端测试：`npm test`（纯函数 + 组件交互，约 344 用例）
-- Rust 测试：`cargo test`（约 258 用例）
+- 前端测试：`npm test`（纯函数 + 组件交互，约 377 用例）
+- Rust 测试：`cargo test`（约 262 用例）
 - 架构依赖校验：`npm run check:arch`（单向依赖防回归）
 - Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
 - 日志驱动冒烟：`scripts/smoke.ps1`（需先 `npm run tauri build -- --no-bundle`）
@@ -97,7 +98,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 RootUp is a smart file-organizing desktop app built for students. It auto-sorts downloads, archives files with one click, and turns scattered cleanup habits into reusable rules.
 
-### Current Features (v0.8.1 released; v0.8.2 feature-frozen, pending release)
+### Current Features (v0.8.3 released)
 
 - Tauri v2 + React desktop app framework
 - System tray with Open / Quit actions
@@ -111,10 +112,14 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Search syntax: `type:` / `label:` / `state:` / `size:` / `before:` / `after:` combined with plain text
 - Configurable rules: ignore rules and classification mapping with three presets (default / developer / creative); takes effect after restart
 - Label management: custom display names, icons and a preset palette for labels; built-in categories stay read-only
+- Project detection & smart open: auto-detects Rust / Node / Python / Java / C# / Go / Unity / C++ / PHP / Ruby / Dart / Flutter / Kotlin / Swift / Android projects (cards show the matched feature file), finds IDEs and common tools automatically, opens / reveals / opens-in-IDE from file rows, and desktop shortcuts can wake RootUp into the project
+- Onboarding & help center: first-run welcome dialog, global sidebar help (getting started / search & advanced usage), IDE selection guidance, and on-demand IDE setup hints
+- First public release: NSIS installer (per-user, no admin, Chinese/English language choice), full brand icon set, installer verification
 - Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
 - Study page (v0.8.0): timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start, stacked cards with spread-out viewing) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation, active-only default); semesters act as schedules with create/edit/copy/delete and backend `study.json` persistence; course names feed file labels automatically; buttons follow the Windows yes-left/no-right convention
 - Reminders & settings (v0.8.1): homework deadline reminders (off by default, configurable lead days; study-page banner + list grouping + tray count/direct open); persistent close behavior (ask / background / quit); language dropdown with a language registry; settings grouped into General / Monitoring & classification / Archive / Study reminders / Advanced; tray left-click open, dynamic menu (due-homework shortcuts, auto-archive and theme toggles); desktop “Open homework” shortcut
 - Monitoring UX & visuals (v0.8.2): removing a watched folder also cleans its index (restorable by rescanning); native “Browse…” folder picker, folder drag & drop, one-click common folders; motion tokens with global reduced-motion support, button micro-interactions, a unified tooltip system, and a settings guide (row click = explain, edit button = edit) with a new “Settings guide” help section
+- Experience catch-up (v0.8.3): custom dropdowns with type-to-filter replace all native selects; project page gains browse / drag & drop / common folders / paste cleaning with manual-vs-auto source and detection-basis badges; recognition matrix expanded and noise folders skipped; tray uses multi-size icons with a due-homework red-dot badge; settings & help center visuals unified
 
 ### Search Syntax
 
@@ -127,7 +132,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 
 ### Planned Features
 
-Fixed version roadmap: v0.8.1 study reminders & settings polish (deadline reminders, language dropdown, persistent close behavior), v0.8.2 lively visuals & feedback (motion tokens, feedback animations, hint improvements), v0.8.3 file-governance loop (smart extraction, project lifecycle, classification change log), v0.9.0 AI capabilities. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Fixed version roadmap: v0.8.3 experience catch-up patch (custom dropdowns, project page & recognition fixes, tray icons), v0.8.4 storage & scan foundation, v0.8.5 fast scan & query, v0.8.6 size & performance, v0.8.7 unit unification, then the platform line up to v2.0. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Tech Stack
 
