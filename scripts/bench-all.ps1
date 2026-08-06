@@ -124,7 +124,9 @@ if (-not $EngineOnly) {
     }
     Invoke-Step "System benchmark ($Rounds rounds)" {
         $args = @("-Version", $Version, "-Rounds", $Rounds)
-        if ($Huge) { $args += "-Huge" } elseif ($Full) { $args += "-Full" }
+        # Official baseline: engine scales with -Full (100k real + 100k in-memory),
+        # system stays on the default 10k fixture; -Huge optionally scales system to 300k.
+        if ($Huge) { $args += "-Huge" }
         powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo "scripts\benchmark.ps1") @args
     }
 }

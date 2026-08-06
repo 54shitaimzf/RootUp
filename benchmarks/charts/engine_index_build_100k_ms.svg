@@ -2,17 +2,17 @@
 <rect width='560' height='260' fill='#ffffff'/>
 <text x='70' y='18' font-family='Segoe UI' font-size='13' fill='#0f172a'>engine_index_build_100k_ms (p50, ms)</text>
 <line x1='70' y1='214' x2='540' y2='214' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='218' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>257.3</text>
+<text x='64' y='218' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>181.7</text>
 <line x1='70' y1='168' x2='540' y2='168' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='172' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>271.6</text>
+<text x='64' y='172' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>191.8</text>
 <line x1='70' y1='122' x2='540' y2='122' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='126' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>285.9</text>
+<text x='64' y='126' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>201.9</text>
 <line x1='70' y1='76' x2='540' y2='76' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>300.2</text>
+<text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>212.0</text>
 <line x1='70' y1='30' x2='540' y2='30' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>314.5</text>
+<text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>222.1</text>
 <polyline points='70,122' fill='none' stroke='#10b981' stroke-width='2'/>
 <circle cx='70' cy='122' r='3.5' fill='#10b981'/>
-<text x='70' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>285.9</text>
+<text x='70' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>201.9</text>
 <text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.3</text>
 </svg>

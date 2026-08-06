@@ -61,6 +61,21 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - Agent 引导验收：`scripts/agent-acceptance.ps1`（真实夹具 + 带参启动 + 主窗口/托盘截图核对清单）
 - 发布门禁（版本提交前强制）：`scripts/pre-release-check.ps1`（全部单测/构建/冒烟 + AI 真实全链路深链验收，需桌面会话与提权）
 - 性能基准（自研唯一标准，仅本地运行）：`scripts/bench-all.ps1` 一键执行引擎（`-EngineOnly`）与系统（`-SystemOnly`）基准并渲染（README 对比表与 SVG 趋势图），0.8.3 官方基线含时间/空间/IO 共 50 项指标、churn VACUUM 硬断言；host 指纹扩展（OS/CPU/rustc/node/npm/RAM/commit），确定性语料自检，渲染器只对同指纹版本计算 delta 与 15% 警示；结果见 [benchmarks/README.md](benchmarks/README.md)
+
+0.8.3 官方基线（引擎 Full + 系统 10k）关键值：
+
+| 指标 | p50 |
+|---|---|
+| 冷启动 | 320.7 ms |
+| 可交互耗时（冷） | 1944.8 ms |
+| 全量扫描 10k | 361 ms（27700 files/s） |
+| 空闲 RSS | 30.1 MB |
+| 索引库体积（10k） | 7620.6 KB |
+| 前端 JS gzip | 143.3 KB |
+| 引擎扫描 10k（mixed） | 303.2 ms |
+| 引擎扫描 100k（mixed） | 2821.6 ms |
+| 标签重分类 100k | 152.0 ms |
+
 - 安装包验证：`scripts/verify-installer.ps1 -InstallerPath <nsis-setup.exe>`（静默安装 → 冒烟 → 卸载）
 
 ### 安装与发布

@@ -2,17 +2,17 @@
 <rect width='560' height='260' fill='#ffffff'/>
 <text x='70' y='18' font-family='Segoe UI' font-size='13' fill='#0f172a'>engine_scan_mixed_100k_per_file_ms (p90, ms/file)</text>
 <line x1='70' y1='214' x2='540' y2='214' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='218' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0365</text>
+<text x='64' y='218' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0252</text>
 <line x1='70' y1='168' x2='540' y2='168' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='172' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0385</text>
+<text x='64' y='172' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0266</text>
 <line x1='70' y1='122' x2='540' y2='122' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='126' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0405</text>
+<text x='64' y='126' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0280</text>
 <line x1='70' y1='76' x2='540' y2='76' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0426</text>
+<text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0294</text>
 <line x1='70' y1='30' x2='540' y2='30' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0446</text>
+<text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.0308</text>
 <polyline points='70,122' fill='none' stroke='#10b981' stroke-width='2'/>
 <circle cx='70' cy='122' r='3.5' fill='#10b981'/>
-<text x='70' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0405</text>
+<text x='70' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0280</text>
 <text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.3</text>
 </svg>
