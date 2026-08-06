@@ -7,18 +7,8 @@ Start-Sleep -Milliseconds 500
 
 $temp = $env:TEMP
 $patterns = @(
-    "rootup_bench_*",
-    "rootup_smoke_*",
-    "rootup_agent_acceptance_*",
-    "rootup_bench_scan_*",
-    "rootup_bench_scan_full_*",
-    "rootup_bench_scan_huge_*",
-    "rootup_bench_archive_*",
-    "rootup_bench_archive_root_*",
-    "rootup_bench_query_*.db*",
-    "rootup_bench_churn_*.db*",
-    "rootup_bench_dryrun_*.json",
-    "rootup_bench_sample_*",
+    "rootup_*",
+    "rootup-*",
     "engine-*.json",
     "engine-v2-*.json"
 )
@@ -37,9 +27,17 @@ foreach ($backup in @(
     if (Test-Path $backup) { Remove-Item $backup -Force -ErrorAction SilentlyContinue }
 }
 
+foreach ($report in @(
+    (Join-Path $Repo "scripts\release-gate-report.log"),
+    (Join-Path $Repo "scripts\smoke-summary.log"),
+    (Join-Path $Repo "scripts\installer-verify.log")
+)) {
+    if (Test-Path $report) { Remove-Item $report -Force -ErrorAction SilentlyContinue }
+}
+
 $failures = 0
 $leftovers = @(Get-ChildItem $temp -Force -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -like "rootup_bench_*" -or $_.Name -like "rootup_smoke_*" -or $_.Name -like "rootup_agent_acceptance_*" })
+    Where-Object { $_.Name -like "rootup_*" -or $_.Name -like "rootup-*" })
 if ($leftovers.Count -gt 0) {
     Write-Host "[FAIL] Temp leftovers remain: $($leftovers.Count)"
     $failures++

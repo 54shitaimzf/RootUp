@@ -5,6 +5,7 @@ param(
     [switch]$Full,
     [switch]$Huge,
     [switch]$DryRun,
+    [switch]$DeterminismCheck,
     [string]$Shape = "mixed",
     [int]$IdleSeconds = 60,
     [string]$ResultsDir = "benchmarks\results"
@@ -16,6 +17,23 @@ param(
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 Add-Type -AssemblyName System.IO.Compression
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class RootUpBenchIo {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct IO_COUNTERS {
+    public ulong ReadOperationCount;
+    public ulong WriteOperationCount;
+    public ulong OtherOperationCount;
+    public ulong ReadTransferCount;
+    public ulong WriteTransferCount;
+    public ulong OtherTransferCount;
+  }
+  [DllImport("kernel32.dll", SetLastError = true)]
+  public static extern bool GetProcessIoCounters(IntPtr hProcess, out IO_COUNTERS lpIoCounters);
+}
+"@
 
 if (-not $Version) {
     $pkg = Get-Content (Join-Path $Repo "package.json") -Raw | ConvertFrom-Json
@@ -23,8 +41,10 @@ if (-not $Version) {
 }
 if ($DryRun) { $Rounds = 1; $IdleSeconds = 5 }
 
-$Exe = Join-Path $Repo $ExePath
-if (-not (Test-Path $Exe)) { throw "Release exe not found: $Exe" }
+if (-not $DeterminismCheck) {
+    $Exe = Join-Path $Repo $ExePath
+    if (-not (Test-Path $Exe)) { throw "Release exe not found: $Exe" }
+}
 
 $FileCount = if ($DryRun) { 100 } elseif ($Huge) { 300000 } elseif ($Full) { 100000 } else { 10000 }
 $AppData = Join-Path $env:APPDATA "com.rootup.desktop"
@@ -142,29 +162,61 @@ function New-FixtureFromSpec([string]$Root, [int]$Count, [string]$ShapeName) {
     }
 }
 
+function Get-FixtureFingerprint([string]$Root) {
+    $sb = New-Object System.Text.StringBuilder
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $files = Get-ChildItem $Root -Recurse -File -ErrorAction SilentlyContinue | Sort-Object FullName
+    foreach ($f in $files) {
+        if ($f.FullName.StartsWith($rootFull + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+            $rel = $f.FullName.Substring($rootFull.Length).TrimStart('\', '/')
+        } else {
+            $rel = $f.FullName
+        }
+        [void]$sb.AppendLine("$rel|$($f.Length)")
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+if ($DeterminismCheck) {
+    $checkCount = 200
+    $checkRoot = Join-Path $env:TEMP ("rootup_bench_det_" + [guid]::NewGuid().ToString("N"))
+    try {
+        New-FixtureFromSpec $checkRoot $checkCount $Shape
+        $hash1 = Get-FixtureFingerprint $checkRoot
+        Get-ChildItem $checkRoot -Force | Remove-Item -Recurse -Force
+        New-FixtureFromSpec $checkRoot $checkCount $Shape
+        $hash2 = Get-FixtureFingerprint $checkRoot
+        if ($hash1 -ne $hash2) {
+            throw "Deterministic corpus check FAILED (same seed produced different fixtures)"
+        }
+        Write-Host "Deterministic corpus check PASS ($checkCount files, seed=$((Get-Corpus).seed))"
+    } finally {
+        Remove-Item $checkRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    exit 0
+}
+
 function Get-ProcIO([System.Diagnostics.Process]$Proc) {
     try {
-        $names = [System.Diagnostics.PerformanceCounterCategory]::GetInstanceNames("Process") |
-            Where-Object { $_ -like "rootup*" }
-        foreach ($name in $names) {
-            $pidCounter = New-Object System.Diagnostics.PerformanceCounter("Process", "ID Process", $name, $true)
-            try {
-                if ($pidCounter.NextValue() -eq $Proc.Id) {
-                    $read = New-Object System.Diagnostics.PerformanceCounter("Process", "IO Read Bytes/sec", $name, $true)
-                    $write = New-Object System.Diagnostics.PerformanceCounter("Process", "IO Write Bytes/sec", $name, $true)
-                    $read.NextValue() | Out-Null
-                    $write.NextValue() | Out-Null
-                    Start-Sleep -Milliseconds 150
-                    $r = $read.NextValue()
-                    $w = $write.NextValue()
-                    return @{ read = $r; write = $w }
-                }
-            } finally {
-                $pidCounter.Dispose()
-            }
-        }
-    } catch { }
-    return $null
+        if ($Proc.HasExited) { return $null }
+        $c1 = New-Object RootUpBenchIo+IO_COUNTERS
+        if (-not [RootUpBenchIo]::GetProcessIoCounters($Proc.Handle, [ref]$c1)) { return $null }
+        Start-Sleep -Milliseconds 1000
+        if ($Proc.HasExited) { return $null }
+        $c2 = New-Object RootUpBenchIo+IO_COUNTERS
+        if (-not [RootUpBenchIo]::GetProcessIoCounters($Proc.Handle, [ref]$c2)) { return $null }
+        $read = [double]($c2.ReadTransferCount - $c1.ReadTransferCount)
+        $write = [double]($c2.WriteTransferCount - $c1.WriteTransferCount)
+        return @{ read = $read; write = $write }
+    } catch {
+        return $null
+    }
 }
 
 function Summarize([double[]]$Values) {
@@ -349,6 +401,10 @@ try {
     }
 
     $rustc = (& rustc --version 2>$null | Select-Object -First 1)
+    $node = (& node --version 2>$null | Select-Object -First 1)
+    $npmv = (& npm.cmd --version 2>$null | Select-Object -First 1)
+    $ramGb = 0
+    try { $ramGb = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1) } catch {}
     $result = [ordered]@{
         schema = 2
         version = $Version
@@ -357,6 +413,9 @@ try {
             os = [Environment]::OSVersion.VersionString
             cpu = $env:PROCESSOR_IDENTIFIER
             rustc = $rustc
+            node = $node
+            npm = $npmv
+            ram_gb = $ramGb
             commit = (& git -C $Repo rev-parse --short HEAD 2>$null)
         }
         scenario = @{
@@ -387,6 +446,29 @@ try {
         Write-Host ("  {0,-36} p50={1} {2}" -f $name, $summaryTable[$name].p50, $summaryTable[$name].unit)
     }
     if (-not (Test-Path $OutPath)) { throw "Result file was not written" }
+    if ($DryRun) {
+        $check = Get-Content $OutPath -Raw | ConvertFrom-Json
+        $missing = [System.Collections.Generic.List[string]]::new()
+        if ($check.schema -ne 2) { $missing.Add("schema=2") }
+        if (-not $check.host -or -not $check.host.commit) { $missing.Add("host.commit") }
+        if (-not $check.host -or -not $check.host.node) { $missing.Add("host.node") }
+        if (-not $check.host -or -not $check.host.npm) { $missing.Add("host.npm") }
+        if ($null -eq $check.host -or $null -eq $check.host.ram_gb -or $check.host.ram_gb -le 0) { $missing.Add("host.ram_gb") }
+        foreach ($key in @(
+            "system_interactive_cold_ms",
+            "system_interactive_warm_ms",
+            "system_io_cold_read_mb_per_sec",
+            "system_io_cold_write_mb_per_sec",
+            "system_io_warm_read_mb_per_sec",
+            "system_io_warm_write_mb_per_sec"
+        )) {
+            if ($null -eq $check.metrics.$key) { $missing.Add($key) }
+        }
+        if ($missing.Count -gt 0) {
+            throw "DryRun validation failed: missing $($missing -join ', ')"
+        }
+        Write-Host "DryRun validation PASS (schema=2, host.commit, interactive+IO keys)"
+    }
 } finally {
     Restore-UserData
     Remove-Item $FixtureRoot -Recurse -Force -ErrorAction SilentlyContinue

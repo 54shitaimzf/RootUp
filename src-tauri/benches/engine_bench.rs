@@ -582,11 +582,22 @@ fn bench_churn(records: usize, cycles: usize) -> Value {
         store.upsert_many(&adds).unwrap();
         store.mark_deleted(&deletes[0]).unwrap();
     }
+    // 先 checkpoint(TRUNCATE) 把 WAL 落回主库，保证 after/vacuum 口径一致
+    Connection::open(&db)
+        .and_then(|conn| conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)"))
+        .ok();
     let after = db_bytes(&db);
     Connection::open(&db)
         .and_then(|conn| conn.execute_batch("VACUUM"))
         .ok();
+    Connection::open(&db)
+        .and_then(|conn| conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)"))
+        .ok();
     let vacuum = db_bytes(&db);
+    assert!(
+        vacuum <= after,
+        "VACUUM must not grow the database: after={after} vacuum={vacuum}"
+    );
 
     if let Value::Object(map) = &mut out {
         map.insert(
