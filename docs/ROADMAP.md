@@ -34,6 +34,8 @@
 - 扫描器重构：抽取 `FileEnumerator`（path / size / modified / is_dir / is_symlink）与 `DeltaSource`（事件流 → upsert / delete）接口，walkdir 为默认实现；差集从内存快照改为 SQLite 临时表 / keyset（内存 O(批次)）；评估 jwalk（仅目录多 / 深生效）；快速路径与 walkdir 等价测试。
 - SQLite 调优与存储治理一阶段：`journal_size_limit` / `wal_autocheckpoint` / 空闲与关闭 checkpoint / `synchronous=NORMAL` / `mmap_size` / `cache_size` / `busy_timeout` / `PRAGMA optimize`；墓碑保留期（30 天）与启动清理；损坏备份保留最近 3 份；快捷图标对账；设置保存合并写 / 去抖。
 - 启动与后台优化一阶段：setup 各阶段埋点；非关键服务延迟到窗口显示后；scanner / 自动归档空闲轮询事件化；日志批量缓冲 flush；空闲 RSS / CPU 入冒烟基线。
+- 文件列表排序与翻页交互：手动排序方式（名称 / 类型 / 大小 / 修改时间 / 标签，升序降序，中文 locale 稳定排序规则）、加载更多与滚动位置保持、翻页状态可感知；索引级 keyset 分页 / COUNT 治理仍归 v0.8.5 落地。
+- 统一输入边界与合法性检查：监控/项目目录（清洗、长度、非法字符、保留名、UNC、环境变量展开后校验、越权路径）、设置枚举与范围（close_action、reminder_lead_days、语言白名单）、命令与深链参数白名单、课程/作业/标签/规则/方案/习惯字段（必填、长度、日期、周次、同周冲突、label_key 合法性）、本地 JSON 未知字段容错、搜索语法边界、拖拽/浏览/粘贴结果校验；Rust 强校验 + 前端即时校验双保险，边界矩阵测试集中维护。
 - 验收：等价测试全绿；启动 / 扫描 / 内存基线建立。
 
 ### v0.8.5「快速扫描与查询」（性能）
@@ -48,7 +50,7 @@
 - 前端渲染：文件列表虚拟滚动（只渲染可视行）。
 - 应用体积压缩（Rust）：`[profile.release]` 启用 `lto` / `codegen-units=1` / `strip` / `panic=abort` / `opt-level=s|z`；cargo-bloat 审计并精简 feature；UPX 仅对照实验不作为默认。
 - 前端体积（路线 A 落地）：React.lazy 页面级分割（首包仅文件页）、语言包按需加载、Vite manualChunks 与构建产物压缩（gzip / brotli 评估）、首屏 JS ≤200KB。
-- 性能基线与测量：自研基准 harness（引擎：扫描/查询/分类/归档；系统：启动/内存/扫描 RSS/产物体积），仅本地运行并记录 host 指纹，结果以 JSON 历史入库并由脚本渲染 README 表格与 SVG 趋势图（0.8.3 已建初始基线，同一台机器跨版本对比）；可选 mimalloc 对照，仅基准证明收益后引入。
+- 性能基线与测量：自研基准 harness（引擎：扫描/查询/分类/归档；系统：启动/内存/扫描 RSS/产物体积），仅本地运行并记录 host 指纹，结果以 JSON 历史入库并由脚本渲染 README 表格与 SVG 趋势图（0.8.3 已建 50 项官方基线：引擎 Full + 系统 10k、含 interactive/IO、churn VACUUM 断言，同一台机器跨版本对比）；可选 mimalloc 对照，仅基准证明收益后引入。
 - 验收：体积 / 内存 / 启动指标达到基线；性能基准对比报告（自研 harness，15% 警示）。
 
 ### v0.8.7「单元同构」（架构，允许 schema v3 迁移）
