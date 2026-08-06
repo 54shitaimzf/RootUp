@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "seed": 20260806,
+  "shapes": ["wide", "deep", "mixed", "noise"],
+  "extensions": {
+    "pdf": 12,
+    "docx": 8,
+    "txt": 15,
+    "md": 8,
+    "png": 10,
+    "jpg": 10,
+    "mp3": 6,
+    "mp4": 4,
+    "zip": 5,
+    "rs": 8,
+    "ts": 6,
+    "py": 5,
+    "json": 5,
+    "csv": 4,
+    "xlsx": 2,
+    "ppt": 1,
+    "exe": 1
+  },
+  "sizeBytes": {
+    "smallRatio": 0.7,
+    "smallMax": 4096,
+    "mediumRatio": 0.2,
+    "mediumMax": 32768,
+    "largeMax": 65536
+  },
+  "noiseDirs": [
+    "node_modules",
+    ".git",
+    "target",
+    "dist",
+    "__pycache__",
+    "build",
+    "out",
+    ".vscode",
+    ".idea"
+  ],
+  "unicodeNameRatio": 0.3,
+  "tempExtensions": ["crdownload", "part", "tmp"],
+  "tempRatio": 0.02,
+  "hiddenRatio": 0.01
+}

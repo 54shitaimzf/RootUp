@@ -3,13 +3,16 @@ param(
     [int]$Rounds = 5,
     [string]$Version = "",
     [switch]$Full,
+    [switch]$Huge,
     [switch]$DryRun,
+    [string]$Shape = "mixed",
+    [int]$IdleSeconds = 60,
     [string]$ResultsDir = "benchmarks\results"
 )
 
-# System-level benchmark (custom harness): cold start, scan, memory and bundle
-# size. Backs up and restores the real settings + index DB so user data is
-# untouched. Run after `npm run tauri build -- --no-bundle`.
+# System-level benchmark v2 (custom harness): cold/warm startup, scan, memory
+# series, idle CPU, IO bytes and bundle size. Backs up and restores the real
+# settings + index DB. Local-only, same-machine comparison.
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 Add-Type -AssemblyName System.IO.Compression
@@ -18,12 +21,12 @@ if (-not $Version) {
     $pkg = Get-Content (Join-Path $Repo "package.json") -Raw | ConvertFrom-Json
     $Version = $pkg.version
 }
-if ($DryRun) { $Rounds = 1 }
+if ($DryRun) { $Rounds = 1; $IdleSeconds = 5 }
 
 $Exe = Join-Path $Repo $ExePath
 if (-not (Test-Path $Exe)) { throw "Release exe not found: $Exe" }
 
-$FileCount = if ($DryRun) { 100 } elseif ($Full) { 100000 } else { 10000 }
+$FileCount = if ($DryRun) { 100 } elseif ($Huge) { 300000 } elseif ($Full) { 100000 } else { 10000 }
 $AppData = Join-Path $env:APPDATA "com.rootup.desktop"
 $SettingsPath = Join-Path $AppData "settings.json"
 $DbPath = Join-Path $AppData "rootup.db"
@@ -45,20 +48,6 @@ function Add-Sample([string]$Name, [double]$Value) {
         $script:metrics[$Name] = [System.Collections.Generic.List[double]]::new()
     }
     $script:metrics[$Name].Add($Value)
-}
-
-function New-Fixture([string]$Root, [int]$Count) {
-    New-Item -ItemType Directory -Force -Path $Root | Out-Null
-    $dirs = 100
-    $per = [Math]::Max(1, [Math]::Ceiling($Count / $dirs))
-    for ($d = 0; $d -lt $dirs; $d++) {
-        $dir = Join-Path $Root ("d" + $d.ToString("D3"))
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        for ($i = 0; $i -lt $per; $i++) {
-            $path = Join-Path $dir ("f" + $i.ToString("D5") + ".txt")
-            [System.IO.File]::Open($path, [System.IO.FileMode]::Create).Close()
-        }
-    }
 }
 
 function Wait-LogLine([string]$Pattern, [int]$TimeoutSeconds) {
@@ -102,30 +91,169 @@ function Get-GzipKb([string]$Path) {
     return $kb
 }
 
+function Get-Corpus {
+    $specPath = Join-Path $Repo "benchmarks\specs\corpus.json"
+    if (-not (Test-Path $specPath)) { throw "Corpus spec not found: $specPath" }
+    return (Get-Content $specPath -Raw | ConvertFrom-Json)
+}
+
+function New-FixtureFromSpec([string]$Root, [int]$Count, [string]$ShapeName) {
+    $corpus = Get-Corpus
+    $rng = [System.Random]::new([int]$corpus.seed + $Count)
+    $extList = @()
+    foreach ($prop in $corpus.extensions.PSObject.Properties) {
+        for ($i = 0; $i -lt [int]$prop.Value; $i++) { $extList += $prop.Name }
+    }
+    $noise = @($corpus.noiseDirs)
+    $dirs = @("docs", "images", "music", "code", "projects", "courses\math-advanced", "courses\physics", "downloads")
+    for ($i = 0; $i -lt $Count; $i++) {
+        $dir = switch ($ShapeName) {
+            "wide" { Join-Path $Root ("d" + ($i % 100).ToString("D3")) }
+            "deep" {
+                $parts = @()
+                $v = $i
+                for ($d = 0; $d -lt 8; $d++) { $parts += "n" + ($v % 8); $v = [Math]::Floor($v / 8) }
+                Join-Path $Root ($parts -join "\")
+            }
+            "noise" {
+                if ($i % 5 -eq 0) {
+                    Join-Path $Root ($noise[$rng.Next($noise.Count)] + "\pkg" + ($i % 20))
+                } else {
+                    Join-Path $Root $dirs[$i % $dirs.Count]
+                }
+            }
+            default { Join-Path $Root $dirs[$i % $dirs.Count] }
+        }
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $ext = $extList[$rng.Next($extList.Count)]
+        $name = if ($rng.NextDouble() -lt [double]$corpus.unicodeNameRatio) {
+            ([char]0x9AD8 + [char]0x7B49 + [char]0x6570 + [char]0x5B66 + "-" +
+                (($i % 20) + 1) + "-notes-" + $i + "." + $ext)
+        } else {
+            ("file" + $i.ToString("D6") + "." + $ext)
+        }
+        $size = if ($rng.NextDouble() -lt 0.7) { $rng.Next(4096) }
+        elseif ($rng.NextDouble() -lt 0.9) { 4096 + $rng.Next(28672) }
+        else { 32768 + $rng.Next(32768) }
+        [System.IO.File]::WriteAllBytes(
+            (Join-Path $dir $name),
+            (New-Object byte[] $size)
+        )
+    }
+}
+
+function Get-ProcIO([System.Diagnostics.Process]$Proc) {
+    try {
+        $names = [System.Diagnostics.PerformanceCounterCategory]::GetInstanceNames("Process") |
+            Where-Object { $_ -like "rootup*" }
+        foreach ($name in $names) {
+            $pidCounter = New-Object System.Diagnostics.PerformanceCounter("Process", "ID Process", $name, $true)
+            try {
+                if ($pidCounter.NextValue() -eq $Proc.Id) {
+                    $read = New-Object System.Diagnostics.PerformanceCounter("Process", "IO Read Bytes/sec", $name, $true)
+                    $write = New-Object System.Diagnostics.PerformanceCounter("Process", "IO Write Bytes/sec", $name, $true)
+                    $read.NextValue() | Out-Null
+                    $write.NextValue() | Out-Null
+                    Start-Sleep -Milliseconds 150
+                    $r = $read.NextValue()
+                    $w = $write.NextValue()
+                    return @{ read = $r; write = $w }
+                }
+            } finally {
+                $pidCounter.Dispose()
+            }
+        }
+    } catch { }
+    return $null
+}
+
 function Summarize([double[]]$Values) {
     if ($Values.Count -eq 0) { return $null }
     $sorted = @($Values | Sort-Object)
     $n = $sorted.Count
-    $median = $sorted[[Math]::Floor($n / 2)]
-    $p90idx = [Math]::Min($n - 1, [Math]::Max(0, [Math]::Ceiling($n * 0.9) - 1))
-    return @{
-        median = [Math]::Round($median, 3)
-        p90 = [Math]::Round($sorted[$p90idx], 3)
+    $pct = {
+        param($p)
+        $idx = [Math]::Min($n - 1, [Math]::Max(0, [Math]::Ceiling($n * $p) - 1))
+        $sorted[$idx]
+    }
+    $mean = ($sorted | Measure-Object -Average).Average
+    $variance = 0.0
+    foreach ($v in $sorted) { $variance += ($v - $mean) * ($v - $mean) }
+    $variance /= $n
+    $p50 = & $pct 0.5
+    $p90 = & $pct 0.9
+    $p99 = & $pct 0.99
+    return [ordered]@{
+        p50 = [Math]::Round($p50, 3)
+        p90 = [Math]::Round($p90, 3)
+        p99 = [Math]::Round($p99, 3)
         min = [Math]::Round($sorted[0], 3)
         max = [Math]::Round($sorted[$n - 1], 3)
+        mean = [Math]::Round($mean, 3)
+        cv = if ([Math]::Abs($mean) -lt 1e-9) { 0.0 } else { [Math]::Round([Math]::Sqrt($variance) / $mean, 3) }
         samples = $n
     }
 }
 
+function Invoke-OneRound([bool]$FreshDb, [string]$Tag) {
+    if ($FreshDb) {
+        Remove-Item $LogFile, $DbPath, "$DbPath-wal", "$DbPath-shm" -Force -ErrorAction SilentlyContinue
+    } else {
+        Remove-Item $LogFile -Force -ErrorAction SilentlyContinue
+    }
+    $Proc = Start-Process -FilePath $Exe -PassThru
+
+    $startupMs = Wait-LogLine "rootup_lib::app RootUp" 60
+    Add-Sample ("system_startup_" + $Tag + "_ms") $startupMs
+    $interactiveMs = Wait-LogLine "settings: " $(if ($DryRun) { 15 } else { 30 })
+    Add-Sample ("system_interactive_" + $Tag + "_ms") $interactiveMs
+
+    $peak = 0
+    $scanLine = $null
+    $memSeries = [System.Collections.Generic.List[double]]::new()
+    $deadline = (Get-Date).AddSeconds(600)
+    while ((Get-Date) -lt $deadline) {
+        if ($Proc -and -not $Proc.HasExited) {
+            $rss = $Proc.WorkingSet64
+            if ($rss -gt $peak) { $peak = $rss }
+            $memSeries.Add($rss / 1MB)
+        }
+        if (Test-Path $LogFile) {
+            $m = Select-String -Path $LogFile -Pattern "elapsed_ms=" -SimpleMatch |
+                Select-Object -Last 1
+            if ($m) { $scanLine = $m.Line; break }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    if (-not $scanLine) { throw "Scan did not finish ($Tag)" }
+    Add-Sample ("system_scan_" + $Tag + "_peak_rss_mb") ($peak / 1MB)
+    if ($memSeries.Count -gt 0) {
+        $arr = @($memSeries.ToArray())
+        Add-Sample ("system_mem_series_" + $Tag + "_mean_mb") (($arr | Measure-Object -Average).Average)
+        Add-Sample ("system_mem_series_" + $Tag + "_peak_mb") ($arr | Measure-Object -Maximum).Maximum
+    }
+    if ($scanLine -match "elapsed_ms=(\d+)") {
+        Add-Sample ("system_scan_" + $Tag + "_ms") ([double]$Matches[1])
+    }
+    if ($scanLine -match "files_per_sec=([\d.]+)") {
+        Add-Sample ("system_scan_" + $Tag + "_files_per_sec") ([double]$Matches[1])
+    }
+    $io = Get-ProcIO $Proc
+    if ($io) {
+        Add-Sample ("system_io_" + $Tag + "_read_mb_per_sec") ($io.read / 1MB)
+        Add-Sample ("system_io_" + $Tag + "_write_mb_per_sec") ($io.write / 1MB)
+    }
+    $script:lastProc = $Proc
+}
+
 try {
     Stop-RootUp
-    # 防御：上次异常残留的备份先恢复
     if (Test-Path $SettingsBackup) { Restore-UserData }
 
     if (Test-Path $SettingsPath) { Copy-Item $SettingsPath $SettingsBackup -Force }
     if (Test-Path $DbPath) { Copy-Item $DbPath $DbBackup -Force }
 
-    New-Fixture $FixtureRoot $FileCount
+    New-FixtureFromSpec $FixtureRoot $FileCount $Shape
     $FixtureDir = $FixtureRoot.Replace("\", "/")
     $Settings = @{
         settings = @{
@@ -148,50 +276,32 @@ try {
     )
 
     for ($round = 1; $round -le $Rounds; $round++) {
-        Remove-Item $LogFile, $DbPath, "$DbPath-wal", "$DbPath-shm" -Force -ErrorAction SilentlyContinue
-        $Proc = Start-Process -FilePath $Exe -PassThru
-
-        $startupMs = Wait-LogLine "rootup_lib::app RootUp" 60
-        Add-Sample "system_startup_log_ms" $startupMs
-
-        $interactiveMs = Wait-LogLine "settings: " $(if ($DryRun) { 15 } else { 30 })
-        Add-Sample "system_interactive_ms" $interactiveMs
-
-        $peak = 0
-        $scanLine = $null
-        $deadline = (Get-Date).AddSeconds(600)
-        while ((Get-Date) -lt $deadline) {
-            if ($Proc -and -not $Proc.HasExited) {
-                $rss = $Proc.WorkingSet64
-                if ($rss -gt $peak) { $peak = $rss }
-            }
-            if (Test-Path $LogFile) {
-                $m = Select-String -Path $LogFile -Pattern "elapsed_ms=" -SimpleMatch |
-                    Select-Object -Last 1
-                if ($m) { $scanLine = $m.Line; break }
-            }
-            Start-Sleep -Milliseconds 200
-        }
-        if (-not $scanLine) { throw "Scan did not finish in round $round" }
-        Add-Sample "system_scan_peak_rss_mb" ($peak / 1MB)
-        if ($scanLine -match "elapsed_ms=(\d+)") {
-            Add-Sample "system_scan_ms" ([double]$Matches[1])
-        }
-        if ($scanLine -match "files_per_sec=([\d.]+)") {
-            Add-Sample "system_scan_files_per_sec" ([double]$Matches[1])
-        }
-
+        Invoke-OneRound $true "cold"
+        $proc = $script:lastProc
         Start-Sleep -Seconds 8
-        if ($Proc -and -not $Proc.HasExited) {
-            $Proc.Refresh()
-            Add-Sample "system_idle_rss_mb" ($Proc.WorkingSet64 / 1MB)
-            Add-Sample "system_idle_private_mb" ($Proc.PrivateMemorySize64 / 1MB)
+        if ($proc -and -not $proc.HasExited) {
+            $proc.Refresh()
+            Add-Sample "system_idle_rss_mb" ($proc.WorkingSet64 / 1MB)
+            Add-Sample "system_idle_private_mb" ($proc.PrivateMemorySize64 / 1MB)
         }
-        Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 500
     }
 
-    # 一次性指标
+    # Warm startup + idle steady state (reuses the index DB from the last round)
+    Invoke-OneRound $false "warm"
+    $warm = $script:lastProc
+    $cpuStart = $warm.TotalProcessorTime.TotalMilliseconds
+    Start-Sleep -Seconds $IdleSeconds
+    $warm.Refresh()
+    $cpuEnd = $warm.TotalProcessorTime.TotalMilliseconds
+    $cpuPct = ($cpuEnd - $cpuStart) / ($IdleSeconds * 1000 * [Environment]::ProcessorCount) * 100
+    Add-Sample "system_idle_cpu_percent" $cpuPct
+    Add-Sample "system_idle_warm_rss_mb" ($warm.WorkingSet64 / 1MB)
+    Stop-Process -Id $warm.Id -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+
+    # One-shot metrics
     $dist = Join-Path $Repo "dist"
     $js = Get-ChildItem $dist -Recurse -Filter "*.js" | Select-Object -First 1
     $css = Get-ChildItem $dist -Recurse -Filter "*.css" | Select-Object -First 1
@@ -206,55 +316,75 @@ try {
         Add-Sample "system_index_db_kb" ($dbBytes / 1KB)
     }
 
-    # 汇总并合并引擎结果
-    $summaries = [ordered]@{}
+    # Summarize and merge engine results (schema v2)
+    $summaryTable = [ordered]@{}
     foreach ($name in ($script:metrics.Keys | Sort-Object)) {
         $unit = switch -Regex ($name) {
-            "rss_mb|private_mb" { "MB" }
-            "kb" { "KB" }
-            "files_per_sec" { "files/s" }
-            default { "ms" }
+            "files_per_sec" { "files/s"; break }
+            "rss_mb|private_mb|mem_series" { "MB"; break }
+            "per_sec" { "MB/s"; break }
+            "kb" { "KB"; break }
+            "cpu_percent" { "%"; break }
+            default { "ms"; break }
         }
         $summary = Summarize @($script:metrics[$name].ToArray())
-        $summaries[$name] = [ordered]@{
+        $summaryTable[$name] = [ordered]@{
             unit = $unit
-            median = $summary.median
+            p50 = $summary.p50
             p90 = $summary.p90
+            p99 = $summary.p99
             min = $summary.min
             max = $summary.max
+            mean = $summary.mean
+            cv = $summary.cv
             samples = $summary.samples
         }
     }
     $engineFile = Join-Path $Repo (Join-Path $ResultsDir "$Version.engine.json")
     if (Test-Path $engineFile) {
         $engine = Get-Content $engineFile -Raw | ConvertFrom-Json
-        foreach ($prop in $engine.PSObject.Properties) {
-            $summaries[$prop.Name] = $prop.Value
+        foreach ($prop in $engine.metrics.PSObject.Properties) {
+            $summaryTable[$prop.Name] = $prop.Value
         }
     }
 
+    $rustc = (& rustc --version 2>$null | Select-Object -First 1)
     $result = [ordered]@{
+        schema = 2
         version = $Version
         date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         host = @{
             os = [Environment]::OSVersion.VersionString
             cpu = $env:PROCESSOR_IDENTIFIER
+            rustc = $rustc
+            commit = (& git -C $Repo rev-parse --short HEAD 2>$null)
         }
-        rounds = $Rounds
-        metrics = $summaries
+        scenario = @{
+            name = "system_v2"
+            fixture = @{
+                spec = "corpus.json"
+                seed = (Get-Corpus).seed
+                shape = $Shape
+                count = $FileCount
+            }
+            state = "cold_warm_idle"
+            samples = $Rounds
+            warmup = 2
+        }
+        metrics = $summaryTable
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $OutPath) | Out-Null
     [System.IO.File]::WriteAllText(
         $OutPath,
-        ($result | ConvertTo-Json -Depth 8),
+        ($result | ConvertTo-Json -Depth 10),
         (New-Object System.Text.UTF8Encoding $false)
     )
 
     Write-Host ""
     Write-Host "Benchmark result: $OutPath"
-    Write-Host "Rounds: $Rounds | Files: $FileCount | Version: $Version"
-    foreach ($name in $summaries.Keys) {
-        Write-Host ("  {0,-32} median={1} {2}" -f $name, $summaries[$name].median, $summaries[$name].unit)
+    Write-Host "Rounds: $Rounds | Files: $FileCount | Shape: $Shape | Version: $Version"
+    foreach ($name in $summaryTable.Keys) {
+        Write-Host ("  {0,-36} p50={1} {2}" -f $name, $summaryTable[$name].p50, $summaryTable[$name].unit)
     }
     if (-not (Test-Path $OutPath)) { throw "Result file was not written" }
 } finally {

@@ -4,8 +4,8 @@ param(
     [switch]$Sample
 )
 
-# Renders committed benchmark JSON history into benchmarks/README.md tables and
-# SVG trend charts. Uses only built-in PowerShell; no external chart library.
+# Renders committed benchmark JSON history (schema v1 + v2) into README tables
+# and SVG trend charts. Local-only, no external chart library.
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 
@@ -14,17 +14,21 @@ if ($Sample) {
     New-Item -ItemType Directory -Force -Path (Join-Path $tmp "results") | Out-Null
     $sampleData = @(
         @{
+            schema = 2
             version = "0.8.3"
             metrics = @{
-                scan_ms = @{ unit = "ms"; median = 120.0; p90 = 140.0; min = 110.0; max = 160.0; samples = 5 }
-                query_ms = @{ unit = "ms"; median = 30.0; p90 = 40.0; min = 28.0; max = 50.0; samples = 5 }
+                engine_scan_mixed_10k_ms = @{ unit = "ms"; p50 = 120.0; p90 = 140.0; p99 = 160.0; min = 110.0; max = 170.0; mean = 125.0; cv = 0.1; samples = 5 }
+                engine_scan_mixed_10k_per_file_ms = @{ unit = "ms/file"; p50 = 0.0289; p90 = 0.0312; p99 = 0.0340; min = 0.0270; max = 0.0350; mean = 0.0295; cv = 0.06; samples = 5 }
+                system_startup_log_ms = @{ unit = "ms"; p50 = 300.0; p90 = 340.0; p99 = 380.0; min = 290.0; max = 400.0; mean = 320.0; cv = 0.08; samples = 5 }
             }
         },
         @{
+            schema = 2
             version = "0.8.4"
             metrics = @{
-                scan_ms = @{ unit = "ms"; median = 105.0; p90 = 120.0; min = 100.0; max = 150.0; samples = 5 }
-                query_ms = @{ unit = "ms"; median = 25.0; p90 = 30.0; min = 22.0; max = 40.0; samples = 5 }
+                engine_scan_mixed_10k_ms = @{ unit = "ms"; p50 = 105.0; p90 = 120.0; p99 = 150.0; min = 100.0; max = 160.0; mean = 110.0; cv = 0.09; samples = 5 }
+                engine_scan_mixed_10k_per_file_ms = @{ unit = "ms/file"; p50 = 0.0256; p90 = 0.0280; p99 = 0.0300; min = 0.0240; max = 0.0310; mean = 0.0261; cv = 0.07; samples = 5 }
+                system_startup_log_ms = @{ unit = "ms"; p50 = 280.0; p90 = 310.0; p99 = 350.0; min = 270.0; max = 380.0; mean = 290.0; cv = 0.07; samples = 5 }
             }
         }
     )
@@ -71,66 +75,151 @@ $data = @($data | Sort-Object @{ Expression = {
 }})
 
 $metricNames = @{}
+$groups = [ordered]@{}
 foreach ($entry in $data) {
     foreach ($prop in $entry.json.metrics.PSObject.Properties) {
         $metricNames[$prop.Name] = $true
+        $prefix = ($prop.Name -split "_")[0]
+        $group = if ($prefix -eq "engine" -or $prefix -eq "system") { $prefix } else { "other" }
+        if (-not $groups.Contains($group)) { $groups[$group] = [System.Collections.Generic.List[string]]::new() }
+        if (-not $groups[$group].Contains($prop.Name)) { $groups[$group].Add($prop.Name) }
     }
 }
-$metrics = @($metricNames.Keys | Sort-Object)
 
 New-Item -ItemType Directory -Force -Path (Join-Path $OutRoot "charts") | Out-Null
+
+function Get-Value($metric, $entry, [string]$Key) {
+    $value = $entry.json.metrics.$metric
+    if ($null -eq $value) { return $null }
+    if ($Key -eq "p50") {
+        if ($null -ne $value.p50) { return [double]$value.p50 }
+        if ($null -ne $value.median) { return [double]$value.median }
+        return $null
+    }
+    if ($Key -eq "p90") { if ($null -ne $value.p90) { return [double]$value.p90 } }
+    if ($Key -eq "p99") { if ($null -ne $value.p99) { return [double]$value.p99 } }
+    return $null
+}
+
+function Format-Number([double]$Value) {
+    if ($Value -ge 100) { return [Math]::Round($Value, 1).ToString("0.0") }
+    if ($Value -ge 1) { return [Math]::Round($Value, 2).ToString("0.00") }
+    return [Math]::Round($Value, 4).ToString("0.0000")
+}
+
+function New-Chart([string]$Name, [object[]]$Points, [string]$Unit, [string]$ValueKey) {
+    if ($Points.Count -lt 1) { return }
+    $width = [Math]::Max(560, 130 * $Points.Count)
+    $height = 260
+    $left = 70
+    $right = 20
+    $top = 30
+    $bottom = 46
+    $plotW = $width - $left - $right
+    $plotH = $height - $top - $bottom
+    $min = ($Points | Measure-Object -Property value -Minimum).Minimum
+    $max = ($Points | Measure-Object -Property value -Maximum).Maximum
+    if ($max -gt $min) {
+        $pad = [Math]::Max(1, ($max - $min) * 0.1)
+    } else {
+        $pad = [Math]::Max(1e-9, [Math]::Abs($max) * 0.1)
+    }
+    $min -= $pad
+    $max += $pad
+
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.AppendLine("<svg xmlns='http://www.w3.org/2000/svg' width='$width' height='$height' viewBox='0 0 $width $height'>")
+    [void]$sb.AppendLine("<rect width='$width' height='$height' fill='#ffffff'/>")
+    [void]$sb.AppendLine("<text x='$left' y='18' font-family='Segoe UI' font-size='13' fill='#0f172a'>$Name ($ValueKey, $Unit)</text>")
+    for ($g = 0; $g -le 4; $g++) {
+        $ratio = $g / 4.0
+        $y = $top + $plotH - $ratio * $plotH
+        $val = $min + $ratio * ($max - $min)
+        [void]$sb.AppendLine("<line x1='$left' y1='$y' x2='$($width - $right)' y2='$y' stroke='#e2e8f0' stroke-width='1'/>")
+        [void]$sb.AppendLine("<text x='$($left - 6)' y='$($y + 4)' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>$(Format-Number $val)</text>")
+    }
+    $coords = @()
+    for ($i = 0; $i -lt $Points.Count; $i++) {
+        $x = $left + ($i / [Math]::Max(1, $Points.Count - 1)) * $plotW
+        $y = $top + $plotH - (($Points[$i].value - $min) / ($max - $min)) * $plotH
+        $coords += [pscustomobject]@{ x = $x; y = $y; p = $Points[$i] }
+    }
+    $poly = ($coords | ForEach-Object { "$([Math]::Round($_.x,1)),$([Math]::Round($_.y,1))" }) -join " "
+    [void]$sb.AppendLine("<polyline points='$poly' fill='none' stroke='#10b981' stroke-width='2'/>")
+    foreach ($c in $coords) {
+        [void]$sb.AppendLine("<circle cx='$([Math]::Round($c.x,1))' cy='$([Math]::Round($c.y,1))' r='3.5' fill='#10b981'/>")
+        [void]$sb.AppendLine("<text x='$([Math]::Round($c.x,1))' y='$([Math]::Round($c.y - 8,1))' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>$(Format-Number $c.p.value)</text>")
+        [void]$sb.AppendLine("<text x='$([Math]::Round($c.x,1))' y='$($height - 24)' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>$($c.p.version)</text>")
+    }
+    [void]$sb.AppendLine("</svg>")
+    return $sb.ToString()
+}
 
 $lines = [System.Collections.Generic.List[string]]::new()
 $lines.Add("# Performance Benchmarks")
 $lines.Add("")
-$lines.Add("> Generated by scripts/render-benchmarks.ps1 with the custom benchmark harness.")
-$lines.Add("> Comparison rule: a change of >=15% versus the previous version is flagged as a warning (non-blocking).")
+$lines.Add("> Generated by scripts/render-benchmarks.ps1 with the custom benchmark harness (local-only, same machine).")
+$lines.Add("> Comparison rule: a p50 change of >=15% versus the previous version is flagged as a warning (non-blocking).")
 $lines.Add("")
-$lines.Add("## Median comparison")
-$lines.Add("")
-
-$header = "| metric |"
-$separator = "|---|"
 foreach ($entry in $data) {
-    $header += " " + $entry.version + " (d%) |"
-    $separator += "---|"
+    $schema = if ($entry.json.schema -eq 2) { "v2" } else { "v1" }
+    $hostInfo = $entry.json.host
+    $hostText = if ($hostInfo) { "$($hostInfo.os) | $($hostInfo.cpu)" } else { "unknown" }
+    $commitText = if ($hostInfo.commit) { " | commit $($hostInfo.commit)" } else { "" }
+    $lines.Add("- **$($entry.version)** ($schema) - $hostText$commitText")
 }
-$lines.Add($header)
-$lines.Add($separator)
+$lines.Add("")
 
 $warnings = [System.Collections.Generic.List[string]]::new()
-foreach ($metric in $metrics) {
-    $row = "| $metric |"
-    $previous = $null
-    $previousVersion = $null
+foreach ($group in $groups.Keys | Sort-Object) {
+    $lines.Add("## $group")
+    $lines.Add("")
+    $header = "| metric |"
+    $separator = "|---|"
     foreach ($entry in $data) {
-        $value = $entry.json.metrics.$metric
-        if ($null -eq $value -or $null -eq $value.median) {
-            $row += " - |"
-            continue
-        }
-        $median = [double]$value.median
-        if ($null -eq $previous) {
-            $row += (" {0} |" -f $median)
-        } else {
-            $delta = ($median - $previous) / $previous * 100
-            $flag = if ([Math]::Abs($delta) -ge 15) { " :warning:" } else { "" }
-            if ([Math]::Abs($delta) -ge 15) {
-                $warnings.Add("$metric $($entry.version): $([Math]::Round($delta,1))% vs $previousVersion")
-            }
-            $row += (" {0} ({1}%){2} |" -f $median, [Math]::Round($delta, 1), $flag)
-        }
-        $previous = $median
-        $previousVersion = $entry.version
+        $header += " $($entry.version) (p50/p90/p99) |"
+        $separator += "---|"
     }
-    $lines.Add($row)
+    $lines.Add($header)
+    $lines.Add($separator)
+    foreach ($metric in $groups[$group]) {
+        $row = "| $metric |"
+        $previous = $null
+        $previousVersion = $null
+        foreach ($entry in $data) {
+            $p50 = Get-Value $metric $entry "p50"
+            if ($null -eq $p50) {
+                $row += " - |"
+                continue
+            }
+            $p90 = Get-Value $metric $entry "p90"
+            $p99 = Get-Value $metric $entry "p99"
+            $p50Text = Format-Number $p50
+            $p90Text = if ($null -eq $p90) { "-" } else { Format-Number $p90 }
+            $p99Text = if ($null -eq $p99) { "-" } else { Format-Number $p99 }
+            if ($null -eq $previous) {
+                $row += " $p50Text / $p90Text / $p99Text |"
+            } else {
+                $delta = ($p50 - $previous) / $previous * 100
+                $flag = if ([Math]::Abs($delta) -ge 15) { " :warning:" } else { "" }
+                if ([Math]::Abs($delta) -ge 15) {
+                    $warnings.Add("$metric $($entry.version): $([Math]::Round($delta,1))% vs $previousVersion")
+                }
+                $row += " $p50Text / $p90Text / $p99Text ($([Math]::Round($delta,1))%)$flag |"
+            }
+            $previous = $p50
+            $previousVersion = $entry.version
+        }
+        $lines.Add($row)
+    }
+    $lines.Add("")
 }
-$lines.Add("")
+
 $lines.Add("## Trend charts")
 $lines.Add("")
-foreach ($metric in $metrics) {
-    $file = ($metric -replace '[^A-Za-z0-9_-]', '_') + ".svg"
-    $lines.Add("- [$metric](charts/$file)")
+foreach ($metric in ($metricNames.Keys | Sort-Object)) {
+    $file = ($metric -replace '[^A-Za-z0-9_-]', '_')
+    $lines.Add("- [$metric p50](charts/$file.svg)  | [p90](charts/$file.p90.svg)")
 }
 $lines.Add("")
 $lines.Add("> Lower is better for ms/MB/KB metrics; higher is better for files/s.")
@@ -142,78 +231,33 @@ $readmePath = Join-Path $OutRoot "README.md"
     (New-Object System.Text.UTF8Encoding $false)
 )
 
-# SVG trend charts
-foreach ($metric in $metrics) {
-    $points = @()
-    foreach ($entry in $data) {
-        $value = $entry.json.metrics.$metric
-        if ($null -ne $value -and $null -ne $value.median) {
-            $points += [pscustomobject]@{
-                version = $entry.version
-                median = [double]$value.median
+foreach ($metric in ($metricNames.Keys | Sort-Object)) {
+    foreach ($valueKey in @("p50", "p90")) {
+        $points = @()
+        foreach ($entry in $data) {
+            $value = Get-Value $metric $entry $valueKey
+            if ($null -ne $value) {
+                $points += [pscustomobject]@{ version = $entry.version; value = $value }
             }
         }
+        if ($points.Count -lt 1) { continue }
+        $unit = $data[0].json.metrics.$metric.unit
+        $svg = New-Chart $metric $points $unit $valueKey
+        $file = ($metric -replace '[^A-Za-z0-9_-]', '_') + $(if ($valueKey -eq "p90") { ".p90.svg" } else { ".svg" })
+        [System.IO.File]::WriteAllText(
+            (Join-Path $OutRoot ("charts\" + $file)),
+            $svg,
+            (New-Object System.Text.UTF8Encoding $false)
+        )
     }
-    if ($points.Count -lt 1) { continue }
-
-    $width = [Math]::Max(560, 120 * $points.Count)
-    $height = 260
-    $left = 70
-    $right = 20
-    $top = 30
-    $bottom = 46
-    $plotW = $width - $left - $right
-    $plotH = $height - $top - $bottom
-    $min = ($points | Measure-Object -Property median -Minimum).Minimum
-    $max = ($points | Measure-Object -Property median -Maximum).Maximum
-    $pad = [Math]::Max(1, ($max - $min) * 0.1)
-    $min -= $pad
-    $max += $pad
-
-    $sb = New-Object System.Text.StringBuilder
-    [void]$sb.AppendLine("<svg xmlns='http://www.w3.org/2000/svg' width='$width' height='$height' viewBox='0 0 $width $height'>")
-    [void]$sb.AppendLine("<rect width='$width' height='$height' fill='#ffffff'/>")
-    [void]$sb.AppendLine("<text x='$left' y='18' font-family='Segoe UI' font-size='13' fill='#0f172a'>$metric ($($points[0].unit))</text>")
-    $better = if ($metric -like "*files_per_sec*") { "higher is better" } else { "lower is better" }
-    [void]$sb.AppendLine("<text x='$($width - $right - 110)' y='18' font-family='Segoe UI' font-size='11' fill='#64748b'>$better</text>")
-
-    for ($g = 0; $g -le 4; $g++) {
-        $ratio = $g / 4.0
-        $y = $top + $plotH - $ratio * $plotH
-        $val = $min + $ratio * ($max - $min)
-        [void]$sb.AppendLine("<line x1='$left' y1='$y' x2='$($width - $right)' y2='$y' stroke='#e2e8f0' stroke-width='1'/>")
-        [void]$sb.AppendLine("<text x='$($left - 6)' y='$($y + 4)' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>$([Math]::Round($val,1))</text>")
-    }
-
-    $coords = @()
-    for ($i = 0; $i -lt $points.Count; $i++) {
-        $x = $left + ($i / [Math]::Max(1, $points.Count - 1)) * $plotW
-        $y = $top + $plotH - (($points[$i].median - $min) / ($max - $min)) * $plotH
-        $coords += [pscustomobject]@{ x = $x; y = $y; p = $points[$i] }
-    }
-    $poly = ($coords | ForEach-Object { "$([Math]::Round($_.x,1)),$([Math]::Round($_.y,1))" }) -join " "
-    [void]$sb.AppendLine("<polyline points='$poly' fill='none' stroke='#10b981' stroke-width='2'/>")
-    foreach ($c in $coords) {
-        [void]$sb.AppendLine("<circle cx='$([Math]::Round($c.x,1))' cy='$([Math]::Round($c.y,1))' r='3.5' fill='#10b981'/>")
-        [void]$sb.AppendLine("<text x='$([Math]::Round($c.x,1))' y='$([Math]::Round($c.y - 8,1))' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>$([Math]::Round($c.p.median,1))</text>")
-        [void]$sb.AppendLine("<text x='$([Math]::Round($c.x,1))' y='$($height - 24)' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>$($c.p.version)</text>")
-    }
-    [void]$sb.AppendLine("</svg>")
-
-    $file = ($metric -replace '[^A-Za-z0-9_-]', '_') + ".svg"
-    [System.IO.File]::WriteAllText(
-        (Join-Path $OutRoot ("charts\" + $file)),
-        $sb.ToString(),
-        (New-Object System.Text.UTF8Encoding $false)
-    )
 }
 
-Write-Host "Rendered $($metrics.Count) metrics across $($data.Count) versions"
+Write-Host "Rendered $($metricNames.Count) metrics across $($data.Count) versions"
 Write-Host "README: $readmePath"
 Write-Host "Charts: $(Join-Path $OutRoot 'charts')"
 if ($warnings.Count -gt 0) {
     Write-Host ""
-    Write-Host "Warnings (>=15% change):"
+    Write-Host "Warnings (>=15% p50 change):"
     foreach ($w in $warnings) { Write-Host "  [WARN] $w" }
 }
 if ($Sample) {
