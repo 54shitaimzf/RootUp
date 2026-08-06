@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FilePage } from "./FilePage";
 import { SettingsProvider } from "../hooks/useSettings";
 import type { ScanController } from "../hooks/useScan";
+import { formatTimestamp } from "../lib/fileUtils";
 
 vi.mock("../lib/tauri", () => ({
   defaultSettings: {
@@ -51,6 +52,7 @@ import {
   archiveFiltered,
   getSettings,
   getHabits,
+  getStudyData,
   listCategories,
   listLabelDefs,
   listLabels,
@@ -147,7 +149,9 @@ describe("FilePage 行操作", () => {
   it("行内打开按钮调用 openFile", async () => {
     renderPage();
     expect(await screen.findByText("notes.pdf")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("用 IDE/工具打开"));
+    expect(screen.getByLabelText("复制路径")).toBeInTheDocument();
+    expect(screen.queryByLabelText("用 IDE 打开")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("智能打开"));
     await waitFor(() =>
       expect(openFile).toHaveBeenCalledWith("C:/docs/notes.pdf"),
     );
@@ -163,11 +167,27 @@ describe("FilePage 行操作", () => {
   });
 
   it("行内用 IDE 打开调用 openProjectFromFile", async () => {
+    vi.mocked(queryFiles).mockResolvedValue({
+      items: [
+        {
+          id: 2,
+          path: "C:/docs/main.rs",
+          name: "main.rs",
+          size: 100,
+          file_type: "rs",
+          labels: "",
+          first_seen: 1,
+          modified: 2,
+          state: "indexed",
+        },
+      ],
+      total: 1,
+    });
     renderPage();
-    await screen.findByText("notes.pdf");
+    await screen.findByText("main.rs");
     fireEvent.click(screen.getByLabelText("用 IDE 打开"));
     await waitFor(() =>
-      expect(openProjectFromFile).toHaveBeenCalledWith("C:/docs/notes.pdf"),
+      expect(openProjectFromFile).toHaveBeenCalledWith("C:/docs/main.rs"),
     );
   });
 
@@ -248,5 +268,70 @@ describe("FilePage 行操作", () => {
     expect(await screen.findByText(/自动归档已开启/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("关闭"));
     expect(screen.queryByText(/自动归档已开启/)).not.toBeInTheDocument();
+  });
+
+  it("同名课程只显示一个标签：首标签完整、+N 折叠、无分割线、无日期", async () => {
+    vi.mocked(getStudyData).mockResolvedValue({
+      version: 1,
+      semesters: [],
+      coursesBySemester: {
+        fall: [
+          {
+            id: "a",
+            name: "高等数学",
+            teacher: "王老师",
+            location: "教 101",
+            day: 1,
+            startMin: 480,
+            endMin: 600,
+            weekRule: "all",
+            labelKey: "course-a",
+            color: "amber",
+          },
+          {
+            id: "b",
+            name: "高等数学",
+            teacher: "李老师",
+            location: "教 202",
+            day: 2,
+            startMin: 600,
+            endMin: 700,
+            weekRule: "all",
+            labelKey: "course-b",
+            color: "amber",
+          },
+        ],
+      },
+      homeworkBySemester: {},
+    });
+    vi.mocked(queryFiles).mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          path: "C:/docs/高等数学/第1章.pdf",
+          name: "高等数学-第1章.pdf",
+          size: 100,
+          file_type: "pdf",
+          labels: "document,course-a,course-b",
+          first_seen: 1,
+          modified: 2,
+          state: "indexed",
+        },
+      ],
+      total: 1,
+    });
+    const { container } = renderPage();
+    await screen.findByText("高等数学-第1章.pdf");
+    await waitFor(() =>
+      expect(screen.getAllByText("高等数学")).toHaveLength(1),
+    );
+    const firstChip = screen.getByText("高等数学").closest("span.rounded-full");
+    expect(firstChip?.className ?? "").not.toContain("max-w-");
+    const more = screen.getByText("+1");
+    expect(more.getAttribute("title")).toContain("文档");
+    const row = container.querySelector("li");
+    expect(row?.querySelectorAll("span.w-px").length).toBe(0);
+    expect(screen.queryByText(formatTimestamp(2))).not.toBeInTheDocument();
+    expect(container.querySelector("li span.opacity-0")).not.toBeNull();
   });
 });

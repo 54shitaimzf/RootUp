@@ -447,6 +447,9 @@ export default {
   },
   files: {
     searchPlaceholder: "Search files…",
+    copyPath: "Copy path",
+    copyPathFailed: "Failed to copy path",
+    openSmart: "Smart open",
     clearSearch: "Clear search",
     removeFilter: "Remove filter",
     acKeywordType: "Filter by type",

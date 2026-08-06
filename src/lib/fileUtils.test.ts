@@ -5,10 +5,12 @@ import {
   fileStateMeta,
   filterFiles,
   formatFileSize,
+  formatFileSizeParts,
   formatTimestamp,
   loadMoreMerge,
   mergeFiles,
   parseLabels,
+  sortLabelsByPriority,
 } from "./fileUtils";
 
 function rec(
@@ -101,6 +103,38 @@ describe("parseLabels", () => {
     expect(parseLabels("")).toEqual([]);
     expect(parseLabels(" , , ")).toEqual([]);
     expect(parseLabels("document, ,code")).toEqual(["document", "code"]);
+  });
+
+  it("标签键去重", () => {
+    expect(parseLabels("document,document, code,code")).toEqual([
+      "document",
+      "code",
+    ]);
+  });
+});
+
+describe("sortLabelsByPriority", () => {
+  const isCourse = (key: string) => key.startsWith("course-");
+
+  it("课程标签在前、通用标签在后，组内保持原顺序", () => {
+    expect(
+      sortLabelsByPriority(
+        ["document", "course-b", "audio", "course-a"],
+        isCourse,
+      ),
+    ).toEqual(["course-b", "course-a", "document", "audio"]);
+  });
+
+  it("空数组与全课程/全通用均稳定", () => {
+    expect(sortLabelsByPriority([], isCourse)).toEqual([]);
+    expect(sortLabelsByPriority(["course-a", "course-b"], isCourse)).toEqual([
+      "course-a",
+      "course-b",
+    ]);
+    expect(sortLabelsByPriority(["audio", "video"], isCourse)).toEqual([
+      "audio",
+      "video",
+    ]);
   });
 });
 
@@ -204,6 +238,18 @@ describe("formatFileSize", () => {
   it("非法输入返回占位符", () => {
     expect(formatFileSize(-1)).toBe("—");
     expect(formatFileSize(Number.NaN)).toBe("—");
+  });
+});
+
+describe("formatFileSizeParts", () => {
+  it("数字与单位拆分且与 formatFileSize 一致", () => {
+    expect(formatFileSizeParts(0)).toEqual({ value: "0", unit: "B" });
+    expect(formatFileSizeParts(1536)).toEqual({ value: "1.5", unit: "KB" });
+    expect(formatFileSizeParts(-1)).toEqual({ value: "—", unit: "" });
+    expect(formatFileSizeParts(1048576)).toEqual({
+      value: "1.0",
+      unit: "MB",
+    });
   });
 });
 

@@ -436,6 +436,9 @@ export default {
   },
   files: {
     searchPlaceholder: "搜索文件…",
+    copyPath: "复制路径",
+    copyPathFailed: "复制路径失败",
+    openSmart: "智能打开",
     clearSearch: "清空搜索",
     removeFilter: "移除该筛选",
     acKeywordType: "按类型筛选",

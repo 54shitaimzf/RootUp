@@ -2,6 +2,7 @@
 use crate::core::classify::{Classifier, ClassifyInput};
 use crate::core::index::IndexStore;
 use crate::core::study::StudyData;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 /// 名称(小写) → 课程标签键，按名称长度从长到短排序（长名优先）。
@@ -16,19 +17,38 @@ impl StudyClassifier {
     }
 
     pub fn refresh(&mut self, data: &StudyData) {
-        let mut matchers: Vec<(String, String)> = Vec::new();
-        for courses in data.courses_by_semester.values() {
+        let semester_order: HashMap<&str, usize> = data
+            .semesters
+            .iter()
+            .enumerate()
+            .map(|(idx, sem)| (sem.id.as_str(), idx))
+            .collect();
+        let mut candidates: Vec<(usize, String, String, String)> = Vec::new();
+        for (sem_id, courses) in &data.courses_by_semester {
+            let sem_idx = semester_order
+                .get(sem_id.as_str())
+                .copied()
+                .unwrap_or(usize::MAX);
             for course in courses {
                 let name = course.name.trim();
                 if name.chars().count() < 2 || course.label_key.is_empty() {
                     continue;
                 }
-                if matchers.iter().any(|(_, key)| key == &course.label_key) {
-                    continue;
-                }
-                matchers.push((name.to_lowercase(), course.label_key.clone()));
+                candidates.push((
+                    sem_idx,
+                    course.id.clone(),
+                    name.to_lowercase(),
+                    course.label_key.clone(),
+                ));
             }
         }
+        // 重名课程（不同学期/时间的同一门课）只保留第一个稳定 key
+        candidates.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+        let mut by_name: BTreeMap<String, String> = BTreeMap::new();
+        for (_, _, name, key) in candidates {
+            by_name.entry(name).or_insert(key);
+        }
+        let mut matchers: Vec<(String, String)> = by_name.into_iter().collect();
         matchers.sort_by(|a, b| {
             b.0.chars()
                 .count()
@@ -148,6 +168,42 @@ mod tests {
         let labels = classifier.labels(&input("C:/x/高等数学与程序设计.pdf"));
         assert!(labels.contains(&"course-c-demo-1".to_string()));
         assert!(labels.contains(&"course-c-demo-2".to_string()));
+    }
+
+    #[test]
+    fn same_name_courses_canonicalize_to_one_key() {
+        use crate::core::study::{Course, Semester};
+
+        let mut data = seed_study_data();
+        let sem = Semester {
+            id: "spring-2099".into(),
+            name: "2099 春季学期".into(),
+            start_date: "2099-02-20".into(),
+            end_date: None,
+            week_count: 20,
+        };
+        data.semesters.push(sem.clone());
+        data.courses_by_semester.insert(
+            sem.id.clone(),
+            vec![Course {
+                id: "math-dup".into(),
+                name: "高等数学".into(),
+                teacher: "李老师".into(),
+                location: "A 楼".into(),
+                day: 2,
+                start_min: 600,
+                end_min: 700,
+                week_rule: "all".into(),
+                week_range: None,
+                color: "#f59e0b".into(),
+                label_key: "course-math-dup".into(),
+            }],
+        );
+
+        let mut classifier = StudyClassifier::new();
+        classifier.refresh(&data);
+        let labels = classifier.labels(&input("C:/Courses/高等数学/第1章.pdf"));
+        assert_eq!(labels, vec!["course-c-demo-1".to_string()]);
     }
 
     #[test]

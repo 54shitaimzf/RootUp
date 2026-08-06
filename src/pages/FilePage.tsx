@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, CheckSquare, Code2, ExternalLink, LocateFixed } from "lucide-react";
+import {
+  Archive,
+  CheckSquare,
+  Code2,
+  Copy,
+  ExternalLink,
+  LocateFixed,
+} from "lucide-react";
 import { CATEGORY_ICON, FileTypeIcon } from "../components/FileTypeIcon";
 import { FilterBar } from "../components/FilterBar";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
@@ -24,8 +31,9 @@ import {
   buildQuery,
   FILTER_STATE_OPTIONS,
   formatFileSize,
-  formatTimestamp,
+  formatFileSizeParts,
   parseLabels,
+  sortLabelsByPriority,
 } from "../lib/fileUtils";
 import {
   KEYWORD_PREFIXES,
@@ -46,6 +54,50 @@ import {
 } from "../lib/tauri";
 
 const PAGE_SIZE = 50;
+
+const CODE_EDITOR_EXTENSIONS = new Set([
+  "rs",
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "py",
+  "go",
+  "java",
+  "kt",
+  "kts",
+  "cs",
+  "cpp",
+  "c",
+  "h",
+  "hpp",
+  "cc",
+  "php",
+  "rb",
+  "swift",
+  "dart",
+  "sh",
+  "bat",
+  "cmd",
+  "ps1",
+  "toml",
+  "yml",
+  "yaml",
+  "json",
+  "xml",
+  "sql",
+  "html",
+  "css",
+  "scss",
+  "vue",
+  "svelte",
+  "md",
+  "txt",
+  "tex",
+  "zig",
+  "lua",
+  "r",
+]);
 
 const KEYWORD_DISPLAY_KEY: Record<string, string> = {
   "type:": "files.acKeywordType",
@@ -125,6 +177,29 @@ export function FilePage({
     [labelDefs, courseLabelDefs],
   );
 
+  const dedupedAvailableLabels = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const key of availableLabels) {
+      const name = mergedLabelDefs[key]?.name ?? key;
+      const norm = name.trim().toLowerCase();
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        out.push(key);
+      }
+    }
+    return out;
+  }, [availableLabels, mergedLabelDefs]);
+
+  const orderedAvailableLabels = useMemo(
+    () =>
+      sortLabelsByPriority(
+        dedupedAvailableLabels,
+        (key) => key in courseLabelDefs,
+      ),
+    [dedupedAvailableLabels, courseLabelDefs],
+  );
+
   const queryString = useMemo(
     () => buildQuery({ text: debouncedQuery, types, states, labels }),
     [debouncedQuery, types, states, labels],
@@ -156,7 +231,7 @@ export function FilePage({
         token: `state:${state}`,
         display: stateLabel(state),
       })),
-      ...availableLabels.map((label) => ({
+      ...orderedAvailableLabels.map((label) => ({
         kind: "label" as const,
         key: `label:${label}`,
         raw: label,
@@ -164,7 +239,7 @@ export function FilePage({
         display: mergedLabelDefs[label]?.name ?? label,
       })),
     ];
-  }, [categories, availableLabels, mergedLabelDefs, t]);
+  }, [categories, orderedAvailableLabels, mergedLabelDefs, t]);
 
   const { items, total, loading, stale } = useFiles(
     queryString,
@@ -211,6 +286,27 @@ export function FilePage({
       void logEvent("info", `ui: 定位文件 path=${path}`);
     } catch (err) {
       setActionError(String(err));
+    }
+  };
+
+  const handleCopyPath = async (path: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(path);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = path;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      setActionError(null);
+      void logEvent("info", `ui: 复制路径 path=${path}`);
+    } catch {
+      setActionError(t("files.copyPathFailed"));
     }
   };
 
@@ -367,7 +463,7 @@ export function FilePage({
         habits={habits}
         onHabitUsed={touch}
         categories={categories}
-        labels={availableLabels}
+        labels={orderedAvailableLabels}
         labelDefs={mergedLabelDefs}
         selectedTypes={types}
         selectedLabels={labels}
@@ -549,14 +645,46 @@ export function FilePage({
           <EmptyState title={t("files.noResults")} />
         ) : (
           <>
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            <ul className="@container divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((file) => {
                 const meta = fileStateMeta(file.state);
                 const fileLabels = parseLabels(file.labels);
+                const dedupedLabels = (() => {
+                  const seen = new Set<string>();
+                  const out: string[] = [];
+                  for (const key of fileLabels) {
+                    const name = mergedLabelDefs[key]
+                      ? mergedLabelDefs[key].name
+                      : t(`filter.${key}`, key);
+                    const norm = name.trim().toLowerCase();
+                    if (!seen.has(norm)) {
+                      seen.add(norm);
+                      out.push(key);
+                    }
+                  }
+                  return out;
+                })();
+                const sortedLabels = sortLabelsByPriority(
+                  dedupedLabels,
+                  (key) => key in courseLabelDefs,
+                );
+                const firstLabel = sortedLabels[0];
+                const firstDef = firstLabel
+                  ? mergedLabelDefs[firstLabel]
+                  : undefined;
+                const firstName = firstLabel
+                  ? firstDef
+                    ? firstDef.name
+                    : t(`filter.${firstLabel}`, firstLabel)
+                  : "";
+                const sizeParts = formatFileSizeParts(file.size);
+                const canIdeOpen = CODE_EDITOR_EXTENSIONS.has(
+                  file.file_type.toLowerCase(),
+                );
                 return (
                   <li
                     key={file.path}
-                    className="list-enter group flex items-center gap-3 px-4 py-3 text-sm"
+                    className="list-enter group flex items-center gap-1.5 px-4 py-3 text-sm"
                     title={file.path}
                   >
                     {batchMode && (
@@ -582,77 +710,106 @@ export function FilePage({
                       category={fileLabels[0] ?? "other"}
                       title={fileLabels[0] ?? "other"}
                     />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-slate-800 dark:text-slate-100">
+                    <span className="w-56 shrink-0">
+                      <span
+                        className="block truncate font-medium text-slate-800 dark:text-slate-100"
+                        title={file.name}
+                      >
                         {file.name}
                       </span>
-                      <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
-                        {file.path}
-                      </span>
-                    </span>
-                    {fileLabels.length > 0 && (
-                      <span className="hidden shrink-0 gap-1 md:flex">
-                        {fileLabels.map((label) => (
-                          <span
-                            key={label}
-                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                          >
-                            {mergedLabelDefs[label] && (
+                      {sortedLabels.length > 0 && (
+                        <span className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden">
+                          <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            {firstDef && (
                               <span
-                                className={`size-1.5 rounded-full ${LABEL_COLORS[labelColorKey(mergedLabelDefs[label].color)].dot}`}
+                                className={`size-1.5 rounded-full ${LABEL_COLORS[labelColorKey(firstDef.color)].dot}`}
                               />
                             )}
-                            {mergedLabelDefs[label]
-                              ? mergedLabelDefs[label].name
-                              : t(`filter.${label}`, label)}
+                            <span className="truncate" title={firstName}>
+                              {firstName}
+                            </span>
                           </span>
-                        ))}
-                      </span>
-                    )}
-                    <span className="hidden w-20 shrink-0 text-right text-xs text-slate-400 dark:text-slate-500 sm:block">
+                          {sortedLabels.length > 1 && (
+                            <span
+                              className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                              title={sortedLabels
+                                .slice(1)
+                                .map((label) =>
+                                  mergedLabelDefs[label]
+                                    ? mergedLabelDefs[label].name
+                                    : t(`filter.${label}`, label),
+                                )
+                                .join(", ")}
+                            >
+                              +{sortedLabels.length - 1}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className="ml-2 w-14 min-w-0 shrink-0 truncate text-left font-mono text-xs text-slate-400 dark:text-slate-500"
+                      title={file.file_type || "—"}
+                    >
                       {file.file_type || "—"}
                     </span>
-                    <span className="hidden w-20 shrink-0 text-right text-xs text-slate-400 dark:text-slate-500 sm:block">
-                      {formatFileSize(file.size)}
+                    <span
+                      className="w-14 min-w-0 shrink-0 truncate text-left font-mono text-xs tabular-nums text-slate-400 dark:text-slate-500"
+                      title={formatFileSize(file.size)}
+                    >
+                      {sizeParts.value}
+                      {sizeParts.unit && (
+                        <span className="ml-0.5 text-slate-500 dark:text-slate-400">
+                          {sizeParts.unit}
+                        </span>
+                      )}
                     </span>
-                    <span className="hidden w-28 shrink-0 text-right text-xs text-slate-400 dark:text-slate-500 md:block">
-                      {formatTimestamp(file.modified)}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="flex min-w-0 flex-1 items-center justify-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
                       {file.state === "indexed" && archiveRoot && (
                         <IconButton
                           label={t("files.archive")}
                           icon={Archive}
                           tone="neutral"
-                          size="sm"
+                          size="md"
                           onClick={() => void handleArchiveOne(file.path)}
                         />
                       )}
                       <IconButton
-                        label={t("projects.open")}
+                        label={t("files.copyPath")}
+                        icon={Copy}
+                        tone="neutral"
+                        size="md"
+                        onClick={() => void handleCopyPath(file.path)}
+                      />
+                      <IconButton
+                        label={t("files.openSmart")}
                         icon={ExternalLink}
                         tone="neutral"
-                        size="sm"
+                        size="md"
                         onClick={() => void handleOpenFile(file.path)}
                       />
                       <IconButton
                         label={t("projects.reveal")}
                         icon={LocateFixed}
                         tone="neutral"
-                        size="sm"
+                        size="md"
                         onClick={() => void handleRevealFile(file.path)}
                       />
-                      <IconButton
-                        label={t("projects.openIde")}
-                        icon={Code2}
-                        tone="brand"
-                        size="sm"
-                        onClick={() => void handleIdeOpenFile(file.path)}
-                      />
+                      {canIdeOpen && (
+                        <IconButton
+                          label={t("projects.openIde")}
+                          icon={Code2}
+                          tone="brand"
+                          size="md"
+                          onClick={() => void handleIdeOpenFile(file.path)}
+                        />
+                      )}
                     </span>
-                    <span className="flex w-20 shrink-0 items-center justify-end gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <span className={`size-1.5 rounded-full ${meta.dotClass}`} />
-                      {t(meta.labelKey)}
+                    <span className="flex w-14 min-w-0 shrink-0 items-center gap-1.5 text-left text-xs text-slate-500 dark:text-slate-400">
+                      <span className={`size-1.5 shrink-0 rounded-full ${meta.dotClass}`} />
+                      <span className="truncate" title={t(meta.labelKey)}>
+                        {t(meta.labelKey)}
+                      </span>
                     </span>
                   </li>
                 );

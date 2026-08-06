@@ -25,10 +25,25 @@ export function buildQuery(parts: QueryParts): string {
 
 /** 解析逗号分隔的标签字段为数组 */
 export function parseLabels(labels: string): string[] {
-  return labels
-    .split(",")
-    .map((label) => label.trim())
-    .filter(Boolean);
+  return [
+    ...new Set(
+      labels
+        .split(",")
+        .map((label) => label.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/** 标签展示优先级：课程标签在前、通用标签在后，组内保持原顺序。 */
+export function sortLabelsByPriority(
+  labels: string[],
+  isCourse: (key: string) => boolean,
+): string[] {
+  return [
+    ...labels.filter((key) => isCourse(key)),
+    ...labels.filter((key) => !isCourse(key)),
+  ];
 }
 
 /** 按名称/路径过滤（大小写不敏感）。 */
@@ -94,9 +109,12 @@ export function fileStateMeta(state: FileRecord["state"]): FileStateMeta {
 }
 
 /** 人类可读的文件大小。 */
-export function formatFileSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "—";
-  if (bytes < 1024) return `${bytes} B`;
+export function formatFileSizeParts(bytes: number): {
+  value: string;
+  unit: string;
+} {
+  if (!Number.isFinite(bytes) || bytes < 0) return { value: "—", unit: "" };
+  if (bytes < 1024) return { value: String(bytes), unit: "B" };
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
   let unit = units[0];
@@ -104,7 +122,14 @@ export function formatFileSize(bytes: number): string {
     value /= 1024;
     unit = units[i];
   }
-  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+  const text = value >= 10 ? value.toFixed(0) : value.toFixed(1);
+  return { value: text, unit };
+}
+
+/** 人类可读的文件大小（数字 + 单位合并文本）。 */
+export function formatFileSize(bytes: number): string {
+  const parts = formatFileSizeParts(bytes);
+  return parts.unit ? `${parts.value} ${parts.unit}` : parts.value;
 }
 
 /** 毫秒时间戳 → 本地可读时间。 */
