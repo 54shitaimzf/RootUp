@@ -14,7 +14,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { StudyPage } from "./pages/StudyPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { HelpCenterProvider } from "./components/HelpCenter";
-import { takeStartupIntent } from "./lib/tauri";
+import { appReady, takeStartupIntent } from "./lib/tauri";
 
 function renderPage(
   page: PageKey,
@@ -122,6 +122,11 @@ function Shell() {
     };
   }, []);
 
+  // 前端就绪后启动后端延迟服务
+  useEffect(() => {
+    void appReady().catch(() => {});
+  }, []);
+
   // 语言随设置变化即时切换
   useEffect(() => {
     if (settings) {
@@ -133,7 +138,7 @@ function Shell() {
     <ThemeProvider>
       <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
         <Sidebar current={page} onNavigate={setPage} />
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-8 [scrollbar-gutter:stable]">
           {renderPage(page, {
             onNavigate: setPage,
             scan,

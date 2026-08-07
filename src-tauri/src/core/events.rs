@@ -118,16 +118,20 @@ pub fn judge_stability(
 /// 规则：
 /// - 已删除的文件不再响应任何事件；
 /// - 删除事件使 pending/indexed/archived 进入 deleted；
+/// - renamed-from 使 indexed/archived 进入 deleted（旧路径已不存在），
+///   pending 尚无记录，不产生迁移；
 /// - created / modified / renamed-to 保持原状态（记录更新由上层负责）。
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn next_state(from: FileState, event: &NormalizedEvent) -> Option<FileState> {
     match (from, event.kind) {
         (FileState::Deleted, _) => None,
-        (_, FileEventKind::Other | FileEventKind::RenamedFrom) => None,
+        (_, FileEventKind::Other) => None,
         (FileState::Pending, FileEventKind::Removed) => Some(FileState::Deleted),
-        (FileState::Indexed | FileState::Archived, FileEventKind::Removed) => {
-            Some(FileState::Deleted)
-        }
+        (
+            FileState::Indexed | FileState::Archived,
+            FileEventKind::Removed | FileEventKind::RenamedFrom,
+        ) => Some(FileState::Deleted),
+        (FileState::Pending, FileEventKind::RenamedFrom) => None,
         (_, FileEventKind::Created | FileEventKind::Modified | FileEventKind::RenamedTo) => {
             Some(from)
         }
@@ -199,19 +203,30 @@ mod tests {
             FileEventKind::Modified,
             FileEventKind::Removed,
             FileEventKind::RenamedTo,
+            FileEventKind::RenamedFrom,
         ] {
             assert_eq!(next_state(FileState::Deleted, &ev(kind)), None);
         }
     }
 
     #[test]
-    fn other_and_renamed_from_do_not_migrate() {
+    fn other_does_not_migrate() {
         assert_eq!(
             next_state(FileState::Indexed, &ev(FileEventKind::Other)),
             None
         );
+    }
+
+    #[test]
+    fn renamed_from_marks_indexed_and_archived_deleted() {
+        for from in [FileState::Indexed, FileState::Archived] {
+            assert_eq!(
+                next_state(from, &ev(FileEventKind::RenamedFrom)),
+                Some(FileState::Deleted)
+            );
+        }
         assert_eq!(
-            next_state(FileState::Indexed, &ev(FileEventKind::RenamedFrom)),
+            next_state(FileState::Pending, &ev(FileEventKind::RenamedFrom)),
             None
         );
     }
@@ -264,9 +279,10 @@ mod tests {
             for kind in kinds {
                 let expected = match (from, kind) {
                     (Deleted, _) => None,
-                    (_, Other | RenamedFrom) => None,
+                    (_, Other) => None,
                     (Pending, Removed) => Some(Deleted),
-                    (Indexed | Archived, Removed) => Some(Deleted),
+                    (Indexed | Archived, Removed | RenamedFrom) => Some(Deleted),
+                    (Pending, RenamedFrom) => None,
                     (_, Created | Modified | RenamedTo) => Some(from),
                 };
                 assert_eq!(

@@ -195,7 +195,7 @@ export function SearchAutocomplete({
         className="relative min-w-0 flex-1"
         onClick={() => inputRef.current?.focus()}
       >
-        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-16 text-sm shadow-card transition-colors focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-2 text-sm shadow-card transition-colors focus-within:border-brand-500 dark:border-slate-700 dark:bg-slate-900">
           {tags.map((tag) => (
             <Chip
               key={`${tag.kind}:${tag.value}`}
@@ -227,18 +227,18 @@ export function SearchAutocomplete({
             aria-expanded={focused && suggestions.length > 0}
             className="min-w-24 flex-1 border-none bg-transparent px-1 py-0.5 text-sm outline-none"
           />
+          {(text !== "" || tags.length > 0) && (
+            <IconButton
+              label={t("files.clearSearch")}
+              icon={X}
+              tone="neutral"
+              size="md"
+              onClick={handleClear}
+              className="shrink-0"
+            />
+          )}
+          <SyntaxHelp className="relative shrink-0" />
         </div>
-        {(text !== "" || tags.length > 0) && (
-          <IconButton
-            label={t("files.clearSearch")}
-            icon={X}
-            tone="neutral"
-            size="md"
-            onClick={handleClear}
-            className="absolute right-8 top-1/2 z-10 -translate-y-1/2"
-          />
-        )}
-        <SyntaxHelp className="absolute inset-y-1 right-1 z-10 flex items-center" />
         {focused && suggestions.length > 0 && (
           <div className="floating-panel pop-in absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto py-1">
             {suggestions.map((suggestion, index) => (

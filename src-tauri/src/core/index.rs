@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::query::{parse_query, FileQuery, QueryPage};
+use crate::core::scan::ScanDiffSummary;
 
 /// 文件索引记录（与数据库表 `files` 对应）。
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -89,6 +90,17 @@ pub trait IndexStore: Send + Sync {
     fn mark_deleted(&mut self, path: &str) -> Result<(), String>;
     /// 事务内把一条记录的路径迁移到新路径并改状态（归档/撤销用）。
     fn move_record(&mut self, from: &str, to: &str, state: &str) -> Result<(), String>;
+    /// 原子归档：记录迁移 + 操作日志写入必须在同一事务内完成；
+    /// 实现方应保证失败时不留下半成品（默认实现为两步非原子组合，仅供测试替身）。
+    fn archive_record(&mut self, from: &str, to: &str, op: &ArchiveOp) -> Result<(), String> {
+        self.move_record(from, to, "archived")?;
+        self.insert_archive_op(op).map(|_| ())
+    }
+    /// 原子撤销：记录迁回 + 标记 undone 必须在同一事务内完成。
+    fn unarchive_record(&mut self, from: &str, to: &str, op_id: i64) -> Result<(), String> {
+        self.move_record(from, to, "indexed")?;
+        self.mark_ops_undone(&[op_id])
+    }
     /// 把任一 root（含子路径）下非 deleted 的历史记录标为 deleted，幂等。
     fn mark_under_roots_deleted(&mut self, roots: &[String]) -> Result<i64, String>;
     /// 写入一条归档操作，返回自增 id。
@@ -114,6 +126,30 @@ pub trait IndexStore: Send + Sync {
     fn update_shortcut_target(&mut self, lnk_path: &str, target_path: &str) -> Result<(), String>;
     #[cfg_attr(not(test), allow(dead_code))]
     fn count(&self) -> Result<i64, String>;
+    /// 空闲/退出前维护钩子（默认无操作；SQLite 实现执行 checkpoint + optimize）。
+    fn maintenance(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// 扫描差集存储契约：把“本次扫描已见键集合”落到存储层（SQLite 临时表 / keyset），
+/// 使扫描器内存占用保持 O(批次)，并为 0.8.5 的快速枚举实现复用同一差集链路。
+pub trait ScanDiffStore: IndexStore {
+    /// 开始一次目录扫描差集会话：在存储层建立快照与已见集合。
+    fn begin_scan_diff(&mut self, root: &str) -> Result<(), String>;
+    /// 批量登记已见路径键（调用方保证键来自 `path_key`）。
+    fn mark_scan_seen(&mut self, keys: &[String]) -> Result<(), String>;
+    /// 结束会话：计算 updated/missing 并清理临时数据；
+    /// `guard_ratio`/`guard_min` 为删除风暴保护参数（阈值在存储层按快照规模计算）。
+    fn finish_scan_diff(
+        &mut self,
+        guard_ratio: f64,
+        guard_min: i64,
+    ) -> Result<ScanDiffSummary, String>;
+    /// 扫描完成后的轻量维护（默认无操作；SQLite 实现执行 `PRAGMA optimize`）。
+    fn optimize(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -9,11 +9,12 @@ use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector, 
 use crate::core::query::parse_query;
 use crate::core::settings::Settings;
 use crate::infra::archive_engine::{
-    apply_project_journal, archive_files as engine_archive_files, next_batch_id, now_millis,
-    remap_target, undo_one_file, ProjectJournal, ProjectLinkEffect, ProjectSideEffects,
+    apply_project_journal, archive_files as engine_archive_files, next_batch_id, remap_target,
+    undo_one_file, ProjectJournal, ProjectLinkEffect, ProjectSideEffects,
 };
 use crate::infra::shortcut;
 use crate::infra::storage;
+use crate::infra::time::now_millis;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
@@ -198,31 +199,28 @@ pub fn undo_archive(app: AppHandle, batch_id: i64) -> Result<ArchiveOutcome, Str
         archived: 0,
         failed: Vec::new(),
     };
-    let mut done_ids: Vec<i64> = Vec::new();
     for op in ops {
         if op.undone_at.is_some() {
             continue;
         }
         let result = if op.kind == "project" {
-            undo_project(&app, &store, &op)
+            undo_project(&app, &store, &op).and_then(|()| {
+                store
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .mark_ops_undone(&[op.id])
+            })
         } else {
             undo_one_file(&store, &op)
         };
         match result {
-            Ok(()) => {
-                outcome.archived += 1;
-                done_ids.push(op.id);
-            }
+            Ok(()) => outcome.archived += 1,
             Err(error) => outcome.failed.push(ArchiveFailure {
                 path: op.dest.clone(),
                 error,
             }),
         }
     }
-    store
-        .lock()
-        .map_err(|e| e.to_string())?
-        .mark_ops_undone(&done_ids)?;
     log::info!(
         "archive: 撤销 batch={batch_id} ok={} fail={}",
         outcome.archived,

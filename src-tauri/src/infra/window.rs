@@ -1,6 +1,15 @@
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
+
+/// 主动退出标志。
+///
+/// Tauri 默认在最后一个窗口销毁时触发 `RunEvent::ExitRequested` 并退出进程，
+/// 这会让"后台运行（关闭即销毁）"失效。因此事件循环中默认阻止退出，
+/// 仅当用户明确选择退出（托盘菜单 / 确认弹窗）并先置位此标志时才放行。
+pub struct QuitFlag(pub Arc<AtomicBool>);
 
 /// 确保主窗口存在并可见：
 /// - 已存在：显示、还原最小化并聚焦

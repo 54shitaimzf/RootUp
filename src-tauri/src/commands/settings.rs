@@ -1,4 +1,5 @@
 use crate::core::settings::{archive_root_conflicts, reset_to_default, Settings};
+use crate::infra::managed_state;
 use crate::infra::storage;
 use crate::infra::tray;
 use tauri::AppHandle;
@@ -17,6 +18,8 @@ pub fn get_settings(app: AppHandle) -> Settings {
 
 #[tauri::command]
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    let mut settings = settings;
+    settings.normalize();
     if !settings.is_valid() {
         return Err("无效的设置值".to_string());
     }
@@ -31,7 +34,7 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
         settings.classify_overrides.len()
     );
     storage::save_settings(&app, &settings)?;
-    crate::app::refresh_managed_state(&app)?;
+    managed_state::refresh(&app)?;
     let _ = tray::refresh_tray(&app);
     Ok(())
 }
@@ -42,7 +45,7 @@ pub fn reset_settings(app: AppHandle) -> Result<Settings, String> {
     let current = storage::load_settings(&app);
     let reset = reset_to_default(&current);
     storage::save_settings(&app, &reset)?;
-    crate::app::refresh_managed_state(&app)?;
+    managed_state::refresh(&app)?;
     let _ = tray::refresh_tray(&app);
     log::info!(
         "settings: 恢复默认（保留监控目录 {} 个）",

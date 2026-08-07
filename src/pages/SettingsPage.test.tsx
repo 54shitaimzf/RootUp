@@ -25,12 +25,21 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 vi.mock("../lib/tauri", () => ({
+  DEFAULT_IGNORE_RULES: {
+    extensions: ["crdownload", "part", "download", "tmp", "temp"],
+    prefixes: ["~$"],
+    exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
+  },
   defaultSettings: {
-    version: 1,
+    version: 3,
     theme: "system",
     language: "zh-CN",
     watched_dirs: [],
-    ignore_rules: { extensions: [], prefixes: [], exact_names: [] },
+    ignore_rules: {
+      extensions: ["crdownload", "part", "download", "tmp", "temp"],
+      prefixes: ["~$"],
+      exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
+    },
     classify_overrides: [],
     project_dirs: [],
     preferred_ide: "auto",

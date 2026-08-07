@@ -1,4 +1,5 @@
 import type { ClassifyRule, IgnoreRules, Settings } from "./tauri";
+import { DEFAULT_IGNORE_RULES } from "./tauri";
 
 /** 规则模板：套用即替换忽略规则与分类覆盖，不影响主题/语言/监控目录。 */
 export interface RulePreset {
@@ -7,12 +8,6 @@ export interface RulePreset {
   ignoreRules: IgnoreRules;
   classifyOverrides: ClassifyRule[];
 }
-
-const DEFAULT_IGNORE_RULES: IgnoreRules = {
-  extensions: ["crdownload", "part", "download", "tmp", "temp"],
-  prefixes: ["~$"],
-  exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
-};
 
 const DEV_IGNORE_RULES: IgnoreRules = {
   ...DEFAULT_IGNORE_RULES,

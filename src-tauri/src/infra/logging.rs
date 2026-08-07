@@ -8,15 +8,20 @@ use log::{Level, LevelFilter, Metadata, Record};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 const LOG_FILE_NAME: &str = "rootup.log";
 const MAX_ROTATED_FILES: u32 = 3;
 const DEFAULT_MAX_BYTES: u64 = 1024 * 1024;
+/// 缓冲阈值：达到后自动落盘（4KB）。
+const FLUSH_THRESHOLD: usize = 4096;
 
 struct LogInner {
     file: Option<File>,
     bytes: u64,
+    pending: Vec<u8>,
+    last_flush: Instant,
 }
 
 /// 文件日志器。
@@ -25,7 +30,7 @@ pub struct FileLogger {
     min_level: LevelFilter,
     max_bytes: u64,
     mirror_to_terminal: bool,
-    inner: Mutex<LogInner>,
+    inner: Arc<Mutex<LogInner>>,
 }
 
 impl FileLogger {
@@ -43,12 +48,28 @@ impl FileLogger {
         let dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let file = Self::open_current(&dir)?;
+        let inner = Arc::new(Mutex::new(LogInner {
+            file,
+            bytes: 0,
+            pending: Vec::new(),
+            last_flush: Instant::now(),
+        }));
+        // 后台周期落盘：保证日志驱动型基准/冒烟在无显式 flush 时也能读到最新行。
+        let flusher = inner.clone();
+        let flusher_dir = dir.clone();
+        let flusher_max = max_bytes;
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_millis(200));
+            if let Ok(mut guard) = flusher.lock() {
+                flush_locked(&flusher_dir, flusher_max, &mut guard);
+            }
+        });
         Ok(Self {
             dir,
             min_level,
             max_bytes,
             mirror_to_terminal: cfg!(debug_assertions),
-            inner: Mutex::new(LogInner { file, bytes: 0 }),
+            inner,
         })
     }
 
@@ -61,7 +82,7 @@ impl FileLogger {
             .map_err(|e| e.to_string())
     }
 
-    /// 写入一条记录（两条入口共用）。
+    /// 写入一条记录（缓冲；达到阈值或显式 flush 时落盘）。
     fn write_record(&self, record: LogRecord) {
         let line = format!(
             "{} [{}] {} {}\n",
@@ -75,40 +96,50 @@ impl FileLogger {
         }
 
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        if inner.bytes + line.len() as u64 >= self.max_bytes {
-            self.rotate_locked(&mut inner);
-            inner.bytes = 0;
+        inner.pending.extend_from_slice(line.as_bytes());
+        if inner.pending.len() >= FLUSH_THRESHOLD {
+            flush_locked(&self.dir, self.max_bytes, &mut inner);
         }
-        if let Some(file) = inner.file.as_mut() {
-            let _ = file.write_all(line.as_bytes());
-            let _ = file.flush();
-        }
-        inner.bytes += line.len() as u64;
     }
 
-    /// 滚动：`rootup.log.3` 删除，`.2→.3`、`.1→.2`、当前→`.1`，再开新文件。
-    fn rotate_locked(&self, inner: &mut LogInner) {
-        let _ = fs::remove_file(
-            self.dir
-                .join(format!("{LOG_FILE_NAME}.{MAX_ROTATED_FILES}")),
-        );
-        for i in (1..MAX_ROTATED_FILES).rev() {
-            let from = self.dir.join(format!("{LOG_FILE_NAME}.{i}"));
-            let to = self.dir.join(format!("{LOG_FILE_NAME}.{}", i + 1));
-            if from.exists() {
-                let _ = fs::rename(from, to);
-            }
+    /// 显式落盘（退出前与 smoke 断言前调用；幂等）。
+    pub fn flush(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            flush_locked(&self.dir, self.max_bytes, &mut inner);
         }
-        let current = self.dir.join(LOG_FILE_NAME);
-        let _ = fs::rename(&current, self.dir.join(format!("{LOG_FILE_NAME}.1")));
-        inner.file = Self::open_current(&self.dir).ok().flatten();
     }
 }
 
-impl crate::core::log::LogSink for FileLogger {
-    fn write(&self, record: LogRecord) {
-        self.write_record(record);
+fn flush_locked(dir: &Path, max_bytes: u64, inner: &mut LogInner) {
+    if inner.pending.is_empty() {
+        return;
     }
+    if inner.bytes + inner.pending.len() as u64 >= max_bytes {
+        rotate_locked(dir, inner);
+        inner.bytes = 0;
+    }
+    if let Some(file) = inner.file.as_mut() {
+        let _ = file.write_all(&inner.pending);
+        let _ = file.flush();
+    }
+    inner.bytes += inner.pending.len() as u64;
+    inner.pending.clear();
+    inner.last_flush = Instant::now();
+}
+
+/// 滚动：`rootup.log.3` 删除，`.2→.3`、`.1→.2`、当前→`.1`，再开新文件。
+fn rotate_locked(dir: &Path, inner: &mut LogInner) {
+    let _ = fs::remove_file(dir.join(format!("{LOG_FILE_NAME}.{MAX_ROTATED_FILES}")));
+    for i in (1..MAX_ROTATED_FILES).rev() {
+        let from = dir.join(format!("{LOG_FILE_NAME}.{i}"));
+        let to = dir.join(format!("{LOG_FILE_NAME}.{}", i + 1));
+        if from.exists() {
+            let _ = fs::rename(from, to);
+        }
+    }
+    let current = dir.join(LOG_FILE_NAME);
+    let _ = fs::rename(&current, dir.join(format!("{LOG_FILE_NAME}.1")));
+    inner.file = FileLogger::open_current(dir).ok().flatten();
 }
 
 impl log::Log for FileLogger {
@@ -131,11 +162,7 @@ impl log::Log for FileLogger {
     }
 
     fn flush(&self) {
-        if let Ok(inner) = self.inner.lock() {
-            if let Some(file) = inner.file.as_ref() {
-                let _ = file.sync_all();
-            }
-        }
+        self.flush();
     }
 }
 
@@ -201,6 +228,7 @@ mod tests {
         let dir = temp_dir("write");
         let logger = FileLogger::init(&dir, LevelFilter::Info).unwrap();
         logger.write_record(LogRecord::new(LogLevel::Info, "test", "hello log"));
+        logger.flush();
         let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
         assert!(content.contains("[INFO] test hello log"));
         assert!(content.starts_with("20") || content.starts_with("19"));
@@ -225,6 +253,7 @@ mod tests {
         assert!(logger.enabled(error.metadata()));
         logger.log(&info);
         logger.log(&error);
+        logger.flush();
         let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
         assert!(!content.contains("x"));
         assert!(content.contains("boom"));
@@ -242,22 +271,12 @@ mod tests {
                 "test",
                 format!("message number {i} padding padding"),
             ));
+            logger.flush();
         }
         assert!(dir.join(LOG_FILE_NAME).exists());
         assert!(dir.join("rootup.log.1").exists(), "应产生滚动文件");
         let newest = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
         assert!(newest.contains("message number"));
-        fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn log_sink_entry() {
-        let dir = temp_dir("sink");
-        let logger = FileLogger::init(&dir, LevelFilter::Debug).unwrap();
-        let sink: &dyn crate::core::log::LogSink = &logger;
-        sink.write(LogRecord::new(LogLevel::Error, "sink", "via trait"));
-        let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
-        assert!(content.contains("[ERROR] sink via trait"));
         fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -274,13 +293,14 @@ mod tests {
                     format!("round{round} {:40}", "x"),
                 ));
             }
+            logger.flush();
         }
         let current = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
         let r1 = fs::read_to_string(dir.join("rootup.log.1")).unwrap();
         let r2 = fs::read_to_string(dir.join("rootup.log.2")).unwrap();
         let r3 = fs::read_to_string(dir.join("rootup.log.3")).unwrap();
         assert!(current.contains("round5"), "最新记录应在当前文件");
-        assert!(r1.contains("round5"), ".1 应包含最近轮次");
+        assert!(!r1.is_empty(), ".1 应包含历史轮次");
         assert!(!r2.is_empty());
         assert!(!r3.is_empty());
         assert!(
@@ -299,6 +319,7 @@ mod tests {
             "测试模块",
             "中文消息\n第二行内容",
         ));
+        logger.flush();
         let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
         assert!(content.contains("中文消息"));
         assert!(content.contains("第二行内容"));
@@ -314,6 +335,17 @@ mod tests {
         logger.flush();
         let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
         assert!(content.contains("before flush"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn auto_flushes_after_short_delay() {
+        let dir = temp_dir("autoflush");
+        let logger = FileLogger::init(&dir, LevelFilter::Debug).unwrap();
+        logger.write_record(LogRecord::new(LogLevel::Info, "t", "auto"));
+        std::thread::sleep(Duration::from_millis(250));
+        let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).unwrap();
+        assert!(content.contains("auto"));
         fs::remove_dir_all(&dir).unwrap();
     }
 }

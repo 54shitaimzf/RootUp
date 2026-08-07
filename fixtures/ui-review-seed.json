@@ -1,0 +1,216 @@
+{
+  "description": "0.8.4 UI review boundary dataset; consumed by scripts/seed-ui-review.ps1",
+  "expected": {
+    "fileCount": 90,
+    "labelCount": 97,
+    "schemeCount": 19,
+    "semesterCount": 4,
+    "homeworkCount": 11
+  },
+  "settings": {
+    "theme": "system",
+    "language": "zh-CN",
+    "ignore_rules": {
+      "extensions": ["crdownload", "part", "download", "tmp", "temp"],
+      "prefixes": ["~$"],
+      "exact_names": ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"]
+    },
+    "classify_overrides": [
+      { "extensions": ["psd"], "category": "image" }
+    ],
+    "project_dirs": [],
+    "preferred_ide": "auto",
+    "custom_open_commands": [],
+    "archive_root": "",
+    "auto_archive": false,
+    "close_action": "ask",
+    "reminder_enabled": false,
+    "reminder_lead_days": 3
+  },
+  "study": {
+    "version": 1,
+    "semesters": [
+      { "id": "summer-2026", "name": "2026 暑期速成班", "startDate": "2026-08-03", "endDate": "2026-08-09", "weekCount": 1 },
+      { "id": "fall-2026", "name": "2026 秋季学期", "startDate": "2026-08-03", "endDate": "2026-12-20", "weekCount": 20 },
+      { "id": "cross-2026", "name": "2026-2027 跨年学期", "startDate": "2026-12-28", "endDate": "2027-06-27", "weekCount": 26 },
+      { "id": "spring-2027", "name": "2027 春季学期（30 周）", "startDate": "2027-02-22", "endDate": "2027-09-19", "weekCount": 30 }
+    ],
+    "coursesBySemester": {
+      "summer-2026": [
+        { "id": "c-summer-1", "name": "暑期数学强化", "teacher": "王老师", "location": "线上教室 1", "day": 1, "startMin": 480, "endMin": 600, "weekRule": "all", "weekRange": null, "color": "sky", "labelKey": "course-c-summer-1" },
+        { "id": "c-summer-2", "name": "暑期编程入门", "teacher": "李老师", "location": "线上教室 2", "day": 2, "startMin": 480, "endMin": 600, "weekRule": "all", "weekRange": null, "color": "violet", "labelKey": "course-c-summer-2" }
+      ],
+      "fall-2026": [
+        { "id": "c-math", "name": "高等数学", "teacher": "王老师", "location": "数 101", "day": 1, "startMin": 480, "endMin": 580, "weekRule": "all", "weekRange": null, "color": "sky", "labelKey": "course-c-math" },
+        { "id": "c-prog", "name": "程序设计", "teacher": "李老师", "location": "机房 A", "day": 3, "startMin": 600, "endMin": 700, "weekRule": "odd", "weekRange": null, "color": "violet", "labelKey": "course-c-prog" },
+        { "id": "c-lin", "name": "线性代数", "teacher": "张老师", "location": "数 202", "day": 4, "startMin": 840, "endMin": 940, "weekRule": "even", "weekRange": null, "color": "emerald", "labelKey": "course-c-lin" },
+        { "id": "c-physics", "name": "大学物理", "teacher": "赵老师", "location": "理科楼 301", "day": 3, "startMin": 600, "endMin": 700, "weekRule": "even", "weekRange": null, "color": "cyan", "labelKey": "course-c-physics" },
+        { "id": "c-data", "name": "数据结构与算法分析（含实验）——面向工程实践的综合课程设计", "teacher": "李教授", "location": "工科楼 508（实验机房）/ 计算中心", "day": 2, "startMin": 600, "endMin": 700, "weekRule": "all", "weekRange": null, "color": "amber", "labelKey": "course-c-data" },
+        { "id": "c-english", "name": "晨读英语", "teacher": "陈老师", "location": "外语楼 101", "day": 2, "startMin": 450, "endMin": 480, "weekRule": "all", "weekRange": null, "color": "rose", "labelKey": "course-c-english" },
+        { "id": "c-sport", "name": "体育俱乐部", "teacher": "刘教练", "location": "体育馆", "day": 6, "startMin": 540, "endMin": 600, "weekRule": "all", "weekRange": null, "color": "lime", "labelKey": "course-c-sport" },
+        { "id": "c-seminar-a", "name": "研讨课 A", "teacher": "周老师", "location": "研讨室 1", "day": 5, "startMin": 480, "endMin": 540, "weekRule": "range", "weekRange": "1-2", "color": "slate", "labelKey": "course-c-seminar-a" },
+        { "id": "c-seminar-b", "name": "研讨课 B", "teacher": "吴老师", "location": "研讨室 2", "day": 5, "startMin": 480, "endMin": 540, "weekRule": "range", "weekRange": "3-4", "color": "blue", "labelKey": "course-c-seminar-b" },
+        { "id": "c-seminar-c", "name": "研讨课 C", "teacher": "郑老师", "location": "研讨室 3", "day": 5, "startMin": 480, "endMin": 540, "weekRule": "range", "weekRange": "5-6", "color": "teal", "labelKey": "course-c-seminar-c" },
+        { "id": "c-practice", "name": "工程实践（企业导师联合指导）", "teacher": "孙导师", "location": "校外基地", "day": 7, "startMin": 480, "endMin": 720, "weekRule": "all", "weekRange": null, "color": "indigo", "labelKey": "course-c-practice" },
+        { "id": "c-long", "name": "超长课程名称测试课程超长课程名称测试课程超长课程名称测试课程超长课程名称测试", "teacher": "何老师", "location": "超长地点测试地点测试地点测试地点测试地点测试", "day": 7, "startMin": 900, "endMin": 1000, "weekRule": "all", "weekRange": null, "color": "slate", "labelKey": "course-c-long" }
+      ],
+      "cross-2026": [
+        { "id": "c-cross-1", "name": "跨年课程实验", "teacher": "实验中心", "location": "实验室 2", "day": 1, "startMin": 480, "endMin": 600, "weekRule": "all", "weekRange": null, "color": "cyan", "labelKey": "course-c-cross-1" },
+        { "id": "c-cross-2", "name": "冬季小学期项目", "teacher": "项目组", "location": "项目工位", "day": 2, "startMin": 600, "endMin": 700, "weekRule": "odd", "weekRange": null, "color": "violet", "labelKey": "course-c-cross-2" }
+      ],
+      "spring-2027": [
+        { "id": "c-spring-1", "name": "2027 春季专业核心课", "teacher": "王教授", "location": "主楼 201", "day": 3, "startMin": 480, "endMin": 600, "weekRule": "all", "weekRange": null, "color": "sky", "labelKey": "course-c-spring-1" },
+        { "id": "c-spring-2", "name": "春季研讨课（指定周）", "teacher": "李教授", "location": "研讨室 4", "day": 4, "startMin": 600, "endMin": 700, "weekRule": "range", "weekRange": "2-28", "color": "amber", "labelKey": "course-c-spring-2" }
+      ]
+    },
+    "homeworkBySemester": {
+      "summer-2026": [
+        { "id": "h-summer-1", "courseId": "c-summer-1", "title": "暑期数学每日一练", "note": "每天 10 题", "details": "", "dueAt": "2026-08-08T23:59:00", "status": "pending" }
+      ],
+      "fall-2026": [
+        { "id": "h-math-3", "courseId": "c-math", "title": "高等数学 作业 3", "note": "第 3 章习题 1–8，周四前交", "details": "完成第 3 章习题 1–8，重点：极限与连续。\n要求写出完整推导过程，拍照或扫描后提交到课程平台。", "dueAt": "2026-08-05T23:59:00", "status": "pending" },
+        { "id": "h-prog-report", "courseId": "c-prog", "title": "程序设计 实验报告", "note": "提交到课程平台", "details": "", "dueAt": "2026-08-07T23:59:00", "status": "pending" },
+        { "id": "h-physics-preview", "courseId": "c-physics", "title": "大学物理 预习笔记", "note": "", "details": "", "dueAt": "2026-08-10T23:59:00", "status": "pending" },
+        { "id": "h-self-note", "courseId": null, "title": "自学笔记整理", "note": "", "details": "", "dueAt": "2026-08-14T23:59:00", "status": "pending" },
+        { "id": "h-lin-2", "courseId": "c-lin", "title": "线性代数 习题 2", "note": "", "details": "", "dueAt": "2026-08-01T23:59:00", "status": "done" },
+        { "id": "h-data-final", "courseId": "c-data", "title": "数据结构 结课报告", "note": "", "details": "", "dueAt": "2026-07-20T23:59:00", "status": "archived" },
+        { "id": "h-long", "courseId": "c-data", "title": "数据结构和算法课程设计的最终提交材料整理与答辩准备（含实验报告、源码、演示视频与PPT）", "note": "", "details": "", "dueAt": "2026-08-18T23:59:00", "status": "pending" },
+        { "id": "h-english-checkin", "courseId": "c-english", "title": "晨读英语 口语打卡", "note": "", "details": "", "dueAt": "2026-08-08T23:59:00", "status": "pending" }
+      ],
+      "cross-2026": [
+        { "id": "h-cross-1", "courseId": "c-cross-1", "title": "冬季项目中期报告", "note": "", "details": "", "dueAt": "2027-03-15T23:59:00", "status": "pending" }
+      ],
+      "spring-2027": [
+        { "id": "h-spring-1", "courseId": "c-spring-1", "title": "春季学期课程论文", "note": "", "details": "", "dueAt": "2027-06-30T23:59:00", "status": "pending" }
+      ]
+    }
+  },
+  "labels": [
+    { "key": "course-resource", "name": "课程资料", "icon": "book", "color": "teal" },
+    { "key": "exam-prep", "name": "考试复习", "icon": "target", "color": "rose" },
+    { "key": "reading", "name": "课外阅读", "icon": "book-open", "color": "sky" },
+    { "key": "project", "name": "课程设计", "icon": "code", "color": "violet" },
+    { "key": "paper-draft", "name": "论文初稿", "icon": "file-text", "color": "amber" },
+    { "key": "unknown-style", "name": "未知样式回退", "icon": "mystery-icon", "color": "neon" },
+    { "key": "long-label-name", "name": "这是一个用于测试显示与校验的特别长的标签名称示例", "icon": "tag", "color": "slate" }
+  ],
+  "schemes": [
+    {
+      "id": "scheme-default",
+      "name": "默认整理方案",
+      "ignore_rules": {
+        "extensions": ["crdownload", "part", "download", "tmp", "temp"],
+        "prefixes": ["~$"],
+        "exact_names": ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"]
+      },
+      "classify_overrides": [
+        { "extensions": ["psd"], "category": "image" }
+      ]
+    },
+    {
+      "id": "scheme-code",
+      "name": "代码与文档",
+      "ignore_rules": {
+        "extensions": ["tmp"],
+        "prefixes": [],
+        "exact_names": []
+      },
+      "classify_overrides": [
+        { "extensions": ["rs", "py", "js", "ts"], "category": "code" },
+        { "extensions": ["pdf", "docx"], "category": "document" }
+      ]
+    }
+  ],
+  "files": [
+    { "name": "file-001.txt", "sizeBytes": 128 },
+    { "name": "file-002.txt", "sizeBytes": 256 },
+    { "name": "file-003.txt", "sizeBytes": 512 },
+    { "name": "file-004.txt", "sizeBytes": 1024 },
+    { "name": "file-005.txt", "sizeBytes": 2048 },
+    { "name": "file-006.txt", "sizeBytes": 4096 },
+    { "name": "file-007.txt", "sizeBytes": 8192 },
+    { "name": "file-008.txt", "sizeBytes": 16384 },
+    { "name": "file-009.txt", "sizeBytes": 32768 },
+    { "name": "file-010.txt", "sizeBytes": 65536 },
+    { "name": "file-011.txt" },
+    { "name": "file-012.txt" },
+    { "name": "file-013.txt" },
+    { "name": "file-014.txt" },
+    { "name": "file-015.txt" },
+    { "name": "file-016.txt" },
+    { "name": "file-017.txt" },
+    { "name": "file-018.txt" },
+    { "name": "file-019.txt" },
+    { "name": "file-020.txt" },
+    { "name": "file-021.txt", "modifiedDays": -7 },
+    { "name": "file-022.txt", "modifiedDays": -7 },
+    { "name": "file-023.txt", "modifiedDays": -7 },
+    { "name": "file-024.txt", "modifiedDays": -3 },
+    { "name": "file-025.txt", "modifiedDays": -3 },
+    { "name": "file-026.txt", "modifiedDays": -3 },
+    { "name": "file-027.txt", "modifiedDays": -1 },
+    { "name": "file-028.txt", "modifiedDays": -1 },
+    { "name": "file-029.txt", "modifiedDays": -1 },
+    { "name": "file-030.txt" },
+    { "name": "file-031.txt" },
+    { "name": "file-032.txt" },
+    { "name": "file-033.txt" },
+    { "name": "file-034.txt" },
+    { "name": "file-035.txt" },
+    { "name": "file-036.txt" },
+    { "name": "file-037.txt" },
+    { "name": "file-038.txt" },
+    { "name": "file-039.txt" },
+    { "name": "file-040.txt" },
+    { "name": "第01章 高等数学笔记.txt", "modifiedDays": -2 },
+    { "name": "第02章 线性代数基础.txt", "modifiedDays": -2 },
+    { "name": "第03章 程序设计实验.txt", "modifiedDays": -2 },
+    { "name": "第04章 大学物理预习.txt", "modifiedDays": -2 },
+    { "name": "第05章 数据结构笔记.txt", "modifiedDays": -1 },
+    { "name": "第06章 英语晨读材料.txt", "modifiedDays": -1 },
+    { "name": "第07章 研讨课报告.txt", "modifiedDays": -1 },
+    { "name": "第08章 工程实践日志.txt", "modifiedDays": -1 },
+    { "name": "第09章 期末考试复习.txt" },
+    { "name": "第10章 跨年课程总结.txt" },
+    { "name": "A-01 报告.pdf" },
+    { "name": "B-02 作业.docx" },
+    { "name": "C-03 表格.xlsx" },
+    { "name": "D-04 幻灯片.pptx" },
+    { "name": "E-05 图片.png" },
+    { "name": "F-06 照片.jpg" },
+    { "name": "G-07 视频.mp4" },
+    { "name": "H-08 音频.mp3" },
+    { "name": "I-09 压缩包.zip" },
+    { "name": "J-10 脚本.js" },
+    { "name": "K-11 源码.ts" },
+    { "name": "L-12 程序.rs" },
+    { "name": "M-13 代码.py" },
+    { "name": "N-14 数据.json" },
+    { "name": "O-15 文档.md" },
+    { "name": "P-16 纯文本.txt" },
+    { "name": "Q-17 数据库.sql" },
+    { "name": "R-18 网页.html" },
+    { "name": "S-19 样式.css" },
+    { "name": "T-20 二进制.bin", "sizeBytes": 1048576 },
+    { "name": "empty.bin", "sizeBytes": 0 },
+    { "name": "large-blob.bin", "sizeBytes": 268435456 },
+    { "name": "no-extension-file", "sizeBytes": 16 },
+    { "name": "hidden-review.txt", "sizeBytes": 64, "hidden": true },
+    { "name": ".dot-prefix-review.txt", "sizeBytes": 8 },
+    { "name": "special [100%] & (1)!@#.docx", "sizeBytes": 32 },
+    { "name": "future-modified.txt", "sizeBytes": 128, "modified": "2099-01-01T00:00:00" },
+    { "name": "ancient-modified.txt", "sizeBytes": 128, "modified": "1980-01-01T00:00:00" },
+    { "name": "Unicode-数学笔记-日本語-한국어-émoji.txt", "sizeBytes": 16 },
+    { "name": "long-name-boundary.txt", "longNameChars": 120 },
+    { "name": "Report.PDF", "subdir": "CaseA", "sizeBytes": 256 },
+    { "name": "report.pdf", "subdir": "CaseB", "sizeBytes": 256 },
+    { "name": "嵌套文件-中文.txt", "subdir": "subdir", "sizeBytes": 512 },
+    { "name": "更深一层.dat", "subdir": "subdir/deep", "sizeBytes": 1024 },
+    { "name": "hidden-dir-entry.txt", "subdir": "HiddenDir", "sizeBytes": 64, "hiddenDir": true },
+    { "name": "中文 2.txt", "sizeBytes": 64 },
+    { "name": "中文 10.txt", "sizeBytes": 64 },
+    { "name": "Z-99.txt", "sizeBytes": 64 },
+    { "name": "a-01.txt", "sizeBytes": 64 },
+    { "name": "b-02.txt", "sizeBytes": 64 }
+  ]
+}

@@ -57,9 +57,13 @@ if ($OpenHomework) { $Args += "--open-homework" }
 
 $KnownIdePids = @(Get-Process -Name Code,Cursor,idea64,devenv -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
 function Stop-TestProcesses {
-    Get-Process -Name Code,Cursor,idea64,devenv -ErrorAction SilentlyContinue |
-        Where-Object { $KnownIdePids -notcontains $_.Id } |
-        Stop-Process -Force -ErrorAction SilentlyContinue
+    for ($attempt = 0; $attempt -lt 5; $attempt++) {
+        Get-Process -Name Code,Cursor,idea64,devenv -ErrorAction SilentlyContinue |
+            Where-Object { $KnownIdePids -notcontains $_.Id } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 1000
+        if ((Get-SpawnedIdeCount) -eq 0) { break }
+    }
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 }

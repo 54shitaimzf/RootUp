@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { loadMoreMerge, mergeFiles } from "../lib/fileUtils";
-import { logEvent, queryFiles, type FileRecord } from "../lib/tauri";
+import {
+  logEvent,
+  queryFiles,
+  type FileRecord,
+  type SortDir,
+  type SortField,
+} from "../lib/tauri";
 
 /**
  * 文件索引查询：后端 query_files 分页加载 + 监听 files-changed 实时合并。
@@ -12,6 +18,8 @@ export function useFiles(
   limit: number,
   offset: number,
   refreshKey: number,
+  sortBy?: SortField | null,
+  sortDir?: SortDir,
 ) {
   const [items, setItems] = useState<FileRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -21,7 +29,7 @@ export function useFiles(
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    queryFiles(query, limit, offset)
+    queryFiles(query, limit, offset, sortBy, sortDir)
       .then((page) => {
         if (cancelled) return;
         setTotal(page.total);
@@ -42,7 +50,7 @@ export function useFiles(
     return () => {
       cancelled = true;
     };
-  }, [query, limit, offset, refreshKey]);
+  }, [query, limit, offset, refreshKey, sortBy, sortDir]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;

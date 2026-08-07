@@ -5,13 +5,14 @@ use crate::commands::labels as labels_commands;
 use crate::commands::projects as projects_commands;
 use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
+use crate::commands::startup as startup_commands;
 use crate::commands::study as study_commands;
 use crate::commands::window as window_commands;
 use crate::core::archive::category_dir;
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
 use crate::core::events::StabilityParams;
 use crate::core::ignore::IgnoreMatcher;
-use crate::core::index::IndexStore;
+use crate::core::index::{IndexStore, ScanDiffStore};
 use crate::core::path::normalize_path;
 use crate::core::project::managed_unit_roots;
 use crate::core::scan::{ScanEvent, ScanEventSink, ScanParams};
@@ -21,9 +22,10 @@ use crate::infra::archive_service::ArchiveService;
 use crate::infra::index_store::SqliteIndexStore;
 use crate::infra::logging::FileLogger;
 use crate::infra::scanner::ScanService;
+use crate::infra::shortcut;
+use crate::infra::startup::StartupGate;
 use crate::infra::storage;
 use crate::infra::study_store::{JsonStudyStore, StudyStore};
-use crate::infra::tray;
 use crate::infra::watcher::WatchService;
 use crate::infra::window as window_lifecycle;
 use log::LevelFilter;
@@ -31,14 +33,8 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
-
-/// 主动退出标志。
-///
-/// Tauri 默认在最后一个窗口销毁时触发 `RunEvent::ExitRequested` 并退出进程，
-/// 这会让"后台运行（关闭即销毁）"失效。因此事件循环中默认阻止退出，
-/// 仅当用户明确选择退出（托盘菜单 / 确认弹窗）并先置位此标志时才放行。
-pub struct QuitFlag(pub Arc<AtomicBool>);
 
 /// 首次启动深链意图：网页监听器就绪前事件会丢失，改为暂存由前端主动领取。
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -55,10 +51,18 @@ fn startup_intent_from_args(args: &[String]) -> Option<StartupIntent> {
     }
     if let Some(pos) = args.iter().position(|a| a == "--open-project") {
         if let Some(path) = args.get(pos + 1) {
-            return Some(StartupIntent::Project { path: path.clone() });
+            if valid_deep_link_path(path) {
+                return Some(StartupIntent::Project { path: path.clone() });
+            }
+            log::warn!("startup: 忽略非法 --open-project 参数");
         }
     }
     None
+}
+
+/// 深链路径白名单式校验：非空、长度受限、无控制字符。
+fn valid_deep_link_path(path: &str) -> bool {
+    !path.trim().is_empty() && path.len() <= 1024 && !path.chars().any(|c| c.is_control())
 }
 
 /// 深链是否需要把 RootUp 调到前台：项目唤醒保持后台（不抢焦点），
@@ -75,43 +79,6 @@ pub fn take_startup_intent(
     let intent = state.lock().ok().and_then(|mut intent| intent.take());
     log::info!("startup: 前端领取意图 {:?}", intent);
     intent
-}
-
-/// 重算系统托管区（单元根 + 归档根）并同步到监听/扫描/自动归档服务，
-/// 同时把历史已索引的托管区文件一次性标为 deleted（幂等）。
-pub fn refresh_managed_state(app: &AppHandle) -> Result<(), String> {
-    let settings = storage::load_settings(app);
-    let mut roots = managed_unit_roots(&settings.watched_dirs, &settings.project_dirs);
-    if !settings.archive_root.is_empty() {
-        roots.push(normalize_path(&settings.archive_root));
-    }
-    if let Some(service) = app.try_state::<Mutex<crate::infra::watcher::WatchService>>() {
-        service
-            .lock()
-            .map_err(|e| e.to_string())?
-            .update_skip_roots(roots.clone());
-    }
-    if let Some(service) = app.try_state::<Mutex<crate::infra::scanner::ScanService>>() {
-        service
-            .lock()
-            .map_err(|e| e.to_string())?
-            .update_skip_roots(roots.clone());
-    }
-    if let Some(service) = app.try_state::<Mutex<ArchiveService>>() {
-        service
-            .lock()
-            .map_err(|e| e.to_string())?
-            .update(settings.archive_root.clone(), settings.auto_archive);
-    }
-    let store = app.state::<Arc<Mutex<dyn IndexStore>>>();
-    let removed = store
-        .lock()
-        .map_err(|e| e.to_string())?
-        .mark_under_roots_deleted(&roots)?;
-    if removed > 0 {
-        log::info!("unit: 排除 roots={} count={removed}", roots.len());
-    }
-    Ok(())
 }
 
 /// 解析 `--open-project <path>` 启动参数并执行打开（单实例与首次启动共用）。
@@ -231,9 +198,11 @@ pub fn run() {
             projects_commands::open_url,
             window_commands::hide_to_tray,
             window_commands::quit_app,
+            startup_commands::app_ready,
             take_startup_intent,
         ])
-        .manage(QuitFlag(Arc::new(AtomicBool::new(false))))
+        .manage(window_lifecycle::QuitFlag(Arc::new(AtomicBool::new(false))))
+        .manage(StartupGate(Arc::new(AtomicBool::new(false))))
         .manage(Mutex::new(None::<StartupIntent>))
         // 关闭请求：拦截并通知前端弹出确认弹窗，由用户决定后台运行或退出
         .on_window_event(|window, event| {
@@ -246,7 +215,9 @@ pub fn run() {
                         let _ = window_lifecycle::destroy_main_window(app);
                     }
                     crate::core::settings::CLOSE_ACTION_QUIT => {
-                        app.state::<QuitFlag>().0.store(true, Ordering::SeqCst);
+                        app.state::<window_lifecycle::QuitFlag>()
+                            .0
+                            .store(true, Ordering::SeqCst);
                         app.exit(0);
                     }
                     _ => {
@@ -256,6 +227,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            let t0 = Instant::now();
             // 日志系统：文件日志 + 终端镜像（debug）
             let log_dir = app
                 .path()
@@ -267,6 +239,8 @@ pub fn run() {
             let _ = log::set_logger(logger);
             log::set_max_level(LevelFilter::Info);
             log::info!("RootUp 启动");
+            log::info!("startup: 日志就绪 ms={}", t0.elapsed().as_millis());
+            let t0 = Instant::now();
 
             // 深链意图必须在 WebView 加载完成前就绪，否则前端领取时仍为 None
             let startup_args: Vec<String> = std::env::args().collect();
@@ -289,12 +263,25 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("无法获取数据目录: {e}"))?;
-            let store: Arc<Mutex<dyn IndexStore>> = Arc::new(Mutex::new(
+            let sqlite_store = Arc::new(Mutex::new(
                 SqliteIndexStore::open(data_dir.join("rootup.db"))
                     .map_err(|e| format!("索引库打开失败: {e}"))?,
             ));
+            let store: Arc<Mutex<dyn IndexStore>> = sqlite_store.clone();
+            let scan_store: Arc<Mutex<dyn ScanDiffStore>> = sqlite_store;
             app.manage(store.clone());
             log::info!("索引库就绪: {:?}", data_dir.join("rootup.db"));
+
+            // 快捷图标对账：补齐内嵌图标并清理杂散缓存
+            let icon_dir = app
+                .path()
+                .app_cache_dir()
+                .map_err(|e| format!("无法获取缓存目录: {e}"))?
+                .join("shortcut-icons");
+            shortcut::reconcile_shortcut_icons(&icon_dir)
+                .map_err(|e| format!("快捷图标对账失败: {e}"))?;
+            log::info!("startup: 图标对账 ms={}", t0.elapsed().as_millis());
+            let t0 = Instant::now();
 
             // 学业数据与课程分类器：保存后刷新同一份共享状态
             let study_store = JsonStudyStore::new(data_dir.join("study.json"));
@@ -303,6 +290,8 @@ pub fn run() {
             study_classifier.refresh(&study_data);
             let study_classifier = Arc::new(Mutex::new(study_classifier));
             app.manage(study_classifier.clone());
+            log::info!("startup: 学业数据 ms={}", t0.elapsed().as_millis());
+            let t0 = Instant::now();
 
             // 监控目录：启动自愈（规范化 + 防重叠修正），修正结果写回设置
             let mut settings = storage::load_settings(app.handle());
@@ -362,7 +351,7 @@ pub fn run() {
                 log::info!("unit: 排除 roots={} count={removed}", skip_roots.len());
             }
             let app_for_auto = app.handle().clone();
-            let mut service = WatchService::new(
+            let service = WatchService::new(
                 store.clone(),
                 classifier.clone(),
                 ignore_matcher.clone(),
@@ -393,22 +382,20 @@ pub fn run() {
                 settings.auto_archive,
             );
             app.manage(Mutex::new(archive_service));
-            app.state::<Mutex<ArchiveService>>()
-                .lock()
-                .map_err(|e| e.to_string())?
-                .start();
             for dir in &settings.watched_dirs {
                 if let Err(e) = service.add_dir(dir) {
                     log::warn!("watch: 无法监听 {dir}: {e}");
                 }
             }
-            service.start();
             app.manage(Mutex::new(service));
-            log::info!("监听服务已启动（{} 个目录）", settings.watched_dirs.len());
+            log::info!(
+                "监听服务已装配（{} 个目录，待前端就绪后启动）",
+                settings.watched_dirs.len()
+            );
 
             // 初始化扫描服务：后台全量扫描 + 快照差集 + 风暴保护
             let scan_service = ScanService::new(
-                store,
+                scan_store,
                 classifier,
                 ignore_matcher,
                 ScanParams::default(),
@@ -424,14 +411,22 @@ pub fn run() {
                 for dir in &settings.watched_dirs {
                     scan_service.enqueue(dir.clone());
                 }
-                let mut scan_service = scan_service;
-                scan_service.start();
             }
-            log::info!("扫描服务已启动");
+            log::info!("startup: 服务装配 ms={}", t0.elapsed().as_millis());
+            log::info!("扫描服务已装配（待前端就绪后启动）");
 
-            tray::init(app)?;
+            // 非关键服务延迟到前端就绪；10 秒未就绪则回退启动，避免功能缺失
+            let fallback_app = app.handle().clone();
+            let gate = app.state::<StartupGate>().0.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(10));
+                if !gate.load(Ordering::SeqCst) {
+                    log::warn!("startup: 前端就绪超时，回退启动延迟服务");
+                    let _ = crate::infra::startup::start_deferred_services(&fallback_app);
+                }
+            });
 
-            refresh_managed_state(app.handle())?;
+            crate::infra::managed_state::refresh(app.handle())?;
 
             // 首次启动：项目打开照常执行（跳转由前端领取意图完成）
             if startup_args.iter().any(|a| a == "--open-project") {
@@ -443,7 +438,11 @@ pub fn run() {
         .expect("RootUp 启动失败")
         .run(|app, event| {
             if let RunEvent::ExitRequested { api, .. } = event {
-                if !app.state::<QuitFlag>().0.load(Ordering::SeqCst) {
+                if !app
+                    .state::<window_lifecycle::QuitFlag>()
+                    .0
+                    .load(Ordering::SeqCst)
+                {
                     api.prevent_exit();
                 }
             }
@@ -473,6 +472,20 @@ mod tests {
             Some(StartupIntent::Homework)
         ));
         assert_eq!(startup_intent_from_args(&args(&[])), None);
+        assert_eq!(
+            startup_intent_from_args(&args(&["--open-project", ""])),
+            None
+        );
+        assert_eq!(
+            startup_intent_from_args(&args(&["--open-project", "bad\npath"])),
+            None
+        );
+        assert_eq!(
+            startup_intent_from_args(&args(&["--open-project", "C:/ok"])),
+            Some(StartupIntent::Project {
+                path: "C:/ok".into()
+            })
+        );
         assert!(matches!(
             startup_intent_from_args(&args(&["--open-homework", "--open-project", "C:/x"])),
             Some(StartupIntent::Homework)

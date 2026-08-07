@@ -6,6 +6,7 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { isComposing } from "../lib/ime";
 import { cleanPathInput } from "../lib/paths";
+import { validateDirInput } from "../lib/pathValidation";
 import {
   openDirectoryDialog,
   resolveDirTarget,
@@ -50,6 +51,14 @@ export function DirectoryAdder({
     async (raw: string, resolveParent: boolean) => {
       let dir = cleanPathInput(raw);
       if (!dir) return;
+      if (!resolveParent) {
+        const check = validateDirInput(dir);
+        if (!check.ok) {
+          setError(check.error ?? "无效路径");
+          return;
+        }
+        dir = check.value;
+      }
       try {
         if (resolveParent) {
           dir = await resolveDirTarget(dir);

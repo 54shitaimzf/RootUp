@@ -1,9 +1,10 @@
 //! 文件监听、索引、扫描与查询相关命令。
 use crate::core::classify::{Category, DEFAULT_EXTENSION_MAP};
 use crate::core::index::IndexStore;
-use crate::core::path::{normalize_path, path_key};
+use crate::core::path::{normalize_path, path_key, validate_dir_path};
 use crate::core::query::{parse_query, QueryPage};
 use crate::core::watched::{check_add, AddCheck};
+use crate::infra::managed_state;
 use crate::infra::scanner::{ScanService, ScanStatus};
 use crate::infra::storage;
 use crate::infra::watcher::WatchService;
@@ -42,10 +43,7 @@ pub struct ClassifyDefaultEntry {
 /// 添加监控目录：两向防重叠校验 → 持久化 → 启动监听 → 入队扫描。
 #[tauri::command]
 pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, String> {
-    let dir = normalize_path(&dir);
-    if dir.is_empty() {
-        return Err("目录不能为空".into());
-    }
+    let dir = validate_dir_path(&dir)?;
     if !Path::new(&dir).is_dir() {
         return Err(format!("目录不存在: {dir}"));
     }
@@ -86,7 +84,7 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
 
     settings.watched_dirs.push(dir.clone());
     storage::save_settings(&app, &settings)?;
-    crate::app::refresh_managed_state(&app)?;
+    managed_state::refresh(&app)?;
 
     let service = app.state::<Mutex<WatchService>>();
     service.lock().map_err(|e| e.to_string())?.add_dir(&dir)?;
@@ -109,7 +107,7 @@ pub fn remove_watched_dir(app: AppHandle, dir: String) -> Result<(), String> {
         .watched_dirs
         .retain(|d| path_key(d) != path_key(&dir));
     storage::save_settings(&app, &settings)?;
-    crate::app::refresh_managed_state(&app)?;
+    managed_state::refresh(&app)?;
 
     let service = app.state::<Mutex<WatchService>>();
     if let Ok(service) = service.lock() {
@@ -215,10 +213,26 @@ fn run_query(
     query: Option<&str>,
     limit: i64,
     offset: i64,
+    sort_by: Option<String>,
+    sort_dir: Option<String>,
 ) -> Result<QueryPage, String> {
     let started = Instant::now();
     let raw = query.unwrap_or("");
     let mut parsed = parse_query(raw);
+    if let Some(field) = sort_by {
+        if !matches!(
+            field.as_str(),
+            "name" | "type" | "size" | "modified" | "labels"
+        ) {
+            return Err(format!("不支持的排序字段: {field}"));
+        }
+        parsed.sort_by = Some(field);
+    }
+    let dir = sort_dir.unwrap_or_else(|| "desc".into());
+    if !matches!(dir.as_str(), "asc" | "desc") {
+        return Err(format!("不支持的排序方向: {dir}"));
+    }
+    parsed.sort_dir = dir;
     parsed.limit = limit.clamp(1, 1000);
     parsed.offset = offset.max(0);
     let store = store.lock().map_err(|e| e.to_string())?;
@@ -235,12 +249,16 @@ pub fn query_files(
     query: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
+    sort_by: Option<String>,
+    sort_dir: Option<String>,
 ) -> Result<QueryPage, String> {
     run_query(
         &store,
         query.as_deref(),
         limit.unwrap_or(DEFAULT_LIST_LIMIT),
         offset.unwrap_or(0),
+        sort_by,
+        sort_dir,
     )
 }
 

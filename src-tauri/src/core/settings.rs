@@ -55,7 +55,7 @@ pub const CURRENT_VERSION: u32 = 3;
 pub const MAX_CLASSIFY_RULES: usize = 100;
 
 /// 忽略规则：临时扩展名 / 文件名前缀 / 完整文件名（目录名）。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IgnoreRules {
     /// 临时扩展名（不含点、小写），如 `crdownload`
@@ -148,6 +148,11 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// 写入前规范化：schema 版本由后端盖章，前端传入的版本号不参与持久化。
+    pub fn normalize(&mut self) {
+        self.version = CURRENT_VERSION;
+    }
+
     /// 版本升级（逐级迁移）；当前 v1 为幂等空迁移。
     pub fn migrate(&mut self) {
         while self.version < CURRENT_VERSION {
@@ -533,6 +538,27 @@ mod tests {
         assert_eq!(s.preferred_ide, PREFERRED_IDE_AUTO);
         assert!(s.custom_open_commands.is_empty());
         assert!(s.is_valid());
+    }
+
+    #[test]
+    fn normalize_stamps_current_version() {
+        for version in [0, 1, 3, 99] {
+            let mut s = Settings {
+                version,
+                ..Default::default()
+            };
+            s.normalize();
+            assert_eq!(s.version, CURRENT_VERSION, "version={version}");
+            assert!(s.is_valid());
+        }
+    }
+
+    #[test]
+    fn default_ignore_rules_match_shared_fixture() {
+        let raw = include_str!("../../../fixtures/default-ignore-rules.json");
+        let fixture: IgnoreRules =
+            serde_json::from_str(raw).expect("fixtures/default-ignore-rules.json 应可解析");
+        assert_eq!(fixture, Settings::default().ignore_rules);
     }
 
     #[test]

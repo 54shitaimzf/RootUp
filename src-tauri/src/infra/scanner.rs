@@ -1,19 +1,20 @@
-//! 后台扫描服务：串行队列、walkdir 遍历、快照差集、删除风暴保护、取消。
+//! 后台扫描服务：串行队列、`FileEnumerator` 遍历、`ScanDiffStore` 差集、删除风暴保护、取消。
 use crate::core::classify::Classifier;
-use crate::core::ignore::IgnoreMatcher;
-use crate::core::index::{FileRecord, IndexStore};
-use crate::core::path::{normalize_path, path_key, under_any};
+use crate::core::index::{FileRecord, ScanDiffStore};
+use crate::core::path::{normalize_path, path_key};
 use crate::core::scan::{
-    diff_missing, record_from_scan, ScanEvent, ScanEventSink, ScanParams, ScanProgress, ScanSummary,
+    record_from_scan, FileEnumerator, ScanEvent, ScanEventSink, ScanParams, ScanProgress,
+    ScanSummary,
 };
+use crate::infra::enumerator::WalkDirEnumerator;
+use crate::infra::time::now_millis;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use walkdir::WalkDir;
+use std::time::{Duration, Instant};
 
 /// 当前扫描状态（供 `get_scan_status` 查询）。
 #[derive(Debug, Clone, Default, Serialize)]
@@ -33,41 +34,45 @@ struct Shared {
     queue: Mutex<VecDeque<String>>,
     status: Mutex<ScanStatus>,
     cancel: AtomicBool,
+    wake: Condvar,
 }
 
 /// 后台扫描服务：一次执行一个目录，其余排队；与 Tauri 通过 ScanEventSink 解耦。
 pub struct ScanService {
-    store: Arc<Mutex<dyn IndexStore>>,
+    store: Arc<Mutex<dyn ScanDiffStore>>,
     classifier: Arc<dyn Classifier>,
-    matcher: IgnoreMatcher,
     params: ScanParams,
     sink: Arc<dyn ScanEventSink>,
     shared: Arc<Shared>,
     thread: Mutex<Option<JoinHandle<()>>>,
     skip_roots: Arc<Mutex<Vec<String>>>,
+    enumerator: Arc<dyn FileEnumerator>,
 }
 
 impl ScanService {
     pub fn new(
-        store: Arc<Mutex<dyn IndexStore>>,
+        store: Arc<Mutex<dyn ScanDiffStore>>,
         classifier: Arc<dyn Classifier>,
-        matcher: IgnoreMatcher,
+        matcher: crate::core::ignore::IgnoreMatcher,
         params: ScanParams,
         sink: Arc<dyn ScanEventSink>,
     ) -> Self {
+        let skip_roots = Arc::new(Mutex::new(Vec::new()));
+        let enumerator = Arc::new(WalkDirEnumerator::new(matcher, skip_roots.clone()));
         Self {
             store,
             classifier,
-            matcher,
             params,
             sink,
             shared: Arc::new(Shared {
                 queue: Mutex::new(VecDeque::new()),
                 status: Mutex::new(ScanStatus::default()),
                 cancel: AtomicBool::new(false),
+                wake: Condvar::new(),
             }),
             thread: Mutex::new(None),
-            skip_roots: Arc::new(Mutex::new(Vec::new())),
+            skip_roots,
+            enumerator,
         }
     }
 
@@ -86,11 +91,10 @@ impl ScanService {
         let loop_body = ScanLoop {
             store: self.store.clone(),
             classifier: self.classifier.clone(),
-            matcher: self.matcher.clone(),
             params: self.params.clone(),
             sink: self.sink.clone(),
             shared: self.shared.clone(),
-            skip_roots: self.skip_roots.clone(),
+            enumerator: self.enumerator.clone(),
         };
         let handle = std::thread::Builder::new()
             .name("rootup-scanner".into())
@@ -122,8 +126,11 @@ impl ScanService {
             return;
         }
         queue.push_back(normalized);
+        let queued = queue.len();
+        drop(queue);
+        self.shared.wake.notify_all();
         let mut status = self.shared.status.lock().unwrap();
-        status.queued = queue.len();
+        status.queued = queued;
     }
 
     /// 取消当前扫描（已写批次保留、跳过差集）。
@@ -136,8 +143,11 @@ impl ScanService {
         let key = path_key(dir);
         let mut queue = self.shared.queue.lock().unwrap();
         queue.retain(|d| path_key(d) != key);
+        let queued = queue.len();
+        drop(queue);
+        self.shared.wake.notify_all();
         let mut status = self.shared.status.lock().unwrap();
-        status.queued = queue.len();
+        status.queued = queued;
         let current = status
             .dir
             .as_ref()
@@ -160,44 +170,47 @@ impl ScanService {
 
 /// 扫描循环体（Arc 持有，供线程运行）。
 struct ScanLoop {
-    store: Arc<Mutex<dyn IndexStore>>,
+    store: Arc<Mutex<dyn ScanDiffStore>>,
     classifier: Arc<dyn Classifier>,
-    matcher: IgnoreMatcher,
     params: ScanParams,
     sink: Arc<dyn ScanEventSink>,
     shared: Arc<Shared>,
-    skip_roots: Arc<Mutex<Vec<String>>>,
+    enumerator: Arc<dyn FileEnumerator>,
 }
 
 impl ScanLoop {
     fn run_loop(&self) {
+        let mut queue = self.shared.queue.lock().unwrap();
         loop {
-            let dir = self.shared.queue.lock().unwrap().pop_front();
-            match dir {
-                Some(dir) => {
-                    self.shared.cancel.store(false, Ordering::SeqCst);
-                    {
-                        let queued = self.shared.queue.lock().unwrap().len();
-                        let mut status = self.shared.status.lock().unwrap();
-                        status.active = true;
-                        status.dir = Some(dir.clone());
-                        status.discovered = 0;
-                        status.processed = 0;
-                        status.ignored = 0;
-                        status.errors = 0;
-                        status.queued = queued;
-                    }
-                    self.scan_dir(&dir);
-                    {
-                        let mut status = self.shared.status.lock().unwrap();
-                        status.active = false;
-                        status.dir = None;
-                    }
+            if let Some(dir) = queue.pop_front() {
+                drop(queue);
+                self.shared.cancel.store(false, Ordering::SeqCst);
+                {
+                    let queued = self.shared.queue.lock().unwrap().len();
+                    let mut status = self.shared.status.lock().unwrap();
+                    status.active = true;
+                    status.dir = Some(dir.clone());
+                    status.discovered = 0;
+                    status.processed = 0;
+                    status.ignored = 0;
+                    status.errors = 0;
+                    status.queued = queued;
                 }
-                None => {
-                    self.shared.cancel.store(false, Ordering::SeqCst);
-                    std::thread::sleep(Duration::from_millis(100));
+                self.scan_dir(&dir);
+                {
+                    let mut status = self.shared.status.lock().unwrap();
+                    status.active = false;
+                    status.dir = None;
                 }
+                queue = self.shared.queue.lock().unwrap();
+            } else {
+                self.shared.cancel.store(false, Ordering::SeqCst);
+                let (guard, _) = self
+                    .shared
+                    .wake
+                    .wait_timeout(queue, Duration::from_millis(1000))
+                    .unwrap();
+                queue = guard;
             }
         }
     }
@@ -219,119 +232,86 @@ impl ScanLoop {
             }
         }
 
-        // 扫描开始时的库内路径快照（key -> 原始路径），防扫描期间新建文件被误删
-        let snapshot_paths = self
+        // 差集会话：快照与已见集合落在存储层（SQLite 临时表），扫描器内存保持 O(批次)
+        if let Err(e) = self
             .store
             .lock()
-            .map(|s| s.paths_with_prefix(dir).unwrap_or_default())
-            .unwrap_or_default();
-        let mut snapshot: HashMap<String, String> = HashMap::new();
-        for path in snapshot_paths {
-            snapshot.entry(path_key(&path)).or_insert(path);
+            .map_err(|e| e.to_string())
+            .and_then(|mut s| s.begin_scan_diff(dir))
+        {
+            self.fail(dir, format!("差集会话启动失败: {e}"));
+            return;
         }
 
-        let mut scanned: HashSet<String> = HashSet::new();
-        let mut added = 0usize;
-        let mut updated = 0usize;
-        let mut ignored = 0usize;
-        let mut errors = 0usize;
-        let mut discovered = 0usize;
         let mut batch: Vec<FileRecord> = Vec::new();
+        let mut seen_batch: Vec<String> = Vec::new();
         let mut last_progress = 0usize;
+        let mut processed = 0usize;
+        let mut cancelled = false;
+        let mut flush_errors = 0usize;
 
-        let walker = WalkDir::new(dir)
-            .follow_links(false)
-            .into_iter()
-            .filter_entry(|entry| {
-                if !entry.file_type().is_dir() {
-                    return true;
-                }
-                let name = entry.file_name().to_string_lossy();
-                if self.matcher.is_ignored(&name) {
-                    return false;
-                }
-                let path = normalize_path(&entry.path().to_string_lossy());
-                let skipped = self
-                    .skip_roots
-                    .lock()
-                    .map(|roots| under_any(&path, &roots))
-                    .unwrap_or(false);
-                !skipped
-            });
-
-        for entry in walker {
+        let enumerate_result = self.enumerator.enumerate(dir, &mut |entry| {
             if self.shared.cancel.load(Ordering::SeqCst) {
-                break;
+                cancelled = true;
+                return false;
             }
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    errors += 1;
-                    log::warn!("scan: 遍历错误 {}: {e}", dir);
-                    continue;
-                }
-            };
-            if entry.file_type().is_dir() {
-                continue;
-            }
-            // 符号链接/junction 一律不索引（防循环与越界）
-            if entry.file_type().is_symlink() {
-                continue;
-            }
-            let file_name = entry.file_name().to_string_lossy().into_owned();
-            if self.matcher.is_ignored(&file_name) {
-                ignored += 1;
-                continue;
-            }
-            discovered += 1;
-            let metadata = match std::fs::metadata(entry.path()) {
-                Ok(m) => m,
-                Err(e) => {
-                    errors += 1;
-                    log::debug!("scan: metadata 失败 {}: {e}", entry.path().display());
-                    continue;
-                }
-            };
-            let path_str = normalize_path(&entry.path().to_string_lossy());
             let now_ms = now_millis();
-            let modified_ms = metadata
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                .map(|d| d.as_millis() as i64)
-                .unwrap_or(now_ms);
             let record = record_from_scan(
-                &path_str,
-                metadata.len() as i64,
-                modified_ms,
+                &entry.path,
+                entry.size,
+                entry.modified_ms,
                 now_ms,
                 self.classifier.as_ref(),
             );
-            let key = path_key(&path_str);
-            if snapshot.contains_key(&key) {
-                updated += 1;
-            } else {
-                added += 1;
-            }
-            scanned.insert(key);
+            seen_batch.push(path_key(&entry.path));
             batch.push(record);
+            if seen_batch.len() >= self.params.batch_size {
+                if let Err(e) = self.flush_seen(&mut seen_batch) {
+                    flush_errors += 1;
+                    log::error!("scan: 写入已见批次失败: {e}");
+                }
+            }
             if batch.len() >= self.params.batch_size {
                 if let Err(e) = self.flush_batch(&mut batch) {
-                    errors += 1;
+                    flush_errors += 1;
                     log::error!("scan: 写入批次失败: {e}");
                 }
             }
-            if discovered - last_progress >= self.params.progress_interval {
-                last_progress = discovered;
-                self.emit_progress(dir, discovered, added + updated, ignored, errors);
+            processed += 1;
+            if processed - last_progress >= self.params.progress_interval {
+                last_progress = processed;
+                // 进度阶段 ignored/errors 未知，以已处理数近似展示，最终以 Finished 摘要为准
+                self.emit_progress(dir, processed, processed, 0, 0);
             }
+            true
+        });
+        let enumerate_stats = match enumerate_result {
+            Ok(stats) => stats,
+            Err(e) => {
+                let _ = self.store.lock().map(|mut s| {
+                    let _ = s.finish_scan_diff(
+                        self.params.deletion_guard_ratio,
+                        self.params.deletion_guard_min as i64,
+                    );
+                });
+                self.fail(dir, format!("遍历失败: {e}"));
+                return;
+            }
+        };
+
+        if let Err(e) = self.flush_seen(&mut seen_batch) {
+            flush_errors += 1;
+            log::error!("scan: 写入已见批次失败: {e}");
         }
         if let Err(e) = self.flush_batch(&mut batch) {
-            errors += 1;
+            flush_errors += 1;
             log::error!("scan: 写入批次失败: {e}");
         }
 
-        let cancelled = self.shared.cancel.load(Ordering::SeqCst);
+        let cancelled = cancelled || self.shared.cancel.load(Ordering::SeqCst);
+        let discovered = enumerate_stats.discovered;
+        let ignored = enumerate_stats.ignored;
+        let mut errors = enumerate_stats.errors + flush_errors;
         let elapsed_ms = started.elapsed().as_millis();
         let files_per_sec = if elapsed_ms > 0 {
             (discovered as f64) * 1000.0 / (elapsed_ms as f64)
@@ -340,11 +320,18 @@ impl ScanLoop {
         };
 
         if cancelled {
+            // 清理差集临时表并跳过删除标记
+            if let Ok(mut s) = self.store.lock() {
+                let _ = s.finish_scan_diff(
+                    self.params.deletion_guard_ratio,
+                    self.params.deletion_guard_min as i64,
+                );
+            }
             let summary = ScanSummary {
                 dir: dir.to_string(),
                 discovered,
-                added,
-                updated,
+                added: 0,
+                updated: 0,
                 ignored,
                 errors,
                 missing_deleted: 0,
@@ -359,42 +346,66 @@ impl ScanLoop {
             return;
         }
 
-        // 差集：候选二次确认（当前仍存在则不标）→ 风暴守卫 → 批量标记
-        let candidates: Vec<String> = diff_missing(&snapshot, &scanned);
-        let missing: Vec<String> = candidates
-            .into_iter()
-            .filter(|p| !Path::new(p).exists())
-            .collect();
-        let guard = self.params.deletion_guard(snapshot.len());
-        let missing_deleted = if missing.len() > guard {
-            log::warn!(
-                "scan: 差集跳过 dir={dir} guard={guard} candidates={}",
-                missing.len()
-            );
-            0
-        } else if missing.is_empty() {
-            0
-        } else {
-            match self.store.lock() {
-                Ok(mut store) => match store.mark_missing(&missing) {
-                    Ok(n) => {
-                        log::info!("scan: 差集 dir={dir} deleted={n}");
-                        n
+        // 差集：风暴守卫 → 候选二次确认（当前仍存在则不标） → 批量标记
+        let diff = self
+            .store
+            .lock()
+            .map_err(|e| e.to_string())
+            .and_then(|mut s| {
+                s.finish_scan_diff(
+                    self.params.deletion_guard_ratio,
+                    self.params.deletion_guard_min as i64,
+                )
+            });
+        let mut updated = 0usize;
+        let mut missing_deleted = 0i64;
+        match diff {
+            Ok(summary) => {
+                updated = summary.updated;
+                if summary.guarded {
+                    log::warn!(
+                        "scan: 差集跳过 dir={dir} snapshot={} candidates={}",
+                        summary.snapshot_total,
+                        summary.missing_total
+                    );
+                } else {
+                    let missing: Vec<String> = summary
+                        .missing
+                        .into_iter()
+                        .filter(|p| !Path::new(p).exists())
+                        .collect();
+                    if !missing.is_empty() {
+                        match self.store.lock() {
+                            Ok(mut s) => match s.mark_missing(&missing) {
+                                Ok(n) => {
+                                    missing_deleted = n;
+                                    log::info!("scan: 差集 dir={dir} deleted={n}");
+                                }
+                                Err(e) => {
+                                    errors += 1;
+                                    log::error!("scan: 差集写入失败 dir={dir}: {e}");
+                                }
+                            },
+                            Err(e) => {
+                                errors += 1;
+                                log::error!("scan: 差集锁失败 dir={dir}: {e}");
+                            }
+                        }
                     }
-                    Err(e) => {
-                        errors += 1;
-                        log::error!("scan: 差集写入失败 dir={dir}: {e}");
-                        0
-                    }
-                },
-                Err(e) => {
-                    errors += 1;
-                    log::error!("scan: 差集锁失败 dir={dir}: {e}");
-                    0
                 }
             }
-        };
+            Err(e) => {
+                errors += 1;
+                log::error!("scan: 差集会话失败 dir={dir}: {e}");
+            }
+        }
 
+        // 扫描完成后的轻量维护（SQLite 执行 PRAGMA optimize）
+        if let Ok(mut s) = self.store.lock() {
+            let _ = s.optimize();
+        }
+
+        let added = discovered.saturating_sub(updated);
         let summary = ScanSummary {
             dir: dir.to_string(),
             discovered,
@@ -421,6 +432,15 @@ impl ScanLoop {
             summary.elapsed_ms,
             summary.files_per_sec
         );
+    }
+
+    fn flush_seen(&self, keys: &mut Vec<String>) -> Result<(), String> {
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let keys = std::mem::take(keys);
+        let mut store = self.store.lock().map_err(|e| e.to_string())?;
+        store.mark_scan_seen(&keys)
     }
 
     fn flush_batch(&self, batch: &mut Vec<FileRecord>) -> Result<(), String> {
@@ -466,18 +486,12 @@ impl ScanLoop {
     }
 }
 
-fn now_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::classify::ExtensionClassifier;
-    use crate::core::index::FileRecord;
+    use crate::core::ignore::IgnoreMatcher;
+    use crate::core::index::{FileRecord, IndexStore, ScanDiffStore};
     use crate::infra::index_store::SqliteIndexStore;
     use std::fs;
 
@@ -506,27 +520,30 @@ mod tests {
         }
     }
 
-    fn make_loop(store: Arc<Mutex<dyn IndexStore>>) -> (ScanLoop, Arc<Mutex<Vec<ScanEvent>>>) {
+    fn make_loop(store: Arc<Mutex<dyn ScanDiffStore>>) -> (ScanLoop, Arc<Mutex<Vec<ScanEvent>>>) {
         make_loop_with_roots(store, Arc::new(Mutex::new(Vec::new())))
     }
 
     fn make_loop_with_roots(
-        store: Arc<Mutex<dyn IndexStore>>,
+        store: Arc<Mutex<dyn ScanDiffStore>>,
         skip_roots: Arc<Mutex<Vec<String>>>,
     ) -> (ScanLoop, Arc<Mutex<Vec<ScanEvent>>>) {
         let events = Arc::new(Mutex::new(Vec::new()));
         let loop_body = ScanLoop {
             store,
             classifier: Arc::new(ExtensionClassifier::new()),
-            matcher: IgnoreMatcher::new(),
             params: test_params(),
             sink: Arc::new(CollectSink(events.clone())),
-            skip_roots,
             shared: Arc::new(Shared {
                 queue: Mutex::new(VecDeque::new()),
                 status: Mutex::new(ScanStatus::default()),
                 cancel: AtomicBool::new(false),
+                wake: Condvar::new(),
             }),
+            enumerator: Arc::new(WalkDirEnumerator::new(
+                crate::core::ignore::IgnoreMatcher::new(),
+                skip_roots,
+            )),
         };
         (loop_body, events)
     }
@@ -548,7 +565,7 @@ mod tests {
         fs::create_dir_all(dir.join("sub")).unwrap();
         fs::write(dir.join("sub/inner.txt"), b"x").unwrap();
 
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let (loop_body, events) = make_loop(store.clone());
         loop_body.scan_dir(&dir.to_string_lossy());
@@ -606,7 +623,7 @@ mod tests {
         fs::write(dir.join("keep.txt"), b"x").unwrap();
         let dir_n = dir.to_string_lossy().replace('\\', "/");
 
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         // 快照预置：keep（存在）与 gone（不存在）均为 indexed
         store
@@ -671,7 +688,7 @@ mod tests {
         fs::write(dir.join("only.txt"), b"x").unwrap();
         let dir_n = dir.to_string_lossy().replace('\\', "/");
 
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         // 快照预置 600 条（目录中均不存在）→ 候选 600 > guard=max(150, 2)
         let mut records = Vec::new();
@@ -699,7 +716,7 @@ mod tests {
 
     #[test]
     fn missing_dir_emits_failed() {
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let (loop_body, events) = make_loop(store);
         loop_body.scan_dir("C:/definitely/not/exists/xyz");
@@ -715,7 +732,7 @@ mod tests {
         }
         let dir_n = dir.to_string_lossy().replace('\\', "/");
 
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         // 预置 3 条 indexed（目录中不存在）→ 若执行差集会被标 deleted
         store
@@ -747,7 +764,7 @@ mod tests {
         fs::write(dir.join("normal.txt"), b"x").unwrap();
         let dir_n = dir.to_string_lossy().replace('\\', "/");
 
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let (loop_body, _events) = make_loop(store.clone());
         loop_body.scan_dir(&dir_n);
@@ -763,7 +780,7 @@ mod tests {
         fs::write(dir.join("proj/src/main.rs"), b"x").unwrap();
         fs::write(dir.join("note.md"), b"x").unwrap();
         let dir_n = dir.to_string_lossy().replace('\\', "/");
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let roots = Arc::new(Mutex::new(vec![format!("{dir_n}/proj")]));
         let (loop_body, _events) = make_loop_with_roots(store.clone(), roots);
@@ -786,7 +803,7 @@ mod tests {
                 return;
             }
             let dir_n = dir.to_string_lossy().replace('\\', "/");
-            let store: Arc<Mutex<dyn IndexStore>> =
+            let store: Arc<Mutex<dyn ScanDiffStore>> =
                 Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
             let (loop_body, _events) = make_loop(store.clone());
             loop_body.scan_dir(&dir_n);
@@ -805,7 +822,7 @@ mod tests {
     fn scan_service_queue_and_cancel() {
         let dir = temp_dir("service");
         fs::write(dir.join("a.txt"), b"x").unwrap();
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let events = Arc::new(Mutex::new(Vec::new()));
         let mut service = ScanService::new(
@@ -855,8 +872,9 @@ mod tests {
         fs::write(dir.join("music.mp3"), b"x").unwrap();
         fs::write(dir.join("Cargo.toml"), b"x").unwrap();
 
-        let store: Arc<Mutex<dyn IndexStore>> =
-            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let sqlite = Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let store: Arc<Mutex<dyn ScanDiffStore>> = sqlite.clone();
+        let index_store: Arc<Mutex<dyn IndexStore>> = sqlite;
         let (loop_body, _events) = make_loop(store.clone());
         loop_body.scan_dir(&dir.to_string_lossy());
         assert_eq!(store.lock().unwrap().count().unwrap(), 4);
@@ -868,11 +886,11 @@ mod tests {
             Box::new(ExtensionClassifier::new()) as Box<dyn Classifier>
         ]);
         chain.push(Box::new(study));
-        let changed = reapply_labels(&mut *store.lock().unwrap(), &chain).unwrap();
+        let changed = reapply_labels(&mut *index_store.lock().unwrap(), &chain).unwrap();
         assert_eq!(changed, 2);
 
-        let course_page = |store: &Arc<Mutex<dyn IndexStore>>| {
-            store
+        let course_page = |index_store: &Arc<Mutex<dyn IndexStore>>| {
+            index_store
                 .lock()
                 .unwrap()
                 .query(&FileQuery {
@@ -882,7 +900,7 @@ mod tests {
                 })
                 .unwrap()
         };
-        assert_eq!(course_page(&store).total, 2);
+        assert_eq!(course_page(&index_store).total, 2);
 
         // 归档课程 PDF：源文件消失、按课程标签仍能查到归档记录
         let pdf_path = format!(
@@ -891,7 +909,7 @@ mod tests {
         );
         let archive_root = temp_dir("real_scenario_archive");
         let outcome = archive_files(
-            &store,
+            &index_store,
             &archive_root.to_string_lossy(),
             std::slice::from_ref(&pdf_path),
             42,
@@ -899,27 +917,27 @@ mod tests {
         .unwrap();
         assert_eq!(outcome.archived, 1);
         assert!(!Path::new(&pdf_path).exists());
-        assert!(store
+        assert!(index_store
             .lock()
             .unwrap()
             .get_by_path(&pdf_path)
             .unwrap()
             .is_none());
         // 归档记录仍带课程标签：查询仍命中，但原路径已不存在
-        assert_eq!(course_page(&store).total, 2);
+        assert_eq!(course_page(&index_store).total, 2);
 
         // 撤销恢复：文件回原位、课程标签查询恢复两条
-        let undo = undo_file_batch(&store, 42).unwrap();
+        let undo = undo_file_batch(&index_store, 42).unwrap();
         assert_eq!(undo.archived, 1);
         assert!(Path::new(&pdf_path).exists());
-        let restored = store
+        let restored = index_store
             .lock()
             .unwrap()
             .get_by_path(&pdf_path)
             .unwrap()
             .unwrap();
         assert_eq!(restored.state, "indexed");
-        assert_eq!(course_page(&store).total, 2);
+        assert_eq!(course_page(&index_store).total, 2);
 
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&archive_root);

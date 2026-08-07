@@ -62,6 +62,77 @@ pub fn under_any(path: &str, roots: &[String]) -> bool {
     })
 }
 
+/// 目录输入最大长度（含环境变量展开后）。
+pub const MAX_DIR_LEN: usize = 260;
+
+/// Windows 保留设备名（组件级，忽略扩展名）。
+pub const RESERVED_DIR_NAMES: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// 展开 `%NAME%` 环境变量；未闭合或未知变量返回错误。
+pub fn expand_env_vars(input: &str) -> Result<String, String> {
+    let mut out = String::new();
+    let mut rest = input;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('%') else {
+            return Err("未闭合的环境变量引用".to_string());
+        };
+        let name = &after[..end];
+        let value = std::env::var(name).map_err(|_| format!("未知环境变量: {name}"))?;
+        out.push_str(&value);
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// 目录输入统一校验：清洗 → 环境变量展开 → 规范化 → 长度/非法字符/保留名/盘根检查。
+pub fn validate_dir_path(input: &str) -> Result<String, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("目录不能为空".to_string());
+    }
+    let expanded = expand_env_vars(trimmed)?;
+    let normalized = normalize_path(&expanded);
+    if normalized.is_empty() {
+        return Err("目录不能为空".to_string());
+    }
+    if normalized.len() > MAX_DIR_LEN {
+        return Err(format!("路径过长（>{MAX_DIR_LEN}）"));
+    }
+    if normalized
+        .chars()
+        .any(|c| c.is_control() || matches!(c, '"' | '<' | '>' | '|' | '?' | '*'))
+    {
+        return Err("路径包含非法字符".to_string());
+    }
+    for part in normalized.split('/').filter(|p| !p.is_empty()) {
+        let upper = part.to_ascii_uppercase();
+        let base = upper.split('.').next().unwrap_or("");
+        if RESERVED_DIR_NAMES.contains(&base) {
+            return Err(format!("路径包含保留名: {part}"));
+        }
+        if part.ends_with('.') || part.ends_with(' ') {
+            return Err(format!("路径组件不能以点或空格结尾: {part}"));
+        }
+        if part.chars().count() > 255 {
+            return Err("路径组件过长".to_string());
+        }
+    }
+    if is_drive_root(&normalized) {
+        return Err("不能监控磁盘根目录".to_string());
+    }
+    Ok(normalized)
+}
+
+fn is_drive_root(path: &str) -> bool {
+    path == "/" || (path.len() == 3 && path.as_bytes()[1] == b':' && path.ends_with('/'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,5 +191,36 @@ mod tests {
         assert!(is_subpath("C:/x", "C:/"));
         assert!(!is_subpath("D:/x", "C:/"));
         assert!(is_subpath("/x/y", "/"));
+    }
+
+    #[test]
+    fn validate_dir_path_rejects_bad_input() {
+        assert!(validate_dir_path("").is_err());
+        assert!(validate_dir_path("   ").is_err());
+        assert!(validate_dir_path("C:/bad|pipe").is_err());
+        assert!(validate_dir_path("C:/bad?query").is_err());
+        assert!(validate_dir_path("C:/CON").is_err());
+        assert!(validate_dir_path("C:/COM1/x").is_err());
+        assert!(validate_dir_path("C:/trailing./x").is_err());
+        assert!(validate_dir_path("C:/trailing /x").is_err());
+        assert!(validate_dir_path("C:/").is_err());
+        assert!(validate_dir_path("/").is_err());
+        assert!(validate_dir_path("C:/unknown%VAR%x").is_err());
+    }
+
+    #[test]
+    fn validate_dir_path_normalizes_and_expands() {
+        let value = validate_dir_path("C:/Users/Admin\\Downloads/").unwrap();
+        assert_eq!(value, "C:/Users/Admin/Downloads");
+        let expanded = validate_dir_path("%USERPROFILE%\\Desktop").unwrap();
+        let profile = std::env::var("USERPROFILE").unwrap_or_default();
+        assert!(path_key(&expanded).starts_with(&path_key(&profile)));
+    }
+
+    #[test]
+    fn expand_env_vars_handles_unclosed_and_unknown() {
+        assert!(expand_env_vars("C:/%NOPE%/x").is_err());
+        assert!(expand_env_vars("C:/%broken").is_err());
+        assert_eq!(expand_env_vars("C:/plain").unwrap(), "C:/plain");
     }
 }

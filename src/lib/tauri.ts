@@ -6,12 +6,22 @@ export type ThemeMode = "system" | "light" | "dark";
 export type Language = "zh-CN" | "en";
 export type CloseAction = "ask" | "background" | "quit";
 
+/** 设置 schema 版本（与 Rust 侧 core::settings::CURRENT_VERSION 一致；写入以后端盖章为准）。 */
+export const SETTINGS_VERSION = 3;
+
 /** 忽略规则：临时扩展名 / 文件名前缀 / 完整文件名（与后端 IgnoreRules 对应） */
 export interface IgnoreRules {
   extensions: string[];
   prefixes: string[];
   exact_names: string[];
 }
+
+/** 默认忽略规则（与 fixtures/default-ignore-rules.json 一致；后端为权威来源，前端仅作兜底/预设展示）。 */
+export const DEFAULT_IGNORE_RULES: IgnoreRules = {
+  extensions: ["crdownload", "part", "download", "tmp", "temp"],
+  prefixes: ["~$"],
+  exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
+};
 
 /** 分类覆盖规则（与后端 ClassifyRule 对应） */
 export interface ClassifyRule {
@@ -114,14 +124,14 @@ export interface Habit {
 export type HabitsMap = Record<string, Habit>;
 
 export const defaultSettings: Settings = {
-  version: 1,
+  version: SETTINGS_VERSION,
   theme: "system",
   language: "zh-CN",
   watched_dirs: [],
   ignore_rules: {
-    extensions: ["crdownload", "part", "download", "tmp", "temp"],
-    prefixes: ["~$"],
-    exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
+    extensions: [...DEFAULT_IGNORE_RULES.extensions],
+    prefixes: [...DEFAULT_IGNORE_RULES.prefixes],
+    exact_names: [...DEFAULT_IGNORE_RULES.exact_names],
   },
   classify_overrides: [],
   project_dirs: [],
@@ -181,6 +191,9 @@ export interface QueryPage {
   items: FileRecord[];
   total: number;
 }
+
+export type SortField = "name" | "type" | "size" | "modified" | "labels";
+export type SortDir = "asc" | "desc";
 
 /** 添加监控目录的结果（message 为可选提示，如“升级覆盖”） */
 export interface AddDirOutcome {
@@ -307,11 +320,15 @@ export function queryFiles(
   query: string,
   limit: number,
   offset: number,
+  sortBy?: SortField | null,
+  sortDir?: SortDir,
 ): Promise<QueryPage> {
   return invoke<QueryPage>("query_files", {
     query: query || null,
     limit,
     offset,
+    sortBy: sortBy ?? null,
+    sortDir: sortDir ?? "desc",
   });
 }
 
@@ -404,6 +421,11 @@ export type StartupIntent =
 
 export function takeStartupIntent(): Promise<StartupIntent | null> {
   return invoke<StartupIntent | null>("take_startup_intent");
+}
+
+/** 前端加载完成通知：后端据此启动延迟服务（监听/扫描/自动归档/托盘）。 */
+export function appReady(): Promise<void> {
+  return invoke<void>("app_ready");
 }
 
 export function addProjectDir(dir: string): Promise<void> {

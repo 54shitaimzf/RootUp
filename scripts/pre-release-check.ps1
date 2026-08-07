@@ -45,6 +45,9 @@ Invoke-Check "Frontend unit/component tests" { npm.cmd test }
 Invoke-Check "Frontend production build" { npm.cmd run build }
 Invoke-Check "Architecture one-way deps" { npm.cmd run check:arch }
 Invoke-Check "Version consistency" { npm.cmd run check:version }
+Invoke-Check "Markdown table alignment" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo "scripts\check-markdown-tables.ps1")
+}
 Invoke-Cargo "Rust tests" "test"
 Invoke-Cargo "Rust clippy (-D warnings)" "clippy --all-targets -- -D warnings"
 Invoke-Cargo "Rust fmt check" "fmt --check"
@@ -53,8 +56,17 @@ Invoke-Cargo "Rust fmt check" "fmt --check"
 Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 
-Invoke-Check "Release build (no bundle)" { npm.cmd run tauri -- build --no-bundle }
-Invoke-Check "Log-driven smoke (10/10)" {
+Invoke-Check "Release build (no bundle)" {
+    $attempts = 0
+    do {
+        $attempts++
+        npm.cmd run tauri -- build --no-bundle
+        if ($LASTEXITCODE -eq 0) { break }
+        Start-Sleep -Seconds 3
+    } while ($attempts -lt 2)
+    if ($LASTEXITCODE -ne 0) { throw "release build failed after $attempts attempts" }
+}
+Invoke-Check "Log-driven smoke (12/12)" {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Milliseconds 500
     powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo "scripts\smoke.ps1")

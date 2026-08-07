@@ -51,6 +51,8 @@ import {
   openProjectFromFile,
   revealInExplorer,
   undoArchive,
+  type SortDir,
+  type SortField,
 } from "../lib/tauri";
 
 const PAGE_SIZE = 50;
@@ -134,6 +136,8 @@ export function FilePage({
   const [watchedCount, setWatchedCount] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [showLoadingBar, setShowLoadingBar] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [batchMode, setBatchMode] = useState(false);
@@ -246,6 +250,8 @@ export function FilePage({
     PAGE_SIZE,
     offset,
     refreshKey,
+    sortField,
+    sortDir,
   );
 
   // 刷新指示延迟出现：150ms 内完成的查询不显示，避免正常操作时可见
@@ -267,6 +273,17 @@ export function FilePage({
     setOffset(0);
     setRefreshKey((key) => key + 1);
     void logEvent("info", "ui: 刷新");
+  };
+
+  const toggleSort = (field: SortField) => {
+    setOffset(0);
+    if (sortField === field) {
+      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+    void logEvent("info", `ui: 排序 field=${field}`);
   };
 
   const handleOpenFile = async (path: string) => {
@@ -620,7 +637,11 @@ export function FilePage({
         </div>
       )}
 
-      <div className="mt-4 min-h-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+      <div
+        className={`mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900 ${
+          loading || items.length === 0 ? "min-h-64" : ""
+        }`}
+      >
         {showLoadingBar && items.length > 0 && (
           <div className="h-px bg-brand-500/20" />
         )}
@@ -645,6 +666,30 @@ export function FilePage({
           <EmptyState title={t("files.noResults")} />
         ) : (
           <>
+            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+              {(["name", "type", "size", "modified", "labels"] as SortField[]).map(
+                (field) => {
+                  const active = sortField === field;
+                  return (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={() => toggleSort(field)}
+                      className={`rounded px-2 py-1 text-xs transition-colors ${
+                        active
+                          ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+                          : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {t(`files.sort${field[0].toUpperCase()}${field.slice(1)}`)}
+                      {active && (
+                        <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>
+                      )}
+                    </button>
+                  );
+                },
+              )}
+            </div>
             <ul className="@container divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((file) => {
                 const meta = fileStateMeta(file.state);
@@ -816,12 +861,19 @@ export function FilePage({
               })}
             </ul>
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-              <span>
-                {t("files.countInfo", {
-                  shown: items.length,
-                  total,
-                })}
-              </span>
+              <div className="flex items-center gap-3">
+                <span>
+                  {t("files.pageInfo", {
+                    page: Math.floor(offset / PAGE_SIZE) + 1,
+                  })}
+                </span>
+                <span>
+                  {t("files.countInfo", {
+                    shown: items.length,
+                    total,
+                  })}
+                </span>
+              </div>
               {items.length < total && (
                 <Button
                   variant="secondary"

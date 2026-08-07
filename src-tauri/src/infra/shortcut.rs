@@ -82,6 +82,28 @@ pub fn ensure_shortcut_icons(icon_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// 图标缓存对账：补齐内嵌图标，并删除缓存目录中不属于内嵌集合的杂散文件。
+pub fn reconcile_shortcut_icons(icon_dir: &Path) -> Result<(), String> {
+    ensure_shortcut_icons(icon_dir)?;
+    let known: Vec<String> = EMBEDDED_ICONS
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect();
+    if let Ok(entries) = fs::read_dir(icon_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !known.contains(&name) {
+                let _ = fs::remove_file(&path);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// 清洗快捷方式名中的非法文件名字符。
 pub fn sanitize_name(name: &str) -> String {
     let cleaned: String = name
@@ -205,6 +227,18 @@ mod tests {
         let exe = dir.join("rootup.exe");
         fs::write(&exe, "x").unwrap();
         exe
+    }
+
+    #[test]
+    fn reconcile_restores_embedded_and_removes_stray_icons() {
+        let dir = temp_root("reconcile");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("stray.ico"), "x").unwrap();
+        reconcile_shortcut_icons(&dir).unwrap();
+        assert!(!dir.join("stray.ico").exists());
+        assert!(dir.join("rust.ico").exists());
+        assert!(dir.join("rootup.ico").exists());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import reminderCasesFixture from "../../fixtures/reminder-cases.json";
 import {
   DEMO_COURSES,
   DEMO_HOMEWORK,
@@ -22,6 +23,7 @@ import {
   formatClockRange,
   homeworkStatusTone,
   homeworkReminderGroup,
+  type Homework,
   isOverdue,
   isDueSoon,
   isValidWeekRange,
@@ -660,5 +662,41 @@ describe("示例数据", () => {
       1,
     );
     expect(courseConflicts(long, DEMO_COURSES, long.id)).toHaveLength(0);
+  });
+});
+
+describe("共享提醒 fixtures", () => {
+  const fixture = reminderCasesFixture as {
+    days_until_due: {
+      due_at: string;
+      today: string;
+      expected: number;
+    }[];
+    group_cases: {
+      name: string;
+      lead_days: number;
+      today: string;
+      homework: Homework[];
+      expected: Record<string, string>;
+    }[];
+  };
+
+  it("calendarDaysUntil 与共享 fixture 一致", () => {
+    for (const c of fixture.days_until_due) {
+      const now = new Date(`${c.today}T12:00:00`);
+      expect(calendarDaysUntil(c.due_at, now), c.due_at).toBe(c.expected);
+    }
+  });
+
+  it("homeworkReminderGroup 与共享 fixture 一致", () => {
+    for (const c of fixture.group_cases) {
+      const now = new Date(`${c.today}T12:00:00`);
+      for (const hw of c.homework) {
+        expect(
+          homeworkReminderGroup(hw, c.lead_days, now),
+          `${c.name} ${hw.id}`,
+        ).toBe(c.expected[hw.id]);
+      }
+    }
   });
 });

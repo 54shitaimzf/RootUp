@@ -1,0 +1,55 @@
+{
+  "days_until_due": [
+    { "due_at": "2026-08-06T23:59:00", "today": "2026-08-06", "expected": 0 },
+    { "due_at": "2026-08-07T00:00:00", "today": "2026-08-06", "expected": 1 },
+    { "due_at": "2026-08-05T23:59:00", "today": "2026-08-06", "expected": -1 },
+    { "due_at": "2026-08-06", "today": "2026-08-06", "expected": 0 },
+    { "due_at": "2026-08-20T23:59:00", "today": "2026-08-06", "expected": 14 }
+  ],
+  "reminder_kind": [
+    { "days": -5, "lead_days": 3, "expected": "overdue" },
+    { "days": -1, "lead_days": 3, "expected": "overdue" },
+    { "days": 0, "lead_days": 3, "expected": "dueSoon" },
+    { "days": 3, "lead_days": 3, "expected": "dueSoon" },
+    { "days": 4, "lead_days": 3, "expected": "none" },
+    { "days": 14, "lead_days": 14, "expected": "dueSoon" },
+    { "days": 15, "lead_days": 14, "expected": "none" }
+  ],
+  "group_cases": [
+    {
+      "name": "mixed_statuses_and_dates",
+      "lead_days": 3,
+      "today": "2026-08-06",
+      "homework": [
+        { "id": "h1", "courseId": null, "title": "作业 1", "note": "", "details": "", "dueAt": "2026-08-04T23:59:00", "status": "pending" },
+        { "id": "h2", "courseId": null, "title": "作业 2", "note": "", "details": "", "dueAt": "2026-08-06T23:59:00", "status": "pending" },
+        { "id": "h3", "courseId": null, "title": "作业 3", "note": "", "details": "", "dueAt": "2026-08-09T23:59:00", "status": "pending" },
+        { "id": "h4", "courseId": null, "title": "作业 4", "note": "", "details": "", "dueAt": "2026-08-04T23:59:00", "status": "done" },
+        { "id": "h5", "courseId": null, "title": "作业 5", "note": "", "details": "", "dueAt": "2026-08-10T23:59:00", "status": "pending" }
+      ],
+      "expected": {
+        "h1": "overdue",
+        "h2": "dueSoon",
+        "h3": "dueSoon",
+        "h4": "normal",
+        "h5": "normal"
+      }
+    }
+  ],
+  "reminder_items": [
+    {
+      "name": "overdue_first_then_due_soon_limited",
+      "enabled": true,
+      "lead_days": 3,
+      "today": "2026-08-06",
+      "max": 3,
+      "homework": [
+        { "id": "h1", "courseId": null, "title": "作业 1", "note": "", "details": "", "dueAt": "2026-08-09T23:59:00", "status": "pending" },
+        { "id": "h2", "courseId": null, "title": "作业 2", "note": "", "details": "", "dueAt": "2026-08-04T23:59:00", "status": "pending" },
+        { "id": "h3", "courseId": null, "title": "作业 3", "note": "", "details": "", "dueAt": "2026-08-06T23:59:00", "status": "pending" },
+        { "id": "h4", "courseId": null, "title": "作业 4", "note": "", "details": "", "dueAt": "2026-08-10T23:59:00", "status": "done" }
+      ],
+      "expected_ids": ["h2", "h3", "h1"]
+    }
+  ]
+}

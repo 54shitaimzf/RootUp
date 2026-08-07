@@ -15,6 +15,9 @@ import {
   type Settings,
 } from "../lib/tauri";
 
+/** 设置保存防抖窗口：`update` 合并写，`replace`（表单整存）立即写。 */
+export const SETTINGS_SAVE_DEBOUNCE_MS = 500;
+
 interface SettingsContextValue {
   settings: Settings | null;
   /** 合并式更新：即时生效并落盘持久化 */
@@ -34,6 +37,7 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const latestRef = useRef<Settings | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,13 +83,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const next = { ...(latestRef.current ?? defaultSettings), ...patch };
     latestRef.current = next;
     setSettings(next);
-    void saveSettings(next).catch(() => {});
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      const snapshot = latestRef.current;
+      if (snapshot) {
+        void saveSettings(snapshot).catch(() => {});
+      }
+    }, SETTINGS_SAVE_DEBOUNCE_MS);
   }, []);
 
   const replace = useCallback((next: Settings) => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
     latestRef.current = next;
     setSettings(next);
     return saveSettings(next);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
   }, []);
 
   return (

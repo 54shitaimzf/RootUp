@@ -10,6 +10,7 @@ use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::{FileRecord, IndexStore};
 use crate::core::path::{normalize_path, under_any};
 use crate::core::scan::record_from_scan;
+use crate::infra::time::now_millis;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
@@ -19,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// 事件通道容量（有界，防止风暴时无限积压）。
 const CHANNEL_CAPACITY: usize = 1000;
@@ -125,7 +126,7 @@ impl EventProcessor {
                     p.last_sample = None;
                 }
             }
-            FileEventKind::Removed => {
+            FileEventKind::Removed | FileEventKind::RenamedFrom => {
                 self.pending.remove(&event.path);
                 let removed_record = {
                     let mut store = match self.store.lock() {
@@ -143,7 +144,7 @@ impl EventProcessor {
                     }
                 };
                 if let Some(record) = removed_record {
-                    log::info!("watch: 删除 {}", path_str);
+                    log::info!("watch: 移除旧路径 {}", path_str);
                     self.push_batch(record);
                 }
             }
@@ -454,13 +455,6 @@ fn normalize_event(event: &Event) -> Vec<NormalizedEvent> {
         .collect()
 }
 
-fn now_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,6 +735,60 @@ mod tests {
         });
         processor.tick();
         assert_eq!(store.lock().unwrap().count().unwrap(), 0);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn processor_marks_renamed_from_as_deleted() {
+        let dir = temp_dir("renamed_from");
+        let store: Arc<Mutex<dyn IndexStore>> =
+            Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
+        let mut processor = EventProcessor::new(
+            store.clone(),
+            test_classifier(),
+            IgnoreMatcher::new(),
+            short_params(),
+            |_| {},
+        );
+
+        let f = dir.join("old.txt");
+        fs::write(&f, b"x").unwrap();
+        processor.handle_event(&NormalizedEvent {
+            path: f.clone(),
+            kind: FileEventKind::Created,
+            is_dir: false,
+        });
+        assert!(
+            wait_until_with_diag(
+                Duration::from_secs(3),
+                || {
+                    processor.tick();
+                    store.lock().unwrap().count().unwrap() == 1
+                },
+                || format!("索引数={}", store.lock().unwrap().count().unwrap())
+            ),
+            "等待文件入库超时"
+        );
+
+        // 重命名 From 事件到来时旧路径已不存在：应立即标为 deleted 并从列表消失
+        processor.handle_event(&NormalizedEvent {
+            path: f.clone(),
+            kind: FileEventKind::RenamedFrom,
+            is_dir: false,
+        });
+        processor.tick();
+        let key = normalize_path(&f.to_string_lossy());
+        assert_eq!(store.lock().unwrap().count().unwrap(), 0);
+        assert_eq!(
+            store
+                .lock()
+                .unwrap()
+                .get_by_path(&key)
+                .unwrap()
+                .unwrap()
+                .state,
+            "deleted"
+        );
         fs::remove_dir_all(&dir).unwrap();
     }
 

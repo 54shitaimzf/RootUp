@@ -1,4 +1,5 @@
 //! 忽略规则：过滤临时文件与编辑器杂项，避免误报。
+use crate::core::settings::Settings;
 
 /// 单条忽略规则。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,11 +28,15 @@ impl Default for IgnoreMatcher {
 
 impl IgnoreMatcher {
     pub fn new() -> Self {
-        Self::from_rules(
-            &["crdownload", "part", "download", "tmp", "temp"],
-            &["~$"],
-            &["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
-        )
+        Self::from_ignore_rules(&Settings::default().ignore_rules)
+    }
+
+    /// 按设置中的忽略规则构造（默认规则唯一来源为 `Settings::default()`）。
+    pub fn from_ignore_rules(rules: &crate::core::settings::IgnoreRules) -> Self {
+        let extensions: Vec<&str> = rules.extensions.iter().map(String::as_str).collect();
+        let prefixes: Vec<&str> = rules.prefixes.iter().map(String::as_str).collect();
+        let exact: Vec<&str> = rules.exact_names.iter().map(String::as_str).collect();
+        Self::from_rules(&extensions, &prefixes, &exact)
     }
 
     /// 按规则集构造（默认规则不变，供测试注入与未来用户自定义规则）。

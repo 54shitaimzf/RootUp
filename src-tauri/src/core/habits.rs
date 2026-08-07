@@ -16,9 +16,11 @@ pub const MAX_HABIT_COUNT: u64 = 1_000_000;
 
 /// 一次使用习惯记录。
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Habit {
     pub count: u64,
+    /// 前端字段名为 `lastUsed`；保留旧版 `last_used` 读取兼容。
+    #[serde(alias = "last_used")]
     pub last_used: u64,
 }
 
@@ -98,5 +100,23 @@ mod tests {
         let json = r#"{"category:document":{"count":3,"last_used":1000,"future":1}}"#;
         let habits: FilterHabits = serde_json::from_str(json).expect("未知字段应被容忍");
         assert_eq!(habits["category:document"].count, 3);
+    }
+
+    #[test]
+    fn habit_uses_camel_case_and_reads_legacy_snake_case() {
+        let camel = r#"{"category:document":{"count":3,"lastUsed":1000}}"#;
+        let habits: FilterHabits = serde_json::from_str(camel).expect("camelCase 应能解析");
+        assert_eq!(habits["category:document"].last_used, 1000);
+
+        let legacy = r#"{"category:document":{"count":3,"last_used":2000}}"#;
+        let habits: FilterHabits = serde_json::from_str(legacy).expect("旧 last_used 应仍可读");
+        assert_eq!(habits["category:document"].last_used, 2000);
+
+        let serialized = serde_json::to_string(&habits).expect("应能序列化");
+        assert!(
+            serialized.contains("lastUsed"),
+            "write camelCase: {serialized}"
+        );
+        assert!(!serialized.contains("last_used"), "no legacy key on write");
     }
 }

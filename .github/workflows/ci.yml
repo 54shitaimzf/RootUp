@@ -55,6 +55,9 @@ jobs:
       - name: Architecture check
         run: npm run check:arch
 
+      - name: Rust architecture check
+        run: npm run check:arch:rust
+
       - name: Frontend build
         run: npm run build
 

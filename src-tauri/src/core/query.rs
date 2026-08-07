@@ -22,6 +22,10 @@ pub struct FileQuery {
     pub before: Option<i64>,
     /// modified >= after（毫秒）
     pub after: Option<i64>,
+    /// 排序字段白名单：name / type / size / modified / labels；None 保持默认（modified DESC）。
+    pub sort_by: Option<String>,
+    /// 排序方向：asc / desc（默认 desc）。
+    pub sort_dir: String,
     pub limit: i64,
     pub offset: i64,
 }

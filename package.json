@@ -1,13 +1,14 @@
 {
   "name": "rootup",
   "private": true,
-  "version": "0.8.3",
+  "version": "0.8.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
     "check:arch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-arch.ps1",
+    "check:arch:rust": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-rust-arch.ps1",
     "check:version": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-version.ps1",
     "preview": "vite preview",
     "tauri": "tauri"

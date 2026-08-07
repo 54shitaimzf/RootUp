@@ -1,6 +1,6 @@
 //! 项目、智能打开与桌面快捷方式命令。
 use crate::core::index::IndexStore;
-use crate::core::path::{normalize_path, path_key};
+use crate::core::path::{normalize_path, path_key, validate_dir_path};
 use crate::core::project::{
     detect_project_kind_with_feature, discover_projects, find_project_root, FeatureDetector,
     ProjectInfo, ProjectKind, ProjectSource, MAX_PROJECT_DEPTH,
@@ -10,9 +10,10 @@ use crate::core::tools::{self, extension_of};
 use crate::infra::app_finder::{
     build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv, SystemRunner,
 };
-use crate::infra::archive_engine::now_millis;
+use crate::infra::managed_state;
 use crate::infra::shortcut;
 use crate::infra::storage;
+use crate::infra::time::now_millis;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -112,10 +113,7 @@ pub fn list_projects(app: AppHandle) -> Vec<ProjectInfo> {
 
 #[tauri::command]
 pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
-    let dir = normalize_path(&dir);
-    if dir.is_empty() {
-        return Err("目录不能为空".into());
-    }
+    let dir = validate_dir_path(&dir)?;
     if !Path::new(&dir).is_dir() {
         return Err(format!("目录不存在: {dir}"));
     }
@@ -129,7 +127,7 @@ pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
     }
     settings.project_dirs.push(dir.clone());
     storage::save_settings(&app, &settings)?;
-    crate::app::refresh_managed_state(&app)?;
+    managed_state::refresh(&app)?;
     log::info!("project: 添加 {dir}");
     Ok(())
 }
@@ -142,7 +140,7 @@ pub fn remove_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
         .project_dirs
         .retain(|d| path_key(d) != path_key(&dir));
     storage::save_settings(&app, &settings)?;
-    crate::app::refresh_managed_state(&app)?;
+    managed_state::refresh(&app)?;
     log::info!("project: 移除 {dir}");
     Ok(())
 }

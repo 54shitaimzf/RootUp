@@ -248,6 +248,13 @@ describe("SearchAutocomplete", () => {
     });
   });
 
+  it("清空与帮助按钮与输入框同处一个 flex 容器，不再绝对定位", () => {
+    render(<Harness text="x" types={["document"]} />);
+    const box = input().parentElement as HTMLElement;
+    expect(box.contains(screen.getByLabelText("清空搜索"))).toBe(true);
+    expect(box.contains(screen.getByLabelText("搜索语法"))).toBe(true);
+  });
+
   it("点击搜索容器空白处聚焦输入框", () => {
     const { container } = render(<Harness types={["document"]} />);
     const wrapper = container.querySelector(".relative") as HTMLElement;

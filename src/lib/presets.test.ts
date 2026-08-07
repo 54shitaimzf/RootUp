@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import defaultIgnoreRulesFixture from "../../fixtures/default-ignore-rules.json";
 import { applyPreset, RULE_PRESETS } from "./presets";
-import { defaultSettings, type Settings } from "./tauri";
+import { DEFAULT_IGNORE_RULES, defaultSettings, type Settings } from "./tauri";
 
 const VALID_CATEGORIES = [
   "document",
@@ -24,6 +25,11 @@ function sampleSettings(): Settings {
 }
 
 describe("RULE_PRESETS", () => {
+  it("默认规则与共享 fixture 一致", () => {
+    expect(DEFAULT_IGNORE_RULES).toEqual(defaultIgnoreRulesFixture);
+    expect(defaultSettings.ignore_rules).toEqual(defaultIgnoreRulesFixture);
+  });
+
   it("三套模板齐全", () => {
     expect(RULE_PRESETS.map((p) => p.id)).toEqual([
       "default",

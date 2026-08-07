@@ -1,4 +1,5 @@
 use crate::core::settings::Settings;
+use crate::infra::local_file;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
@@ -62,6 +63,7 @@ pub fn backup_corrupt_settings(dir: impl AsRef<Path>) -> Result<Option<PathBuf>,
         .join(format!("{SETTINGS_FILE}.corrupt-{ts}.bak"));
     std::fs::rename(&settings_path, &backup).map_err(|e| e.to_string())?;
     log::warn!("settings: 损坏备份 -> {}", backup.display());
+    local_file::prune_corrupt_backups(dir.as_ref(), SETTINGS_FILE, 3)?;
     Ok(Some(backup))
 }
 

@@ -2,14 +2,15 @@
 
 use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::events::FileState;
-use crate::core::index::{FileRecord, IndexStore};
+use crate::core::index::{FileRecord, IndexStore, ScanDiffStore};
 use crate::core::query::{FileQuery, QueryPage};
+use crate::core::scan::ScanDiffSummary;
+use crate::infra::time::now_millis;
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS files (
@@ -21,7 +22,8 @@ CREATE TABLE IF NOT EXISTS files (
     labels TEXT NOT NULL DEFAULT '',
     first_seen INTEGER NOT NULL,
     modified INTEGER NOT NULL,
-    state TEXT NOT NULL DEFAULT 'pending'
+    state TEXT NOT NULL DEFAULT 'pending',
+    deleted_at INTEGER
 );
 "#;
 
@@ -65,14 +67,30 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
+    if version < 3 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let has_deleted_at = {
+            let mut stmt = tx
+                .prepare("PRAGMA table_info(files)")
+                .map_err(|e| e.to_string())?;
+            let names = stmt
+                .query_map([], |row| row.get::<_, String>(1))
+                .map_err(|e| e.to_string())?;
+            names
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+                .iter()
+                .any(|name| name == "deleted_at")
+        };
+        if !has_deleted_at {
+            tx.execute_batch("ALTER TABLE files ADD COLUMN deleted_at INTEGER")
+                .map_err(|e| e.to_string())?;
+        }
+        tx.pragma_update(None, "user_version", 3)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
     Ok(())
-}
-
-fn now_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 fn row_to_record(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
@@ -108,9 +126,54 @@ impl SqliteIndexStore {
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| e.to_string())?;
         migrate(&mut conn)?;
+        conn.pragma_update(None, "journal_size_limit", 64 * 1024 * 1024)
+            .map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "wal_autocheckpoint", 1000)
+            .map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "synchronous", "NORMAL")
+            .map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "mmap_size", 256 * 1024 * 1024)
+            .map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "cache_size", -16384)
+            .map_err(|e| e.to_string())?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
+        let before = now_millis() - 30 * 86_400_000;
+        let purged = conn
+            .execute(
+                "DELETE FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
+                params![FileState::Deleted.as_str(), before],
+            )
+            .map_err(|e| e.to_string())?;
+        if purged > 0 {
+            log::info!("storage: 清理墓碑 count={purged}");
+        }
         Ok(Self {
             conn: Mutex::new(conn),
         })
+    }
+
+    /// 物理删除指定时间之前标记为 deleted 的墓碑记录，返回删除条数。
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn purge_tombstones(&self, before_ms: i64) -> Result<i64, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let n = conn
+            .execute(
+                "DELETE FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
+                params![FileState::Deleted.as_str(), before_ms],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(n as i64)
+    }
+
+    /// WAL checkpoint + `PRAGMA optimize`（退出/空闲维护）。
+    pub fn checkpoint_and_optimize(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
+            .map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA optimize;")
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
 
@@ -258,10 +321,8 @@ impl IndexStore for SqliteIndexStore {
             params.extend(query.types.iter().map(|t| Value::Text(t.clone())));
         }
         if !query.labels.is_empty() {
-            let ors: Vec<String> = query
-                .labels
-                .iter()
-                .map(|_label| format!("',' || labels || ',' LIKE ?{}", params.len() + 1))
+            let ors: Vec<String> = (0..query.labels.len())
+                .map(|i| format!("',' || labels || ',' LIKE ?{}", params.len() + i + 1))
                 .collect();
             conditions.push(format!("({})", ors.join(" OR ")));
             params.extend(
@@ -296,6 +357,7 @@ impl IndexStore for SqliteIndexStore {
         }
 
         let where_sql = conditions.join(" AND ");
+        let (order_col, order_dir) = sort_clause(query);
         let total: i64 = conn
             .query_row(
                 &format!("SELECT COUNT(*) FROM files WHERE {where_sql}"),
@@ -307,7 +369,7 @@ impl IndexStore for SqliteIndexStore {
         let mut stmt = conn
             .prepare(&format!(
                 "SELECT * FROM files WHERE {where_sql} \
-                 ORDER BY modified DESC, id DESC LIMIT ?{} OFFSET ?{}",
+                 ORDER BY {order_col} {order_dir}, id DESC LIMIT ?{} OFFSET ?{}",
                 params.len() + 1,
                 params.len() + 2
             ))
@@ -400,12 +462,15 @@ impl IndexStore for SqliteIndexStore {
         let mut changed = 0_i64;
         for chunk in paths.chunks(500) {
             let placeholders: Vec<String> =
-                (0..chunk.len()).map(|i| format!("?{}", i + 2)).collect();
+                (0..chunk.len()).map(|i| format!("?{}", i + 3)).collect();
             let sql = format!(
-                "UPDATE files SET state = ?1 WHERE path IN ({})",
+                "UPDATE files SET state = ?1, deleted_at = ?2 WHERE path IN ({})",
                 placeholders.join(",")
             );
-            let mut values: Vec<Value> = vec![Value::Text(FileState::Deleted.as_str().into())];
+            let mut values: Vec<Value> = vec![
+                Value::Text(FileState::Deleted.as_str().into()),
+                Value::Integer(now_millis()),
+            ];
             values.extend(chunk.iter().map(|p| Value::Text(p.clone())));
             changed += tx
                 .execute(&sql, params_from_iter(values.iter()))
@@ -438,8 +503,8 @@ impl IndexStore for SqliteIndexStore {
     fn mark_deleted(&mut self, path: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
-            "UPDATE files SET state = ?1 WHERE path = ?2",
-            params![FileState::Deleted.as_str(), path],
+            "UPDATE files SET state = ?1, deleted_at = ?2 WHERE path = ?3",
+            params![FileState::Deleted.as_str(), now_millis(), path],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
@@ -453,6 +518,10 @@ impl IndexStore for SqliteIndexStore {
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())
+    }
+
+    fn maintenance(&mut self) -> Result<(), String> {
+        self.checkpoint_and_optimize()
     }
 
     fn move_record(&mut self, from: &str, to: &str, state: &str) -> Result<(), String> {
@@ -481,6 +550,88 @@ impl IndexStore for SqliteIndexStore {
         Ok(())
     }
 
+    fn archive_record(&mut self, from: &str, to: &str, op: &ArchiveOp) -> Result<(), String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let exists = tx
+            .query_row("SELECT 1 FROM files WHERE path = ?1", params![from], |_| {
+                Ok(true)
+            })
+            .optional()
+            .map_err(|e| e.to_string())?
+            .unwrap_or(false);
+        if !exists {
+            return Err(format!("记录不存在: {from}"));
+        }
+        let name = Path::new(to)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| to.to_string());
+        tx.execute(
+            "UPDATE files SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
+            params![to, name, FileState::Archived.as_str(), from],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO archive_ops (batch_id, kind, source, dest, created_at, undone_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                op.batch_id,
+                op.kind,
+                op.source,
+                op.dest,
+                op.created_at,
+                op.undone_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn unarchive_record(&mut self, from: &str, to: &str, op_id: i64) -> Result<(), String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let record_exists = tx
+            .query_row("SELECT 1 FROM files WHERE path = ?1", params![from], |_| {
+                Ok(true)
+            })
+            .optional()
+            .map_err(|e| e.to_string())?
+            .unwrap_or(false);
+        if !record_exists {
+            return Err(format!("记录不存在: {from}"));
+        }
+        let op_exists = tx
+            .query_row(
+                "SELECT 1 FROM archive_ops WHERE id = ?1 AND undone_at IS NULL",
+                params![op_id],
+                |_| Ok(true),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+            .unwrap_or(false);
+        if !op_exists {
+            return Err(format!("操作不存在或已撤销: {op_id}"));
+        }
+        let name = Path::new(to)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| to.to_string());
+        tx.execute(
+            "UPDATE files SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
+            params![to, name, FileState::Indexed.as_str(), from],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.execute(
+            "UPDATE archive_ops SET undone_at = ?1 WHERE id = ?2 AND undone_at IS NULL",
+            params![now_millis(), op_id],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn mark_under_roots_deleted(&mut self, roots: &[String]) -> Result<i64, String> {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -489,8 +640,13 @@ impl IndexStore for SqliteIndexStore {
             let pattern = format!("{}/%", escape_like(root));
             changed += tx
                 .execute(
-                    "UPDATE files SET state = ?1 WHERE state != ?1 AND (LOWER(path) = LOWER(?2) OR path LIKE ?3 ESCAPE '\\')",
-                    params![FileState::Deleted.as_str(), root, pattern],
+                    "UPDATE files SET state = ?1, deleted_at = ?2 WHERE state != ?1 AND (LOWER(path) = LOWER(?3) OR path LIKE ?4 ESCAPE '\\')",
+                    params![
+                        FileState::Deleted.as_str(),
+                        now_millis(),
+                        root,
+                        pattern
+                    ],
                 )
                 .map_err(|e| e.to_string())? as i64;
         }
@@ -647,12 +803,127 @@ impl IndexStore for SqliteIndexStore {
     }
 }
 
+impl ScanDiffStore for SqliteIndexStore {
+    fn begin_scan_diff(&mut self, root: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch(
+            "CREATE TEMP TABLE IF NOT EXISTS scan_snapshot(key TEXT PRIMARY KEY, path TEXT NOT NULL);
+             DELETE FROM scan_snapshot;
+             CREATE TEMP TABLE IF NOT EXISTS scan_seen(key TEXT PRIMARY KEY);
+             DELETE FROM scan_seen;",
+        )
+        .map_err(|e| e.to_string())?;
+        let prefix = format!("{}/%", escape_like(root));
+        conn.execute(
+            "INSERT INTO scan_snapshot(key, path)
+             SELECT LOWER(path), path FROM files
+             WHERE state != ?1
+               AND (LOWER(path) = LOWER(?2) OR LOWER(path) LIKE LOWER(?3) ESCAPE '\\')",
+            params![FileState::Deleted.as_str(), root, prefix],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn mark_scan_seen(&mut self, keys: &[String]) -> Result<(), String> {
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        {
+            let mut stmt = tx
+                .prepare("INSERT OR IGNORE INTO scan_seen(key) VALUES (?1)")
+                .map_err(|e| e.to_string())?;
+            for key in keys {
+                stmt.execute(params![key]).map_err(|e| e.to_string())?;
+            }
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn finish_scan_diff(
+        &mut self,
+        guard_ratio: f64,
+        guard_min: i64,
+    ) -> Result<ScanDiffSummary, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let snapshot_total: i64 = conn
+            .query_row("SELECT COUNT(*) FROM scan_snapshot", [], |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+        let guard = ((snapshot_total as f64 * guard_ratio).ceil() as i64).max(guard_min);
+        let updated: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM scan_snapshot s JOIN scan_seen k ON s.key = k.key",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let missing_total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM scan_snapshot s LEFT JOIN scan_seen k ON s.key = k.key \
+                 WHERE k.key IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let limit = guard.saturating_add(1);
+        let mut stmt = conn
+            .prepare(
+                "SELECT s.path FROM scan_snapshot s LEFT JOIN scan_seen k ON s.key = k.key \
+                 WHERE k.key IS NULL ORDER BY s.rowid LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![limit], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let missing = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        conn.execute_batch("DELETE FROM scan_snapshot; DELETE FROM scan_seen;")
+            .map_err(|e| e.to_string())?;
+        Ok(ScanDiffSummary {
+            updated: updated as usize,
+            snapshot_total: snapshot_total as usize,
+            missing,
+            missing_total,
+            guarded: missing_total > guard,
+        })
+    }
+
+    fn optimize(&mut self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA optimize;")
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
 /// 转义 LIKE 通配符（`%`、`_` 与转义符自身），使搜索按字面匹配。
 fn escape_like(input: &str) -> String {
     input
         .replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")
+}
+
+/// 排序白名单映射：字段固定为列表达式，杜绝注入；tie-breaker 恒为 id DESC。
+fn sort_clause(query: &FileQuery) -> (String, String) {
+    let col = match query.sort_by.as_deref() {
+        Some("name") => "name COLLATE NOCASE",
+        Some("type") => "file_type COLLATE NOCASE",
+        Some("size") => "size",
+        Some("modified") => "modified",
+        Some("labels") => "labels COLLATE NOCASE",
+        _ => "modified",
+    };
+    let dir = if query.sort_dir.eq_ignore_ascii_case("asc") {
+        "ASC"
+    } else {
+        "DESC"
+    };
+    (col.to_string(), dir.to_string())
 }
 
 #[cfg(test)]
@@ -750,6 +1021,27 @@ mod tests {
     }
 
     #[test]
+    fn purge_tombstones_removes_only_old_deleted() {
+        let mut s = store();
+        s.upsert(&record("C:/old.txt", 1, 1)).unwrap();
+        s.upsert(&record("C:/recent.txt", 1, 1)).unwrap();
+        s.mark_deleted("C:/old.txt").unwrap();
+        s.mark_deleted("C:/recent.txt").unwrap();
+        s.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE files SET deleted_at = 1 WHERE path = 'C:/old.txt'",
+                [],
+            )
+            .unwrap();
+        let removed = s.purge_tombstones(100).unwrap();
+        assert_eq!(removed, 1);
+        assert!(s.get_by_path("C:/old.txt").unwrap().is_none());
+        assert!(s.get_by_path("C:/recent.txt").unwrap().is_some());
+    }
+
+    #[test]
     fn all_records_excludes_deleted_and_update_labels_preserves_meta() {
         let mut s = store();
         let mut r = record("C:/Math/高等数学笔记.pdf", 100, 1000);
@@ -810,6 +1102,116 @@ mod tests {
             })
             .unwrap();
         assert_eq!(page.total, 0, "裸 course 不应命中 course-1/course-10");
+    }
+
+    #[test]
+    fn label_multi_value_or_and_combined_query_bind_correctly() {
+        let mut s = store();
+        s.upsert(&record_with(
+            "C:/a.pdf", 1, 100, "pdf", "document", "indexed",
+        ))
+        .unwrap();
+        s.upsert(&record_with("C:/b.pdf", 2, 200, "pdf", "course", "indexed"))
+            .unwrap();
+        s.upsert(&record_with(
+            "C:/c.pdf",
+            3,
+            300,
+            "pdf",
+            "document,course",
+            "indexed",
+        ))
+        .unwrap();
+        s.upsert(&record_with("C:/d.txt", 4, 400, "txt", "image", "indexed"))
+            .unwrap();
+
+        // Multiple labels are OR within the dimension: any hit is shown.
+        let page = s
+            .query(&FileQuery {
+                labels: vec!["document".into(), "course".into()],
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 3, "multi-label OR should match a/b/c");
+
+        // Combined dimensions must not collide placeholder indices.
+        let page = s
+            .query(&FileQuery {
+                words: vec!["a".into()],
+                labels: vec!["document".into(), "course".into()],
+                types: vec!["pdf".into()],
+                states: vec!["indexed".into()],
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1, "combined query should bind and match a.pdf");
+        assert_eq!(page.items[0].name, "a.pdf");
+    }
+
+    #[test]
+    fn query_binding_matrix_covers_label_counts_and_combined_dims() {
+        let mut s = store();
+        s.upsert(&record_with(
+            "C:/a.pdf", 1, 100, "pdf", "document", "indexed",
+        ))
+        .unwrap();
+        s.upsert(&record_with("C:/b.pdf", 2, 200, "pdf", "course", "indexed"))
+            .unwrap();
+        s.upsert(&record_with(
+            "C:/c.txt",
+            3,
+            300,
+            "txt",
+            "document,course",
+            "indexed",
+        ))
+        .unwrap();
+
+        let labels = ["document", "course", "image", "code", "audio"];
+        for count in 0..=labels.len() {
+            for has_words in [false, true] {
+                for has_types in [false, true] {
+                    for has_states in [false, true] {
+                        for has_size in [false, true] {
+                            for has_date in [false, true] {
+                                for sort_by in [None, Some("name"), Some("size")] {
+                                    let mut q = FileQuery {
+                                        limit: 10,
+                                        ..Default::default()
+                                    };
+                                    q.labels =
+                                        labels[..count].iter().map(|s| s.to_string()).collect();
+                                    if has_words {
+                                        q.words = vec!["pdf".into()];
+                                    }
+                                    if has_types {
+                                        q.types = vec!["pdf".into()];
+                                    }
+                                    if has_states {
+                                        q.states = vec!["indexed".into()];
+                                    }
+                                    if has_size {
+                                        q.size_min = Some(1);
+                                    }
+                                    if has_date {
+                                        q.before = Some(400);
+                                    }
+                                    q.sort_by = sort_by.map(|s| s.to_string());
+
+                                    // 任何组合都不允许出现占位符/参数数量错误。
+                                    let page =
+                                        s.query(&q).expect("query must bind without param errors");
+                                    assert!(page.total >= 0);
+                                    assert!(page.items.len() <= 10);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -1124,7 +1526,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 2);
+            assert_eq!(version, 3);
         }
         // 重复打开幂等，不报错
         {
@@ -1133,7 +1535,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 2);
+            assert_eq!(version, 3);
         }
         fs::remove_dir_all(&dir).unwrap();
     }
@@ -1267,5 +1669,85 @@ mod tests {
         s.update_shortcut_target("C:/Desktop/proj.lnk", "C:/proj")
             .unwrap();
         assert_eq!(s.shortcuts_under("C:/proj").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn scan_diff_session_computes_updated_and_missing() {
+        let mut s = store();
+        s.upsert(&record("C:/Watch/keep.txt", 1, 1)).unwrap();
+        s.upsert(&record("C:/Watch/gone.txt", 1, 1)).unwrap();
+        let mut deleted = record("C:/Watch/old.txt", 1, 1);
+        deleted.state = "deleted".into();
+        s.upsert(&deleted).unwrap();
+
+        s.begin_scan_diff("C:/Watch").unwrap();
+        s.mark_scan_seen(&["c:/watch/keep.txt".into()]).unwrap();
+        let summary = s.finish_scan_diff(0.25, 2).unwrap();
+        assert_eq!(summary.snapshot_total, 2);
+        assert_eq!(summary.updated, 1);
+        assert_eq!(summary.missing_total, 1);
+        assert_eq!(summary.missing, vec!["C:/Watch/gone.txt"]);
+        assert!(!summary.guarded);
+    }
+
+    #[test]
+    fn scan_diff_guard_and_session_reuse() {
+        let mut s = store();
+        for i in 0..10 {
+            s.upsert(&record(&format!("C:/Watch/g{i}.txt"), 1, 1))
+                .unwrap();
+        }
+        s.begin_scan_diff("C:/Watch").unwrap();
+        let summary = s.finish_scan_diff(0.25, 2).unwrap();
+        assert!(summary.guarded);
+        assert!(summary.missing.len() <= 4, "missing 最多 guard+1");
+        assert_eq!(summary.missing_total, 10);
+
+        // 会话结束已清理，可复用同一存储实例
+        s.begin_scan_diff("C:/Watch").unwrap();
+        let keys: Vec<String> = (0..10).map(|i| format!("c:/watch/g{i}.txt")).collect();
+        s.mark_scan_seen(&keys).unwrap();
+        let summary = s.finish_scan_diff(0.25, 2).unwrap();
+        assert_eq!(summary.updated, 10);
+        assert_eq!(summary.missing_total, 0);
+        assert!(!summary.guarded);
+    }
+
+    #[test]
+    fn query_sorts_by_whitelisted_fields() {
+        let mut s = store();
+        s.upsert(&record("C:/b.txt", 2, 2)).unwrap();
+        s.upsert(&record("C:/a.pdf", 1, 3)).unwrap();
+        s.upsert(&record("C:/A.txt", 3, 1)).unwrap();
+        let page = |field: &str, dir: &str| {
+            s.query(&FileQuery {
+                sort_by: Some(field.into()),
+                sort_dir: dir.into(),
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+
+        let names: Vec<String> = page("name", "asc")
+            .items
+            .iter()
+            .map(|r| r.name.clone())
+            .collect();
+        assert_eq!(names, vec!["a.pdf", "A.txt", "b.txt"]);
+
+        let sizes: Vec<i64> = page("size", "asc").items.iter().map(|r| r.size).collect();
+        assert_eq!(sizes, vec![1, 2, 3]);
+
+        let mods: Vec<i64> = page("modified", "desc")
+            .items
+            .iter()
+            .map(|r| r.modified)
+            .collect();
+        assert_eq!(mods, vec![3, 2, 1]);
+
+        // 未知字段回退默认排序且不注入 SQL
+        let fallback = page("name; DROP TABLE files", "desc");
+        assert_eq!(fallback.total, 3);
     }
 }

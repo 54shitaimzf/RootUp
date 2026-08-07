@@ -102,6 +102,59 @@ pub fn reminder_items(
 mod tests {
     use super::*;
     use crate::core::study::{seed_study_data, Homework};
+    use serde::Deserialize;
+    use std::collections::HashMap;
+
+    #[derive(Deserialize)]
+    struct ReminderFixture {
+        days_until_due: Vec<DaysCase>,
+        reminder_kind: Vec<KindCase>,
+        group_cases: Vec<GroupCase>,
+        reminder_items: Vec<ItemsCase>,
+    }
+
+    #[derive(Deserialize)]
+    struct DaysCase {
+        due_at: String,
+        today: String,
+        expected: i64,
+    }
+
+    #[derive(Deserialize)]
+    struct KindCase {
+        days: i64,
+        lead_days: u32,
+        expected: String,
+    }
+
+    #[derive(Deserialize)]
+    struct GroupCase {
+        name: String,
+        lead_days: u32,
+        today: String,
+        homework: Vec<Homework>,
+        expected: HashMap<String, String>,
+    }
+
+    #[derive(Deserialize)]
+    struct ItemsCase {
+        name: String,
+        enabled: bool,
+        lead_days: u32,
+        today: String,
+        max: usize,
+        homework: Vec<Homework>,
+        expected_ids: Vec<String>,
+    }
+
+    fn load_fixture() -> ReminderFixture {
+        let raw = include_str!("../../../fixtures/reminder-cases.json");
+        serde_json::from_str(raw).expect("fixtures/reminder-cases.json 应可解析")
+    }
+
+    fn parse_date(value: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(value, "%Y-%m-%d").unwrap()
+    }
 
     const TODAY: &str = "2026-08-06";
 
@@ -179,5 +232,79 @@ mod tests {
 
         let empty = StudyData::default();
         assert!(reminder_items(&empty, true, 3, date(TODAY), 10).is_empty());
+    }
+
+    #[test]
+    fn fixture_days_until_due() {
+        let fixture = load_fixture();
+        for case in fixture.days_until_due {
+            assert_eq!(
+                days_until_due(&case.due_at, parse_date(&case.today)),
+                Some(case.expected),
+                "due_at={} today={}",
+                case.due_at,
+                case.today
+            );
+        }
+    }
+
+    #[test]
+    fn fixture_reminder_kind() {
+        let fixture = load_fixture();
+        for case in fixture.reminder_kind {
+            let expected = match case.expected.as_str() {
+                "overdue" => Some(ReminderKind::Overdue),
+                "dueSoon" => Some(ReminderKind::DueSoon),
+                "none" => None,
+                other => panic!("未知期望值: {other}"),
+            };
+            assert_eq!(
+                reminder_kind(case.days, case.lead_days),
+                expected,
+                "days={} lead_days={}",
+                case.days,
+                case.lead_days
+            );
+        }
+    }
+
+    #[test]
+    fn fixture_group_cases() {
+        let fixture = load_fixture();
+        for case in fixture.group_cases {
+            let today = parse_date(&case.today);
+            for hw in &case.homework {
+                let days = days_until_due(&hw.due_at, today).expect("日期应可解析");
+                let actual = if hw.status != "pending" {
+                    "normal"
+                } else {
+                    match reminder_kind(days, case.lead_days) {
+                        Some(ReminderKind::Overdue) => "overdue",
+                        Some(ReminderKind::DueSoon) => "dueSoon",
+                        None => "normal",
+                    }
+                };
+                let expected = case
+                    .expected
+                    .get(&hw.id)
+                    .map(String::as_str)
+                    .unwrap_or_else(|| panic!("fixture 缺少 {}/{}", case.name, hw.id));
+                assert_eq!(actual, expected, "case={} id={}", case.name, hw.id);
+            }
+        }
+    }
+
+    #[test]
+    fn fixture_reminder_items() {
+        let fixture = load_fixture();
+        for case in fixture.reminder_items {
+            let today = parse_date(&case.today);
+            let mut data = StudyData::default();
+            data.homework_by_semester
+                .insert("fixture".into(), case.homework);
+            let items = reminder_items(&data, case.enabled, case.lead_days, today, case.max);
+            let ids: Vec<String> = items.iter().map(|i| i.homework_id.clone()).collect();
+            assert_eq!(ids, case.expected_ids, "case={}", case.name);
+        }
     }
 }

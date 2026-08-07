@@ -141,6 +141,12 @@ Write-Result "扫描摘要含 added=5" ($LogContent -match "scan: 完成 dir=$Te
 Write-Result "扫描摘要含 ignored=3" ($LogContent -match "scan: 完成 dir=$TestDir .*ignored=3") "crdownload、desktop.ini 与自定义 zzz 应被忽略（配置生效）"
 Write-Result "启动自愈移除重叠子目录" ($LogContent -match "watch: 启动修正 $TestDir/sub -> $TestDir") "父+子目录配置应在启动时保留父移除子"
 Write-Result "分类覆盖装配生效" ($LogContent -match "classify: 应用覆盖 2 条") "配置中的 psd/ai→image 应被分类器加载"
+Write-Result "启动阶段日志齐全" (
+    $LogContent -match "startup: 日志就绪" -and
+    $LogContent -match "startup: 服务装配" -and
+    $LogContent -match "startup: 延迟服务已启动"
+) "期望 startup: 日志就绪 / 服务装配 / 延迟服务已启动 三阶段日志齐全"
+Write-Result "冒烟窗口内无 ERROR 日志" ($LogContent -notmatch "\[ERROR\]") "日志文件在冒烟开始时重建，不应出现任何 ERROR"
 
 # ---- 监听场景：新增、删除 ----
 $NewFile = Join-Path $TestRoot "new.pdf"
@@ -148,9 +154,11 @@ Set-Content -Path $NewFile -Value "new" -Encoding UTF8
 $WatchBatch = Wait-LogLine $LogFile "watch: 索引批次" 60
 Write-Result "监听新增文件入库" $WatchBatch "期望日志行 watch: 索引批次"
 
+# 等待采样稳定窗口结束，避免“创建→立即删除”被合并为噪音事件。
+Start-Sleep -Milliseconds 2000
 Remove-Item $NewFile -Force
-$WatchDelete = Wait-LogLine $LogFile "watch: 删除" 60
-Write-Result "监听删除跟随索引" $WatchDelete "期望日志行 watch: 删除"
+$WatchDelete = Wait-LogLine $LogFile "watch: 移除旧路径" 60
+Write-Result "监听删除跟随索引" $WatchDelete "期望日志行 watch: 移除旧路径"
 
 # ---- 查询日志（前端未触发时至少确认命令已注册的日志能力） ----
 $QueryLine = Wait-LogLine $LogFile "query: q=" 5

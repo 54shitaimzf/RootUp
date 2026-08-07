@@ -53,7 +53,31 @@ pub fn backup_corrupt_file(path: &Path) -> Result<Option<PathBuf>, String> {
     let backup = path.with_file_name(format!("{name}.corrupt-{ts}.bak"));
     fs::rename(path, &backup).map_err(|e| format!("损坏备份失败: {e}"))?;
     log::warn!("local_file: 损坏备份 -> {}", backup.display());
+    if let Some(dir) = path.parent() {
+        prune_corrupt_backups(dir, &name, 3)?;
+    }
     Ok(Some(backup))
+}
+
+/// 保留最近 `keep` 份 `<base>.corrupt-<ts>.bak`，删除更早的备份（按文件名排序，时间戳同宽）。
+pub fn prune_corrupt_backups(dir: &Path, base_name: &str, keep: usize) -> Result<(), String> {
+    let prefix = format!("{base_name}.corrupt-");
+    let mut backups: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(&prefix) && name.ends_with(".bak") {
+                backups.push(entry.path());
+            }
+        }
+    }
+    backups.sort();
+    if backups.len() > keep {
+        for old in backups.iter().take(backups.len() - keep) {
+            let _ = fs::remove_file(old);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -109,6 +133,24 @@ mod tests {
         let path = dir.join("d.json");
         write_json_atomic(&path, &"ok").unwrap();
         assert!(!path.with_extension("json.tmp").exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn corrupt_backups_keep_only_latest_three() {
+        let dir = temp_dir("prune");
+        for ts in 1000..1005 {
+            fs::write(dir.join(format!("x.json.corrupt-{ts}.bak")), "x").unwrap();
+        }
+        prune_corrupt_backups(&dir, "x.json", 3).unwrap();
+        let remaining = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains("corrupt"))
+            .count();
+        assert_eq!(remaining, 3);
+        assert!(!dir.join("x.json.corrupt-1000.bak").exists());
+        assert!(!dir.join("x.json.corrupt-1001.bak").exists());
         fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -5,7 +5,7 @@
 
 use rootup_lib::core::classify::{Classifier, ClassifierChain, ExtensionClassifier};
 use rootup_lib::core::ignore::IgnoreMatcher;
-use rootup_lib::core::index::{FileRecord, IndexStore};
+use rootup_lib::core::index::{FileRecord, IndexStore, ScanDiffStore};
 use rootup_lib::core::query::{parse_query, FileQuery};
 use rootup_lib::core::scan::{ScanEvent, ScanEventSink, ScanParams, ScanSummary};
 use rootup_lib::core::study::seed_study_data;
@@ -276,7 +276,7 @@ fn wait_scan(events: Arc<Mutex<Vec<ScanEvent>>>, timeout: Duration) -> Result<Sc
 }
 
 fn scan_once(dir: &Path) -> (Duration, ScanSummary) {
-    let store: Arc<Mutex<dyn IndexStore>> =
+    let store: Arc<Mutex<dyn ScanDiffStore>> =
         Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
     let sink = Arc::new(Sink(Arc::new(Mutex::new(Vec::new()))));
     let mut service = ScanService::new(
@@ -327,7 +327,7 @@ fn bench_warm_rescan(root: &Path, samples: usize) -> Value {
     let mut out = Value::Object(Default::default());
     let mut durations = Vec::new();
     for _ in 0..samples {
-        let store: Arc<Mutex<dyn IndexStore>> =
+        let store: Arc<Mutex<dyn ScanDiffStore>> =
             Arc::new(Mutex::new(SqliteIndexStore::open(":memory:").unwrap()));
         let sink = Arc::new(Sink(Arc::new(Mutex::new(Vec::new()))));
         let mut service = ScanService::new(

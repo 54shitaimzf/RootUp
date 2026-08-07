@@ -1,14 +1,17 @@
 //! 托盘：动态菜单（提醒直达 / 自动归档 / 主题切换 / 退出）与左键唤起。
-use crate::app::QuitFlag;
+use crate::core::index::IndexStore;
 use crate::core::reminder::ReminderKind;
 use crate::core::settings::{THEME_DARK, THEME_LIGHT, THEME_SYSTEM};
 use crate::core::tray_menu::{tray_icon_has_badge, tray_menu_model, TrayMenuModel};
+use crate::infra::managed_state;
 use crate::infra::storage;
 use crate::infra::study_store::{JsonStudyStore, StudyStore};
+use crate::infra::window::QuitFlag;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 use tauri::menu::{CheckMenuItem, IconMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{App, AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const TRAY_ID: &str = "rootup-tray";
 const TRAY_ICON: &[u8] = include_bytes!("../../../resources/icons/rootup-tray.ico");
@@ -206,7 +209,7 @@ pub fn refresh_tray(app: &AppHandle) -> Result<(), String> {
 }
 
 /// 初始化托盘：无菜单创建（菜单由 [`refresh_tray`] 立即填充）。
-pub fn init(app: &App) -> tauri::Result<()> {
+pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let icon = tauri::image::Image::from_bytes(TRAY_ICON)?;
 
     let _tray = TrayIconBuilder::with_id(TRAY_ID)
@@ -230,6 +233,9 @@ pub fn init(app: &App) -> tauri::Result<()> {
                 }
                 "quit" => {
                     app.state::<QuitFlag>().0.store(true, Ordering::SeqCst);
+                    if let Some(store) = app.try_state::<Arc<Mutex<dyn IndexStore>>>() {
+                        let _ = store.lock().map(|mut s| s.maintenance());
+                    }
                     app.exit(0);
                 }
                 "auto-archive" => {
@@ -238,7 +244,8 @@ pub fn init(app: &App) -> tauri::Result<()> {
                     if let Err(e) = storage::save_settings(app, &settings) {
                         log::warn!("tray: 切换自动归档失败: {e}");
                     } else {
-                        let _ = crate::app::refresh_managed_state(app);
+                        let _ = managed_state::refresh(app);
+                        let _ = app.emit("settings-changed", ());
                         let _ = refresh_tray(app);
                     }
                 }
@@ -267,7 +274,7 @@ pub fn init(app: &App) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    if let Err(e) = refresh_tray(app.handle()) {
+    if let Err(e) = refresh_tray(app) {
         log::error!("tray: 初始化菜单失败: {e}");
     }
     Ok(())

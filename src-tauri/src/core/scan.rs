@@ -5,6 +5,46 @@ use crate::core::index::FileRecord;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
+/// 枚举器产出的统一文件条目。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileEntry {
+    pub path: String,
+    pub size: i64,
+    pub modified_ms: i64,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+}
+
+/// 遍历统计：与旧扫描语义保持一致（discovered = 通过忽略规则的文件数）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EnumerateStats {
+    pub discovered: usize,
+    pub ignored: usize,
+    pub errors: usize,
+}
+
+/// 目录枚举契约：walkdir 是默认实现，0.8.5 的 MFT/USN 可作为新实现插入。
+///
+/// 实现方负责忽略规则、跳过集与符号链接策略；`on_file` 返回 `false` 表示调用方请求停止。
+pub trait FileEnumerator: Send + Sync {
+    fn enumerate(
+        &self,
+        root: &str,
+        on_file: &mut dyn FnMut(FileEntry) -> bool,
+    ) -> Result<EnumerateStats, String>;
+}
+
+/// 扫描差集结果：`updated` 为快照中本次仍存在的文件数；
+/// `missing` 为候选缺失路径（最多 `guard + 1` 条），`guarded` 表示触发删除风暴保护。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanDiffSummary {
+    pub updated: usize,
+    pub snapshot_total: usize,
+    pub missing: Vec<String>,
+    pub missing_total: i64,
+    pub guarded: bool,
+}
+
 /// 扫描进度（节流推送）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,6 +113,7 @@ impl Default for ScanParams {
 
 impl ScanParams {
     /// 删除风暴守卫阈值：候选超过该值视为异常（磁盘断连/目录移动等）。
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn deletion_guard(&self, snapshot_len: usize) -> usize {
         let by_ratio = (snapshot_len as f64 * self.deletion_guard_ratio).ceil() as usize;
         by_ratio.max(self.deletion_guard_min)
@@ -80,6 +121,7 @@ impl ScanParams {
 }
 
 /// 快照差集：快照中存在但本次扫描未发现的路径（返回原始存储路径）。
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn diff_missing(snapshot: &HashMap<String, String>, scanned: &HashSet<String>) -> Vec<String> {
     snapshot
         .iter()

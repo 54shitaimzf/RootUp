@@ -1,4 +1,4 @@
-//! 日志契约：业务模块只依赖本契约，不依赖具体落盘实现。
+//! 日志模型：业务模块经 `log` facade 写入，落盘由 `infra::logging` 实现。
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -44,10 +44,4 @@ impl LogRecord {
             message: message.into(),
         }
     }
-}
-
-/// 日志写入契约：实现方决定落盘方式（文件、终端、远程等）。
-#[cfg_attr(not(test), allow(dead_code))]
-pub trait LogSink: Send + Sync {
-    fn write(&self, record: LogRecord);
 }

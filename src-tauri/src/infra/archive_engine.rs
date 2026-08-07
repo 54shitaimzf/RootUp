@@ -7,21 +7,14 @@ use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::ProjectKind;
 use crate::core::settings::Settings;
+use crate::infra::time::now_millis;
 use std::path::Path;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 批次号分配：进程内严格递增，基准为毫秒时间戳×1000，
 /// 保证同一毫秒内的多个批次不会共用同一 id（无需数据库 schema 变更）。
 static NEXT_BATCH_ID: AtomicI64 = AtomicI64::new(0);
-
-pub fn now_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
 
 /// 分配下一个归档批次号（进程内单调递增）。
 pub fn next_batch_id() -> i64 {
@@ -46,10 +39,24 @@ pub fn remap_target(target: &str, from_root: &str, to_root: &str) -> String {
     let from = normalize_path(from_root);
     let to = normalize_path(to_root);
     let target = normalize_path(target);
-    if path_key(&target) == path_key(&from) {
+    let from_key = path_key(&from);
+    let target_key = path_key(&target);
+    if target_key == from_key {
         return to;
     }
-    if let Some(rel) = target.strip_prefix(&format!("{from}/")) {
+    // 用 path_key 构造带分隔符的边界，避免误匹配同名前缀（C:/proj 不应命中 C:/proj2）。
+    let boundary = if from_key.ends_with('/') {
+        from_key
+    } else {
+        format!("{from_key}/")
+    };
+    if target_key.starts_with(&boundary) {
+        let skip = if from.ends_with('/') {
+            from.len()
+        } else {
+            from.len() + 1
+        };
+        let rel = &target[skip..];
         return format!("{to}/{rel}");
     }
     target
@@ -195,10 +202,8 @@ fn archive_one(
     std::fs::rename(&path, &dest).map_err(|e| move_error(&path, e))?;
 
     let dest_str = normalize_path(&dest.to_string_lossy());
-    let journal_result = (|| -> Result<(), String> {
-        let mut store = store.lock().map_err(|e| e.to_string())?;
-        store.move_record(&path, &dest_str, "archived")?;
-        store.insert_archive_op(&ArchiveOp {
+    let journal_result = {
+        let op = ArchiveOp {
             id: 0,
             batch_id,
             kind: "file".to_string(),
@@ -206,9 +211,10 @@ fn archive_one(
             dest: dest_str.clone(),
             created_at: now_millis(),
             undone_at: None,
-        })?;
-        Ok(())
-    })();
+        };
+        let mut store = store.lock().map_err(|e| e.to_string())?;
+        store.archive_record(&path, &dest_str, &op)
+    };
     if let Err(e) = journal_result {
         // 索引/日志失败则把文件移回，保证不留半成品。
         let _ = std::fs::rename(&dest, &path);
@@ -233,26 +239,18 @@ pub fn undo_file_batch(
         archived: 0,
         failed: Vec::new(),
     };
-    let mut done_ids: Vec<i64> = Vec::new();
     for op in ops {
         if op.kind != "file" || op.undone_at.is_some() {
             continue;
         }
         match undo_one_file(store, &op) {
-            Ok(()) => {
-                outcome.archived += 1;
-                done_ids.push(op.id);
-            }
+            Ok(()) => outcome.archived += 1,
             Err(error) => outcome.failed.push(ArchiveFailure {
                 path: op.dest.clone(),
                 error,
             }),
         }
     }
-    store
-        .lock()
-        .map_err(|e| e.to_string())?
-        .mark_ops_undone(&done_ids)?;
     Ok(outcome)
 }
 
@@ -264,10 +262,15 @@ pub fn undo_one_file(store: &Arc<Mutex<dyn IndexStore>>, op: &ArchiveOp) -> Resu
         return Err(format!("目标文件已不存在: {}", op.dest));
     }
     std::fs::rename(&op.dest, &op.source).map_err(|e| move_error(&op.dest, e))?;
-    store
+    let result = store
         .lock()
         .map_err(|e| e.to_string())?
-        .move_record(&op.dest, &op.source, "indexed")?;
+        .unarchive_record(&op.dest, &op.source, op.id);
+    if let Err(e) = result {
+        // 索引/日志失败则把文件移回，保证磁盘与索引一致。
+        let _ = std::fs::rename(&op.source, &op.dest);
+        return Err(format!("索引更新失败，已还原: {e}"));
+    }
     log::info!("archive: 撤销 file={} <- {}", op.source, op.dest);
     Ok(())
 }
@@ -275,6 +278,7 @@ pub fn undo_one_file(store: &Arc<Mutex<dyn IndexStore>>, op: &ArchiveOp) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::archive::{ArchiveBatch, ShortcutRecord};
     use crate::core::index::{FileRecord, IndexStore};
     use crate::infra::index_store::SqliteIndexStore;
     use std::fs;
@@ -329,6 +333,207 @@ mod tests {
             remap_target("C:/other", "C:/proj", "C:/Archive/x"),
             "C:/other"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn remap_target_is_case_insensitive_on_windows() {
+        assert_eq!(
+            remap_target("c:/PROJ/sub/a", "C:/proj", "C:/Archive/proj"),
+            "C:/Archive/proj/sub/a"
+        );
+        assert_eq!(
+            remap_target("C:/PROJ", "c:/proj", "C:/Archive/proj"),
+            "C:/Archive/proj"
+        );
+        assert_eq!(
+            remap_target("C:/Proj2/x", "C:/proj", "C:/Archive/proj"),
+            "C:/Proj2/x"
+        );
+    }
+
+    #[test]
+    fn remap_target_handles_unicode_and_segment_boundaries() {
+        assert_eq!(
+            remap_target("C:/课程/资料/a.pdf", "C:/课程", "C:/归档/课程"),
+            "C:/归档/课程/资料/a.pdf"
+        );
+        assert_eq!(
+            remap_target("C:/课程2/a.pdf", "C:/课程", "C:/归档/课程"),
+            "C:/课程2/a.pdf"
+        );
+    }
+
+    /// 故障注入替身：只支持归档/撤销链路上用到的读取与写入，
+    /// 其余方法不会被调用，直接 panic 以暴露意外调用。
+    struct FailingArchiveStore {
+        record: FileRecord,
+        fail_archive: bool,
+        fail_unarchive: bool,
+    }
+
+    impl IndexStore for FailingArchiveStore {
+        fn get_by_path(&self, path: &str) -> Result<Option<FileRecord>, String> {
+            if self.record.path == path {
+                Ok(Some(self.record.clone()))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn archive_record(
+            &mut self,
+            _from: &str,
+            _to: &str,
+            _op: &ArchiveOp,
+        ) -> Result<(), String> {
+            if self.fail_archive {
+                Err("注入: 索引写入失败".into())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn unarchive_record(&mut self, _from: &str, _to: &str, _op_id: i64) -> Result<(), String> {
+            if self.fail_unarchive {
+                Err("注入: 索引写入失败".into())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn prune_archive_ops(&mut self, _keep: i64) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn upsert(&mut self, _record: &FileRecord) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn list(&self, _limit: i64, _offset: i64) -> Result<Vec<FileRecord>, String> {
+            unimplemented!()
+        }
+        fn all_records(&self) -> Result<Vec<FileRecord>, String> {
+            unimplemented!()
+        }
+        fn update_labels(&mut self, _path: &str, _labels: &str) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn query(
+            &self,
+            _query: &crate::core::query::FileQuery,
+        ) -> Result<crate::core::query::QueryPage, String> {
+            unimplemented!()
+        }
+        fn upsert_many(&mut self, _records: &[FileRecord]) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn paths_with_prefix(&self, _dir: &str) -> Result<Vec<String>, String> {
+            unimplemented!()
+        }
+        fn mark_missing(&mut self, _paths: &[String]) -> Result<i64, String> {
+            unimplemented!()
+        }
+        fn list_labels(&self) -> Result<Vec<String>, String> {
+            unimplemented!()
+        }
+        fn mark_deleted(&mut self, _path: &str) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn move_record(&mut self, _from: &str, _to: &str, _state: &str) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn mark_under_roots_deleted(&mut self, _roots: &[String]) -> Result<i64, String> {
+            unimplemented!()
+        }
+        fn insert_archive_op(&mut self, _op: &ArchiveOp) -> Result<i64, String> {
+            unimplemented!()
+        }
+        fn list_archive_batches(&self, _limit: i64) -> Result<Vec<ArchiveBatch>, String> {
+            unimplemented!()
+        }
+        fn ops_for_batch(&self, _batch_id: i64) -> Result<Vec<ArchiveOp>, String> {
+            unimplemented!()
+        }
+        fn mark_ops_undone(&mut self, _ids: &[i64]) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn upsert_shortcut(
+            &mut self,
+            _lnk_path: &str,
+            _target_path: &str,
+            _created_at: i64,
+        ) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn shortcuts_under(&self, _root: &str) -> Result<Vec<ShortcutRecord>, String> {
+            unimplemented!()
+        }
+        fn update_shortcut_target(
+            &mut self,
+            _lnk_path: &str,
+            _target_path: &str,
+        ) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn count(&self) -> Result<i64, String> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn archive_file_rolls_back_disk_when_db_update_fails() {
+        let dir = temp_dir("archive_rollback");
+        let downloads = dir.join("Downloads");
+        let archive = dir.join("Archive");
+        fs::create_dir_all(&downloads).unwrap();
+        let src = downloads.join("a.pdf");
+        fs::write(&src, "x").unwrap();
+        let src_str = normalize_path(&src.to_string_lossy());
+        let archive_str = normalize_path(&archive.to_string_lossy());
+        let store: Arc<Mutex<dyn IndexStore>> = Arc::new(Mutex::new(FailingArchiveStore {
+            record: indexed(&src_str, "document"),
+            fail_archive: true,
+            fail_unarchive: false,
+        }));
+
+        let outcome =
+            archive_files(&store, &archive_str, std::slice::from_ref(&src_str), 1).unwrap();
+        assert_eq!(outcome.archived, 0);
+        assert_eq!(outcome.failed.len(), 1);
+        assert!(src.exists(), "DB 更新失败后文件应被移回原位置");
+        assert!(!archive.join("document").join("a.pdf").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn undo_file_rolls_back_disk_when_db_update_fails() {
+        let dir = temp_dir("undo_rollback");
+        let dest = dir.join("a.pdf");
+        let back = dir.join("back");
+        fs::create_dir_all(&back).unwrap();
+        fs::write(&dest, "x").unwrap();
+        let dest_str = normalize_path(&dest.to_string_lossy());
+        let source_str = normalize_path(&back.join("a.pdf").to_string_lossy());
+        let store: Arc<Mutex<dyn IndexStore>> = Arc::new(Mutex::new(FailingArchiveStore {
+            record: FileRecord::new(&dest_str, 10, 1, "archived"),
+            fail_archive: false,
+            fail_unarchive: true,
+        }));
+        let op = ArchiveOp {
+            id: 7,
+            batch_id: 1,
+            kind: "file".into(),
+            source: source_str.clone(),
+            dest: dest_str.clone(),
+            created_at: 1,
+            undone_at: None,
+        };
+
+        let err = undo_one_file(&store, &op).unwrap_err();
+        assert!(err.contains("已还原"), "错误应说明已回滚: {err}");
+        assert!(dest.exists(), "撤销失败后文件应留在归档目标");
+        assert!(!Path::new(&source_str).exists(), "不应留下半成品源文件");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     fn test_settings(dirs: &[&str]) -> Settings {

@@ -1,0 +1,5 @@
+{
+  "extensions": ["crdownload", "part", "download", "tmp", "temp"],
+  "prefixes": ["~$"],
+  "exact_names": ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"]
+}

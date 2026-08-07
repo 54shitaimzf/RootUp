@@ -4,7 +4,7 @@ use crate::core::index::IndexStore;
 use crate::infra::archive_engine::{archive_files, next_batch_id};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -12,6 +12,7 @@ struct ArchiveInner {
     store: Arc<Mutex<dyn IndexStore>>,
     root: Mutex<String>,
     queue: Mutex<VecDeque<String>>,
+    wake: Condvar,
     enabled: AtomicBool,
     running: AtomicBool,
 }
@@ -29,6 +30,7 @@ impl ArchiveService {
                 store,
                 root: Mutex::new(root),
                 queue: Mutex::new(VecDeque::new()),
+                wake: Condvar::new(),
                 enabled: AtomicBool::new(enabled),
                 running: AtomicBool::new(false),
             }),
@@ -56,6 +58,8 @@ impl ArchiveService {
             return;
         }
         queue.push_back(path);
+        drop(queue);
+        self.inner.wake.notify_all();
     }
 
     pub fn start(&mut self) {
@@ -67,14 +71,23 @@ impl ArchiveService {
         let handle = std::thread::Builder::new()
             .name("rootup-archiver".into())
             .spawn(move || loop {
-                if !inner.running.load(Ordering::SeqCst) {
-                    break;
-                }
-                let path = inner.queue.lock().unwrap().pop_front();
-                let Some(path) = path else {
-                    std::thread::sleep(Duration::from_millis(100));
-                    continue;
+                let path = {
+                    let mut queue = inner.queue.lock().unwrap();
+                    loop {
+                        if !inner.running.load(Ordering::SeqCst) {
+                            break None;
+                        }
+                        if let Some(p) = queue.pop_front() {
+                            break Some(p);
+                        }
+                        let (guard, _) = inner
+                            .wake
+                            .wait_timeout(queue, Duration::from_millis(1000))
+                            .unwrap();
+                        queue = guard;
+                    }
                 };
+                let Some(path) = path else { break };
                 if !inner.enabled.load(Ordering::SeqCst) {
                     continue;
                 }
