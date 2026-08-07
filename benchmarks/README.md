@@ -5,66 +5,67 @@
 > Comparisons are computed only between versions with the same host fingerprint (os|cpu|rustc|ram_gb). Different or unknown fingerprints are displayed without a delta.
 
 - **0.8.3** (v2) - Microsoft Windows NT 10.0.22621.0 | Intel64 Family 6 Model 183 Stepping 1, GenuineIntel | commit f43e46a
+- **0.8.4** (v2) - Microsoft Windows NT 10.0.22621.0 | Intel64 Family 6 Model 183 Stepping 1, GenuineIntel | commit 5877b00
 
 ## engine
 
-| metric | 0.8.3 (p50/p90/p99) |
-|---|---|
-| engine_archive_files_ms | 427.9 / 427.9 / 427.9 |
-| engine_churn_db_kb_after | 8424.0 / 8424.0 / 8424.0 |
-| engine_churn_db_kb_before | 12382.2 / 12382.2 / 12382.2 |
-| engine_churn_db_kb_vacuum | 8048.0 / 8048.0 / 8048.0 |
-| engine_index_build_100k_ms | 201.9 / 201.9 / 201.9 |
-| engine_query_combined_ms | 26.33 / 27.06 / 27.06 |
-| engine_query_label_cold_ms | 67.62 / 67.62 / 67.62 |
-| engine_query_label_ms | 41.29 / 41.73 / 41.73 |
-| engine_query_paged_ms | 92.43 / 92.58 / 92.58 |
-| engine_query_text_cold_ms | 65.00 / 65.00 / 65.00 |
-| engine_query_text_ms | 46.99 / 61.57 / 61.57 |
-| engine_query_type_ms | 22.61 / 23.26 / 23.26 |
-| engine_reapply_labels_ms | 152.0 / 220.3 / 220.3 |
-| engine_rescan_10k_ms | 352.8 / 352.8 / 352.8 |
-| engine_scan_deep_10k_ms | 302.7 / 302.7 / 302.7 |
-| engine_scan_deep_10k_per_file_ms | 0.0269 / 0.0269 / 0.0269 |
-| engine_scan_mixed_100k_ms | 2821.6 / 2821.6 / 2821.6 |
-| engine_scan_mixed_100k_per_file_ms | 0.0280 / 0.0280 / 0.0280 |
-| engine_scan_mixed_10k_ms | 303.2 / 303.2 / 303.2 |
-| engine_scan_mixed_10k_per_file_ms | 0.0270 / 0.0270 / 0.0270 |
-| engine_scan_noise_10k_ms | 302.8 / 302.8 / 302.8 |
-| engine_scan_noise_10k_per_file_ms | 0.0267 / 0.0267 / 0.0267 |
-| engine_scan_wide_10k_ms | 302.4 / 302.4 / 302.4 |
-| engine_scan_wide_10k_per_file_ms | 0.0266 / 0.0266 / 0.0266 |
-| engine_undo_files_ms | 320.2 / 320.2 / 320.2 |
+| metric | 0.8.3 (p50/p90/p99) | 0.8.4 (p50/p90/p99) |
+|---|---|---|
+| engine_archive_files_ms | 427.9 / 427.9 / 427.9 | 412.1 / 412.1 / 412.1 (-3.7%) |
+| engine_churn_db_kb_after | 8424.0 / 8424.0 / 8424.0 | 8488.0 / 8488.0 / 8488.0 (0.8%) |
+| engine_churn_db_kb_before | 12382.2 / 12382.2 / 12382.2 | 12430.2 / 12430.2 / 12430.2 (0.4%) |
+| engine_churn_db_kb_vacuum | 8048.0 / 8048.0 / 8048.0 | 8488.0 / 8488.0 / 8488.0 (5.5%) |
+| engine_index_build_100k_ms | 201.9 / 201.9 / 201.9 | 220.9 / 220.9 / 220.9 (9.4%) |
+| engine_query_combined_ms | 26.33 / 27.06 / 27.06 | 27.68 / 27.90 / 27.90 (5.1%) |
+| engine_query_label_cold_ms | 67.62 / 67.62 / 67.62 | 43.11 / 43.11 / 43.11 (-36.2%) :warning: |
+| engine_query_label_ms | 41.29 / 41.73 / 41.73 | 42.25 / 43.13 / 43.13 (2.3%) |
+| engine_query_paged_ms | 92.43 / 92.58 / 92.58 | 96.67 / 97.88 / 97.88 (4.6%) |
+| engine_query_text_cold_ms | 65.00 / 65.00 / 65.00 | 50.98 / 50.98 / 50.98 (-21.6%) :warning: |
+| engine_query_text_ms | 46.99 / 61.57 / 61.57 | 47.72 / 47.73 / 47.73 (1.6%) |
+| engine_query_type_ms | 22.61 / 23.26 / 23.26 | 24.36 / 24.62 / 24.62 (7.7%) |
+| engine_reapply_labels_ms | 152.0 / 220.3 / 220.3 | 156.9 / 225.5 / 225.5 (3.2%) |
+| engine_rescan_10k_ms | 352.8 / 352.8 / 352.8 | 302.0 / 302.0 / 302.0 (-14.4%) |
+| engine_scan_deep_10k_ms | 302.7 / 302.7 / 302.7 | 302.8 / 302.8 / 302.8 (0%) |
+| engine_scan_deep_10k_per_file_ms | 0.0269 / 0.0269 / 0.0269 | 0.0270 / 0.0270 / 0.0270 (0.4%) |
+| engine_scan_mixed_100k_ms | 2821.6 / 2821.6 / 2821.6 | 3025.1 / 3025.1 / 3025.1 (7.2%) |
+| engine_scan_mixed_100k_per_file_ms | 0.0280 / 0.0280 / 0.0280 | 0.0299 / 0.0299 / 0.0299 (6.6%) |
+| engine_scan_mixed_10k_ms | 303.2 / 303.2 / 303.2 | 302.3 / 302.3 / 302.3 (-0.3%) |
+| engine_scan_mixed_10k_per_file_ms | 0.0270 / 0.0270 / 0.0270 | 0.0274 / 0.0274 / 0.0274 (1.5%) |
+| engine_scan_noise_10k_ms | 302.8 / 302.8 / 302.8 | 302.8 / 302.8 / 302.8 (0%) |
+| engine_scan_noise_10k_per_file_ms | 0.0267 / 0.0267 / 0.0267 | 0.0275 / 0.0275 / 0.0275 (3%) |
+| engine_scan_wide_10k_ms | 302.4 / 302.4 / 302.4 | 302.7 / 302.7 / 302.7 (0.1%) |
+| engine_scan_wide_10k_per_file_ms | 0.0266 / 0.0266 / 0.0266 | 0.0274 / 0.0274 / 0.0274 (3%) |
+| engine_undo_files_ms | 320.2 / 320.2 / 320.2 | 326.3 / 326.3 / 326.3 (1.9%) |
 
 ## system
 
-| metric | 0.8.3 (p50/p90/p99) |
-|---|---|
-| system_bundle_css_gzip_kb | 13.02 / 13.02 / 13.02 |
-| system_bundle_js_gzip_kb | 143.3 / 143.3 / 143.3 |
-| system_idle_cpu_percent | 0.0000 / 0.0000 / 0.0000 |
-| system_idle_private_mb | 9.04 / 9.15 / 9.15 |
-| system_idle_rss_mb | 30.10 / 30.22 / 30.22 |
-| system_idle_warm_rss_mb | 30.03 / 30.03 / 30.03 |
-| system_index_db_kb | 7620.6 / 7620.6 / 7620.6 |
-| system_interactive_cold_ms | 1944.8 / 1950.0 / 1950.0 |
-| system_interactive_warm_ms | 1955.3 / 1955.3 / 1955.3 |
-| system_io_cold_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 |
-| system_io_cold_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 |
-| system_io_warm_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 |
-| system_io_warm_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 |
-| system_mem_series_cold_mean_mb | 30.10 / 30.22 / 30.22 |
-| system_mem_series_cold_peak_mb | 30.10 / 30.22 / 30.22 |
-| system_mem_series_warm_mean_mb | 30.11 / 30.11 / 30.11 |
-| system_mem_series_warm_peak_mb | 30.11 / 30.11 / 30.11 |
-| system_scan_cold_files_per_sec | 27700.8 / 28490.0 / 28490.0 |
-| system_scan_cold_ms | 361.0 / 372.0 / 372.0 |
-| system_scan_cold_peak_rss_mb | 30.10 / 30.22 / 30.22 |
-| system_scan_warm_files_per_sec | 26954.2 / 26954.2 / 26954.2 |
-| system_scan_warm_ms | 371.0 / 371.0 / 371.0 |
-| system_scan_warm_peak_rss_mb | 30.11 / 30.11 / 30.11 |
-| system_startup_cold_ms | 320.7 / 393.9 / 393.9 |
-| system_startup_warm_ms | 311.4 / 311.4 / 311.4 |
+| metric | 0.8.3 (p50/p90/p99) | 0.8.4 (p50/p90/p99) |
+|---|---|---|
+| system_bundle_css_gzip_kb | 13.02 / 13.02 / 13.02 | 13.05 / 13.05 / 13.05 (0.2%) |
+| system_bundle_js_gzip_kb | 143.3 / 143.3 / 143.3 | 144.1 / 144.1 / 144.1 (0.6%) |
+| system_idle_cpu_percent | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_idle_private_mb | 9.04 / 9.15 / 9.15 | 13.02 / 13.28 / 13.28 (44%) :warning: |
+| system_idle_rss_mb | 30.10 / 30.22 / 30.22 | 35.19 / 35.36 / 35.36 (16.9%) :warning: |
+| system_idle_warm_rss_mb | 30.03 / 30.03 / 30.03 | 40.85 / 40.85 / 40.85 (36%) :warning: |
+| system_index_db_kb | 7620.6 / 7620.6 / 7620.6 | 7612.6 / 7612.6 / 7612.6 (-0.1%) |
+| system_interactive_cold_ms | 1944.8 / 1950.0 / 1950.0 | 1806.2 / 1826.0 / 1826.0 (-7.1%) |
+| system_interactive_warm_ms | 1955.3 / 1955.3 / 1955.3 | 1822.2 / 1822.2 / 1822.2 (-6.8%) |
+| system_io_cold_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_io_cold_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_io_warm_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_io_warm_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_mem_series_cold_mean_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) |
+| system_mem_series_cold_peak_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) |
+| system_mem_series_warm_mean_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: |
+| system_mem_series_warm_peak_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: |
+| system_scan_cold_files_per_sec | 27700.8 / 28490.0 / 28490.0 | 31348.0 / 31746.0 / 31746.0 (13.2%) |
+| system_scan_cold_ms | 361.0 / 372.0 / 372.0 | 319.0 / 327.0 / 327.0 (-11.6%) |
+| system_scan_cold_peak_rss_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) |
+| system_scan_warm_files_per_sec | 26954.2 / 26954.2 / 26954.2 | 30395.1 / 30395.1 / 30395.1 (12.8%) |
+| system_scan_warm_ms | 371.0 / 371.0 / 371.0 | 329.0 / 329.0 / 329.0 (-11.3%) |
+| system_scan_warm_peak_rss_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: |
+| system_startup_cold_ms | 320.7 / 393.9 / 393.9 | 519.6 / 555.3 / 555.3 (62%) :warning: |
+| system_startup_warm_ms | 311.4 / 311.4 / 311.4 | 521.8 / 521.8 / 521.8 (67.6%) :warning: |
 
 ## Trend charts
 
