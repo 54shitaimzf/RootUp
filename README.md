@@ -6,7 +6,7 @@
 
 RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
 
-### 当前能力（v0.8.3 已发布）
+### 当前能力（v0.8.4 已发布）
 
 - Tauri v2 + React 桌面应用框架
 - 系统托盘驻留（打开 / 退出）
@@ -28,6 +28,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - 学业提醒与设置（v0.8.1）：作业截止提醒（默认关闭、可设提前量，学业页提示条 + 列表分组 + 托盘计数直达）；关闭默认行为持久化（每次询问 / 后台运行 / 退出）；语言下拉与 i18n 注册表；设置页按常规/监控与分类/归档/学业提醒/高级分组；托盘左键打开、动态菜单（临期作业直达、自动归档与主题快速切换）；桌面“打开未完成作业”快捷方式
 - 监控体验与视觉（v0.8.2）：移除监控目录即清理索引（可重扫恢复）；原生“浏览…”目录选择器、文件夹拖拽、常用目录一键添加；动效令牌与全局“减少动画”降级、按钮微动、悬浮提示体系；设置项“点行看说明 / 编辑按钮才编辑”，说明中心新增“设置说明”分区
 - 体验补课（v0.8.3）：自绘下拉与输入过滤（替换全部原生下拉）；项目页原生浏览/拖拽/常用目录/粘贴清洗，来源（手动/自动）与识别依据展示，向上查找跳过噪音目录；托盘多尺寸图标与临期/逾期红点角标；设置与帮助中心观感统一
+- 存储与扫描地基（v0.8.4）：扫描器接口化（`FileEnumerator`/`ScanDiffStore`，差集落库 SQLite 临时表/keyset）、SQLite 调优与存储治理（PRAGMA 组、墓碑 30 天清理、损坏备份保留 3 份、快捷图标对账、设置保存防抖）、启动与后台优化（阶段埋点、延迟服务、事件驱动、日志缓冲）、文件列表五维排序与加载更多、统一输入边界（目录强校验 + 前端即时校验双保险）；发布前审查修复：搜索框标签对齐、多标签/组合查询、习惯持久化、列表高度与滚动条稳定性
 
 ### 搜索语法
 
@@ -42,7 +43,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 规划能力
 
-已固定版本规划：v0.8.4 存储与扫描地基（扫描器重构、SQLite 调优、启动与后台优化）、v0.8.5 快速扫描与查询、v0.8.6 规模与体积、v0.8.7 单元同构，后续至 v2.0 的完整路线见 [docs/ROADMAP.md](docs/ROADMAP.md)；架构与皮肤约定见 [docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+已固定版本规划：v0.8.4 已发布（存储与扫描地基），后续 v0.8.5 快速扫描与查询、v0.8.6 规模与体积、v0.8.7 单元同构，直至 v2.0 的完整路线见 [docs/ROADMAP.md](docs/ROADMAP.md)；架构与皮肤约定见 [docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ### 技术栈
 
@@ -53,28 +54,29 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 ### 质量检查
 
-- 前端测试：`npm test`（纯函数 + 组件交互，394 用例）
-- Rust 测试：`cargo test`（271 用例）
+- 前端测试：`npm test`（纯函数 + 组件交互，402 用例）
+- Rust 测试：`cargo test`（298 用例）
 - 架构依赖校验：`npm run check:arch`（单向依赖防回归）
+- Rust 分层校验：`npm run check:arch:rust`（core 纯业务、命令层不依赖组合根）
 - Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
 - 日志驱动冒烟：`scripts/smoke.ps1`（需先 `npm run tauri build -- --no-bundle`）
 - Agent 引导验收：`scripts/agent-acceptance.ps1`（真实夹具 + 带参启动 + 主窗口/托盘截图核对清单）
 - 发布门禁（版本提交前强制）：`scripts/pre-release-check.ps1`（全部单测/构建/冒烟 + AI 真实全链路深链验收，需桌面会话与提权）
-- 性能基准（自研唯一标准，仅本地运行）：`scripts/bench-all.ps1` 一键执行引擎（`-EngineOnly`）与系统（`-SystemOnly`）基准并渲染（README 对比表与 SVG 趋势图），0.8.3 官方基线含时间/空间/IO 共 50 项指标、churn VACUUM 硬断言；host 指纹扩展（OS/CPU/rustc/node/npm/RAM/commit），确定性语料自检，渲染器只对同指纹版本计算 delta 与 15% 警示；结果见 [benchmarks/README.md](benchmarks/README.md)
+- 性能基准（自研唯一标准，仅本地运行）：`scripts/bench-all.ps1` 一键执行引擎（`-EngineOnly`）与系统（`-SystemOnly`）基准并渲染（README 对比表与 SVG 趋势图），0.8.4 官方基线含时间/空间/IO 共 50 项指标、churn VACUUM 硬断言；host 指纹扩展（OS/CPU/rustc/node/npm/RAM/commit），确定性语料自检，渲染器只对同指纹版本计算 delta 与 15% 警示；结果见 [benchmarks/README.md](benchmarks/README.md)
 
-0.8.3 官方基线（引擎 Full + 系统 10k）关键值：
+0.8.4 官方基线（引擎 Full + 系统 10k）关键值：
 
 | 指标 | p50 |
 |---|---|
-| 冷启动 | 320.7 ms |
-| 可交互耗时（冷） | 1944.8 ms |
-| 全量扫描 10k | 361 ms（27700 files/s） |
-| 空闲 RSS | 30.1 MB |
-| 索引库体积（10k） | 7620.6 KB |
-| 前端 JS gzip | 143.3 KB |
-| 引擎扫描 10k（mixed） | 303.2 ms |
-| 引擎扫描 100k（mixed） | 2821.6 ms |
-| 标签重分类 100k | 152.0 ms |
+| 冷启动 | 519.6 ms |
+| 可交互耗时（冷） | 1806.2 ms |
+| 全量扫描 10k | 319 ms（31348 files/s） |
+| 空闲 RSS | 35.2 MB |
+| 索引库体积（10k） | 7612.6 KB |
+| 前端 JS gzip | 144.1 KB |
+| 引擎扫描 10k（mixed） | 302.3 ms |
+| 引擎扫描 100k（mixed） | 3025.1 ms |
+| 标签重分类 100k | 156.9 ms |
 
 - 安装包验证：`scripts/verify-installer.ps1 -InstallerPath <nsis-setup.exe>`（静默安装 → 冒烟 → 卸载）
 
@@ -98,6 +100,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 - `src/`：React 前端（页面、组件、主题、i18n）
 - `src-tauri/`：Rust 桌面壳（commands / core / infra 分层）
 - `docs/`：项目文档（愿景、路线图、架构）
+- `docs/reports/`：版本审查与汇报（0.8.4 边界审查、UI 审查清单、版本汇报）
 - `resources/`：图标等非代码资源
 
 架构与依赖规则详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -116,7 +119,7 @@ RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面�
 
 RootUp is a smart file-organizing desktop app built for students. It auto-sorts downloads, archives files with one click, and turns scattered cleanup habits into reusable rules.
 
-### Current Features (v0.8.3 released)
+### Current Features (v0.8.4 released)
 
 - Tauri v2 + React desktop app framework
 - System tray with Open / Quit actions
@@ -136,6 +139,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 - Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
 - Study page (v0.8.0): timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start, stacked cards with spread-out viewing) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation, active-only default); semesters act as schedules with create/edit/copy/delete and backend `study.json` persistence; course names feed file labels automatically; buttons follow the Windows yes-left/no-right convention
 - Reminders & settings (v0.8.1): homework deadline reminders (off by default, configurable lead days; study-page banner + list grouping + tray count/direct open); persistent close behavior (ask / background / quit); language dropdown with a language registry; settings grouped into General / Monitoring & classification / Archive / Study reminders / Advanced; tray left-click open, dynamic menu (due-homework shortcuts, auto-archive and theme toggles); desktop “Open homework” shortcut
+- Storage & scan foundation (v0.8.4): pluggable scanner contracts (`FileEnumerator` / `ScanDiffStore`, SQLite temp-table diff), SQLite tuning & storage governance (PRAGMA group, 30-day tombstone purge, 3 backup copies, shortcut icon reconcile, debounced settings save), startup/background optimization (stage timing, delayed services, event-driven workers, buffered logging), five-dimension file sorting with load-more pagination, and a unified input boundary (strict directory validation + mirrored frontend checks); release-review fixes include search-box tag alignment, multi-label/combined queries, habit persistence, list height and scrollbar stability
 - Monitoring UX & visuals (v0.8.2): removing a watched folder also cleans its index (restorable by rescanning); native “Browse…” folder picker, folder drag & drop, one-click common folders; motion tokens with global reduced-motion support, button micro-interactions, a unified tooltip system, and a settings guide (row click = explain, edit button = edit) with a new “Settings guide” help section
 - Experience catch-up (v0.8.3): custom dropdowns with type-to-filter replace all native selects; project page gains browse / drag & drop / common folders / paste cleaning with manual-vs-auto source and detection-basis badges; recognition matrix expanded and noise folders skipped; tray uses multi-size icons with a due-homework red-dot badge; settings & help center visuals unified
 
@@ -150,7 +154,7 @@ RootUp is a smart file-organizing desktop app built for students. It auto-sorts 
 
 ### Planned Features
 
-Fixed version roadmap: v0.8.3 experience catch-up patch (custom dropdowns, project page & recognition fixes, tray icons), v0.8.4 storage & scan foundation, v0.8.5 fast scan & query, v0.8.6 size & performance, v0.8.7 unit unification, then the platform line up to v2.0. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Fixed version roadmap: v0.8.4 released (storage & scan foundation), then v0.8.5 fast scan & query, v0.8.6 size & performance, v0.8.7 unit unification, up to v2.0. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Tech Stack
 
@@ -161,9 +165,10 @@ Fixed version roadmap: v0.8.3 experience catch-up patch (custom dropdowns, proje
 
 ### Quality Checks
 
-- Frontend tests: `npm test` (394 cases)
-- Rust tests: `cargo test` (271 cases)
+- Frontend tests: `npm test` (402 cases)
+- Rust tests: `cargo test` (298 cases)
 - Architecture check: `npm run check:arch` (one-way dependencies)
+- Rust layer check: `npm run check:arch:rust` (pure core, commands never depend on the composition root)
 - Release gate: `scripts/pre-release-check.ps1` (unit tests, build, smoke, AI deep-link acceptance; requires a desktop session)
 - Performance baseline (custom harness, local-only): `scripts/bench-all.ps1` with deterministic corpus self-check and extended host fingerprint; only same-machine versions are compared, see [benchmarks/README.md](benchmarks/README.md)
 
@@ -181,6 +186,7 @@ Fixed version roadmap: v0.8.3 experience catch-up patch (custom dropdowns, proje
 - `src/`: React frontend (pages, components, theme, i18n)
 - `src-tauri/`: Rust desktop shell (commands / core / infra layers)
 - `docs/`: project documents (vision, roadmap, architecture)
+- `docs/reports/`: version reviews & release reports (0.8.4 boundary review, UI review checklist, release report)
 - `resources/`: non-code assets such as icons
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture and dependency rules.

@@ -2,7 +2,41 @@
 
 本项目的版本变更记录。首个公开发布为 v0.6.0；此前版本为开发期里程碑，按迭代整理。
 
-## [Unreleased]
+## [0.8.4] - 2026-08-07
+
+### 修复（0.8.4 前置加固）
+
+- 归档事务原子化：`IndexStore` 新增 `archive_record` / `unarchive_record`，记录迁移与操作日志（或 undone 标记）在单事务内完成；DB 失败时磁盘文件自动回滚，撤销改为逐项即时标记，消除半成品窗口。
+- 设置版本盖章：`set_settings` 写入前强制 `Settings::normalize()`，schema 版本一律以 `CURRENT_VERSION` 为准；前端兜底常量同步为 3。
+- 托盘自动归档开关补发 `settings-changed` 事件，前端设置/文件页即时刷新。
+- 归档快捷方式目标重映射改为大小写安全的分段前缀匹配（Windows 下 `C:/proj` 不再误命中 `C:/proj2`）。
+- 重命名索引收敛：`RenamedFrom` 事件立即将旧路径标记 deleted 并广播，文件列表不再残留旧路径幽灵记录；`next_state` 状态机同步更新。
+- 默认忽略规则单一来源：后端 `IgnoreMatcher::new()` 改为从 `Settings::default().ignore_rules` 构造；前端预设与兜底统一引用 `DEFAULT_IGNORE_RULES`；两侧均对共享 fixture 断言。
+- 提醒语义一致性：Rust 与 TS 测试共同消费 `fixtures/reminder-cases.json`，锁定日期差、临期边界与分组语义。
+- 公共时间工具：新增 `infra/time.rs::now_millis()`，替换四处重复实现。
+
+### 重构
+
+- `refresh_managed_state` 从组合根 `app.rs` 迁至 `infra/managed_state.rs`，命令层与托盘不再反向依赖 `app.rs`；`QuitFlag` 同步迁至 `infra/window.rs`。
+- 新增 `scripts/check-rust-arch.ps1`（`npm run check:arch:rust`）并在 CI 强制执行：`core` 保持纯业务、`commands` 不回指组合根、`infra` 不依赖命令层。
+
+### 新增（0.8.4）
+
+- 扫描器接口化：新增 `FileEnumerator` 与 `ScanDiffStore` 契约，walkdir 默认实现；差集从内存快照改为 SQLite 临时表 / keyset，内存占用 O(批次)。
+- SQLite 调优与存储治理：应用 PRAGMA 组（WAL/synchronous/mmap/cache/busy_timeout 等）、墓碑记录 30 天物理清理（schema v3 `deleted_at`）、损坏备份保留最近 3 份、快捷图标对账、设置保存 500ms 防抖合并写。
+- 启动与后台优化：setup 各阶段耗时埋点、监听/扫描/自动归档/托盘延迟到前端就绪后启动（含 10s 回退）、scanner 与自动归档改为 Condvar 事件驱动、日志 200ms 周期落盘。
+- 文件列表排序与翻页：名称/类型/大小/修改时间/标签五维升降序（确定性规则），页码可感知，加载更多保持滚动位置。
+- 统一输入边界：目录输入统一校验（清洗/环境变量展开/非法字符/保留名/盘根拒绝）、深链参数白名单、前端即时校验镜像与后端强校验双保险。
+- jwalk 评估：0.8.4 不引入依赖，结论与 0.8.5 触发条件见 `benchmarks/jwalk-evaluation.md`。
+### 报告与审查
+
+- 0.8.4 边界与职责审查、UI 审查清单与版本汇报见 [docs/reports/](docs/reports/)（`0.8.4-boundary-review.md` / `0.8.4-ui-review-checklist.md` / `0.8.4-release-report.md`）。
+### 修复（UI 审查反馈）
+
+- 搜索框存在筛选标签时，清空与语法帮助按钮不再绝对定位漂移：改为输入行内 flex 子项，与输入框天然同高居中。
+- 修复多标签/组合查询的 SQL 占位符冲突：多个 `label:`（含标签 + 文本/类型/状态组合）此前会报参数数量不匹配导致文件列表加载失败；现为同维度多值 OR、跨维度 AND，并补回归测试。
+- 修复筛选习惯持久化：前端 `lastUsed` 与后端 `last_used` 字段名不一致导致每次保存失败；后端改为 camelCase 序列化并兼容读取旧 snake_case 数据。
+- 文件列表卡片最小高度改为仅在加载/空结果时生效：条目少时卡片随内容收缩，底部计数栏紧贴列表，不再出现大片空白。
 
 ## [0.8.3] - 2026-08-06
 

@@ -191,10 +191,13 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 **新增模块与职责**：
 - `core/path.rs`：`normalize_path`（统一 `/` 分隔符、去尾斜杠）与 `is_subpath`（组件级包含判定，Windows 小写比较）；所有入库、差集、前缀匹配、目录去重统一走它。
 - `core/classify.rs`：`Category` 枚举、`Classifier` trait、`ClassifierChain`（顺序执行 + 跨分类器去重 + 每步 debug 日志）、`ExtensionClassifier`（扩展名→大类映射）；labels 逗号分隔小写 key，字符集 `[a-z0-9-]`，写入前校验。
-- `core/query.rs`：`parse_query` 解析 `type:` / `label:`（别名 `tag:`）/ `state:`（别名 `status:`）/ `size:>/<N~M`（B/KB/MB/GB）/ `before:` / `after:`（毫秒时间戳或 `YYYY-MM-DD` 本地时区）；非法值与未知前缀回落为普通文本；同维度 OR、跨维度 AND。
+- `core/query.rs`：`parse_query` 解析 `type:` / `label:`（别名 `tag:`）/ `state:`（别名 `status:`）/ `size:>/<N~M`（B/KB/MB/GB）/ `before:` / `after:`（毫秒时间戳或 `YYYY-MM-DD` 本地时区）与 `sort_by/sort_dir`（name/type/size/modified/labels × asc/desc 白名单）；非法值与未知前缀回落为普通文本；同维度 OR、跨维度 AND。
 - `core/scan.rs`：`ScanEvent` / `ScanSummary` / `ScanParams` / `ScanEventSink` / `diff_missing` / `record_from_scan` 纯逻辑。
+- `core/index.rs`：`FileEntry` / `FileEnumerator`（遍历契约：path/size/modified/is_dir/is_symlink）与 `ScanDiffStore`（begin/mark_seen/finish 差集契约）接口，`FileRecord` 模型；扫描器与存储层只依赖契约，不依赖具体遍历实现。
 - `core/watched.rs`：`check_add`（相等/被覆盖/将覆盖三态）与 `dedupe_watched`（启动自愈）纯函数。
-- `infra/scanner.rs`：`ScanService` 串行队列后台扫描（walkdir 不跟随符号链接）、批量事务、进度节流、取消、快照差集、删除风暴保护、可用性检查、候选二次确认。
+- `infra/scanner.rs`：`ScanService` 串行队列后台扫描，仅依赖 `FileEnumerator` + `ScanDiffStore` 契约；批量事务、进度节流、取消、删除风暴保护、候选二次确认。
+- `infra/enumerator.rs`：walkdir 默认实现 `WalkDirEnumerator`（不跟随符号链接、应用忽略规则与跳过集）；0.8.5 MFT/USN 以新实现替换，扫描器零改动。
+- `infra/startup.rs`：`StartupGate` 延迟非关键服务（watcher/scanner/archive/tray）到前端 `app_ready`（10s 兜底），setup 阶段耗时统一 `startup: <stage> ms=` 埋点。
 
 **依赖注入约定**：`ScanService::new(store, classifier, matcher, params, sink)` 全注入；Tauri 侧仅提供 `TauriScanSink`（emit 前端事件）与分类链组装，业务层零 Tauri 依赖；AI/课程分类 = 新增 `Classifier` 追加进链。
 
@@ -204,20 +207,20 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 **错误消息规范**：`模块: 消息` 前缀（如 `scan: 目录不可访问 ...`），命令层透传，测试断言前缀；本轮不引入 thiserror。
 
-**文件安全基线**：扫描只读 metadata；「删除」仅为索引状态标记；快照差集 + 风暴保护 + 可用性检查 + 候选复核构成误判防护；物理归档（迭代 B）须启用事务性移动 + 撤销 + 目标存在性检查。
+**文件安全基线**：扫描只读 metadata；「删除」仅为索引状态标记；`SqliteIndexStore` 用 TEMP 表 + keyset 实现 `ScanDiffStore`（内存 O(批次)），配合删除风暴保护、可用性检查与候选复核构成误判防护；物理归档须启用事务性移动 + 撤销 + 目标存在性检查。
 
 **监听稳定确认**：事件处理器在 `first_sample_delay` 后首次采样，之后按 `sample_gap`
 间隔采样大小与可打开性，避免写入中途的短暂停顿被过早判定稳定；超过 `force_timeout`
 强制上报兜底。**标签筛选**：`label:` 条件按逗号边界精确匹配（`%,key,%`），杜绝
 前缀误命中（如 `course-1` 命中 `course-10`）。
 
-**后续候选**：排序（`sort_by/sort_dir`）、统计概览（`get_stats`）、`scan_meta` 表、`resources/icons/filetypes/` SVG 源、游标分页、`RwLock` 读写分离、rayon 并行、thiserror、E2E 框架。
+**后续候选**：统计概览（`get_stats`）、`scan_meta` 表、`resources/icons/filetypes/` SVG 源、keyset 分页 / COUNT 治理（0.8.5）、`RwLock` 读写分离、rayon 并行、thiserror、E2E 框架。
 
 ## 文件页搜索与筛选
 
 - **搜索为核心**：`components/SearchAutocomplete.tsx` 为搜索框 + 自动补全（combobox），候选来自 `list_categories` / `list_labels` / 固定状态集（状态仅存在于搜索语法与补全，不在界面筛选行），经 `lib/autocomplete.ts` 纯函数匹配与插入（维度前缀补全、子串匹配、替换/追加）。
 - **筛选 chips 频率排序**：`FilterBar` 为分类 / 标签两行横向滚动列表（状态筛选不在界面，`state:` 保留给搜索语法），进入页面时按习惯快照排序一次、会话内稳定（已选置前仅体现在高亮与自动滚入视野，不实时重排）；习惯数据由 `hooks/useFilterHabits.ts` 读写（存储见下条）。
-- **习惯数据管理**：筛选/补全使用习惯存应用数据目录 `habits.json`（Rust 侧 `core/habits.rs` 校验 + `infra/habit_store.rs` 原子写入与损坏备份 + `commands/habits.rs` 读写），与 settings 完全分离；前端 `useFilterHabits` 800ms 防抖合并写盘，启动时一次性迁移旧 localStorage 数据（成功即删除旧键）；恢复默认设置不清空习惯。日志行：`habits: 保存/迁移/损坏回退`。自动补全关键词（`type:` 等）固定顺序，不参与习惯统计；筛选行点击与补全添加标签共用同一习惯键。
+- **习惯数据管理**：筛选/补全使用习惯存应用数据目录 `habits.json`（Rust 侧 `core/habits.rs` 校验 + `infra/habit_store.rs` 原子写入与损坏备份 + `commands/habits.rs` 读写），与 settings 完全分离；字段序列化 camelCase（`lastUsed`，兼容旧 `last_used` 读取）；前端 `useFilterHabits` 800ms 防抖合并写盘，启动时一次性迁移旧 localStorage 数据（成功即删除旧键）；恢复默认设置不清空习惯。日志行：`habits: 保存/迁移/损坏回退`。自动补全关键词（`type:` 等）固定顺序，不参与习惯统计；筛选行点击与补全添加标签共用同一习惯键。
 - **查询去重**：搜索文本与 chips/自动补全统一汇入 `buildQuery`，按原文 Set 去重后再发送后端。
 - **日志约定**：`filter: 切换 kind=... key=... active=...`、`autocomplete: 插入 kind=... key=... token=...`、`filter: 习惯数据损坏已回退`，供冒烟与排查。
 - **转义候选**：Windows 文件名不允许冒号，真实文件名不会与 `type:`/`label:` 等语法 token 冲突；未来如需搜索含冒号字符串，在 `parse_query` 增加 `\` 转义（如 `\label:高数` 视为纯文本），本次不实现。
@@ -266,3 +269,14 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - `components/` 只放跨功能可复用的组件；页面私有组件随功能生长到 `features/<domain>/components/`，禁止在 `features/<domain>/` 根目录散放 UI 文件。
 - 新增依赖前先评估必要性（轻量原则）；当前不引入路由、状态管理等非必要库。
 - 保持单向依赖，代码审查时以本文件依赖图为基准。
+
+## 0.8.4 前置修复契约
+
+- **托管状态刷新**：`refresh_managed_state` 已迁至 `infra/managed_state.rs::refresh`，`app.rs` 仅保留组合装配；`commands/`、`infra/tray.rs` 均通过 `infra::managed_state` 调用，禁止再回指 `app.rs`。`QuitFlag` 同迁至 `infra/window.rs`。
+- **Rust 分层门禁**：`scripts/check-rust-arch.ps1`（`npm run check:arch:rust`，CI 强制执行）校验：`core` 生产代码不得引用 `tauri`/`crate::infra`/`crate::commands`/`crate::app`；`commands` 不得引用 `crate::app`；`infra` 不得引用 `crate::commands`/`crate::app`；扫描时剔除注释、字符串与 `mod tests` 块。
+- **设置写入盖章**：`Settings::normalize()` 将 `version` 恒置为 `CURRENT_VERSION`；`set_settings` 必须先 normalize 再校验/保存，前端不参与版本持久化。
+- **归档原子化**：`IndexStore::archive_record(from, to, op)` 与 `unarchive_record(from, to, op_id)` 必须单事务完成（记录迁移 + 日志插入 / undone 标记）；引擎层在 DB 失败时回滚磁盘 rename；撤销逐项即时标记，不允许“最后统一批量标记”的中间窗口。
+- **重命名语义**：`RenamedFrom` 对 indexed/archived 记录视为旧路径删除（`next_state` 迁移到 deleted）；pending 记录仅移除待确认项。rename 配对迁移属于 0.8.4 `DeltaSource` 职责，前置修复只保证不残留旧路径。
+- **默认规则单一来源**：后端默认忽略规则唯一来源为 `Settings::default().ignore_rules`，`IgnoreMatcher::new()` 由其构造；前端 `DEFAULT_IGNORE_RULES`（`lib/tauri.ts`）与 `fixtures/default-ignore-rules.json` 保持同步并由双端测试断言。
+- **共享一致性 fixtures**：`fixtures/` 下的 JSON 由 Rust（`include_str!`）与 TS（JSON import）共同消费；新增跨语言语义（如提醒分组、默认值）一律先落 fixture 再实现/断言，不引入代码生成工具链。
+- **公共时间工具**：Unix 毫秒时间戳统一走 `infra/time.rs::now_millis()`，禁止各 infra 模块重复实现。

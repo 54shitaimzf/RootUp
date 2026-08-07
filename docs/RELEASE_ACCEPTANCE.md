@@ -4,6 +4,7 @@
 > 作为 0.7.0 及后续版本的发布门槛。每项通过后勾选并注明版本号。
 >
 > **版本提交前强制门禁**：必须先运行 `scripts/pre-release-check.ps1`（全量单测/构建/冒烟 + AI 真实全链路深链验收）并全绿，报告 `scripts/release-gate-report.log` 随提交记录；下述视觉清单仍需人/agent 目验后勾选。
+> **0.8.4 发布门禁（2026-08-07）**：`pre-release-check.ps1` 12/12 PASS（含升级后的 smoke 12 项与两条深链验收）；0.8.4 官方性能基线（引擎 Full + 系统 10k）已重测入库并渲染；DB 审计 10/10 PASS（`docs/reports/0.8.4-db-audit.md`）。
 
 ## 归档与撤销
 
@@ -21,6 +22,12 @@
 - [ ] 自动归档：开启后向监控目录丢一个分类明确的新文件，数秒内自动归档；other/未知类型留在原地
 - [ ] 项目归档：项目卡片归档 → 整目录移动 → 桌面快捷方式双击仍能唤起；撤销后快捷方式恢复
 
+## 0.8.4 前置修复
+
+- [x] 托盘“自动归档”开关切换后，设置页与文件页无需重启/刷新即可显示新状态（`settings-changed` 事件生效，单测 + UI 审查覆盖）
+- [x] 文件页对监控目录内文件执行“重命名”：旧路径条目立即消失，新路径条目数秒内出现，搜索不再残留旧路径幽灵记录（watcher 单测覆盖）
+- [x] 归档/撤销后桌面快捷方式仍可唤起；`C:/Proj` 与 `C:/Proj2` 之间归档互不误伤（大小写前缀边界，archive_engine 单测覆盖）
+
 ## v0.8.3 体验补课
 
 - [ ] 项目页：文字粘贴（含引号清洗）、原生“浏览…”、文件夹拖拽（文件取父目录）、常用目录一键添加均可添加项目并刷新列表
@@ -34,18 +41,18 @@
 
 ## Agent 引导验收（真实场景，scripts/agent-acceptance.ps1）
 
-- [ ] `pre-release-check.ps1` 中两条深链验收（--OpenProject / --OpenHomework）自动断言全绿（日志含“前端领取意图 Some(...)”与项目页加载），报告已生成
-- [ ] 代理验收结束后无测试拉起的 IDE 进程残留（断言 `No test-spawned IDE processes remain` PASS）
-- [ ] 运行 `scripts/agent-acceptance.ps1 -OpenProject`：自动创建真实夹具（Rust 项目 + 课程文件 + 音乐），项目唤醒不聚焦前台（RootUp 驻留托盘），IDE/资源管理器打开项目；日志含“前端领取意图 Some(Project)”与“project: 发现”，之后从托盘打开 RootUp 停在项目页
+- [x] `pre-release-check.ps1` 中两条深链验收（--OpenProject / --OpenHomework）自动断言全绿（日志含“前端领取意图 Some(...)”与项目页加载），报告已生成（12/12）
+- [x] 代理验收结束后无测试拉起的 IDE 进程残留（断言 `No test-spawned IDE processes remain` PASS）
+- [x] 运行 `scripts/agent-acceptance.ps1 -OpenProject`：自动创建真实夹具（Rust 项目 + 课程文件 + 音乐），项目唤醒不聚焦前台（RootUp 驻留托盘），IDE/资源管理器打开项目；日志含“前端领取意图 Some(Project)”与“project: 发现”（脚本断言 6/6 PASS）
 - [ ] 在项目页用浏览/拖拽添加夹具目录后，卡片显示 `demo-project`：Rust 徽章、手动来源、识别依据 `Cargo.toml`
 - [ ] 把夹具目录加入监控后，项目来源徽章切换为“自动”
 - [ ] 学业页添加一条已过期作业后，托盘出现红点角标（对照截图确认），作业处理后红点消失
-- [ ] 深浅主题与中英下，上述界面观感一致；`--OpenHomework` 启动参数直达作业视图（日志含“前端领取意图 Some(Homework)”）
+- [x] 深浅主题与中英下，上述界面观感一致（UI 审查清单覆盖）；`--OpenHomework` 启动参数直达作业视图（日志含“前端领取意图 Some(Homework)”）
 
 ## 常规回归
 
-- [ ] 深浅主题、中英切换
-- [ ] 首次启动欢迎弹窗、托盘、单实例
-- [ ] 设置 / 标签管理 / 规则方案弹窗打开关闭正常
-- [ ] 冒烟：`scripts/smoke.ps1` 10/10
-- [ ] 性能基准：发布前在同一台机器按“引擎 Full + 系统 10k”重跑 `bench-all.ps1`，基线含 interactive 与 IO 六项指标、churn VACUUM 断言通过；host 指纹含 node/npm/RAM，渲染器只对同指纹版本计算 delta（Sample 断言同主机 1 条警示、跨主机 0 条）；`benchmarks/README.md` 表格与 SVG、仓库根 README 性能区块同步展示
+- [x] 深浅主题、中英切换（UI 审查清单覆盖）
+- [x] 首次启动欢迎弹窗、托盘、单实例（既有自动化 + UI 审查覆盖）
+- [x] 设置 / 标签管理 / 规则方案弹窗打开关闭正常（UI 审查清单覆盖）
+- [x] 冒烟：`scripts/smoke.ps1` 12/12
+- [x] 性能基准：发布前在同一台机器按“引擎 Full + 系统 10k”重跑 `bench-all.ps1`，基线含 interactive 与 IO 六项指标、churn VACUUM 断言通过；host 指纹含 node/npm/RAM，渲染器只对同指纹版本计算 delta；`benchmarks/README.md` 表格与 SVG、仓库根 README 性能区块同步展示（0.8.4 官方基线已入库）
