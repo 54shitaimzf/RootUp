@@ -6,66 +6,75 @@
 
 - **0.8.3** (v2) - Microsoft Windows NT 10.0.22621.0 | Intel64 Family 6 Model 183 Stepping 1, GenuineIntel | commit f43e46a
 - **0.8.4** (v2) - Microsoft Windows NT 10.0.22621.0 | Intel64 Family 6 Model 183 Stepping 1, GenuineIntel | commit 5877b00
+- **0.8.5** (v2) - Microsoft Windows NT 10.0.22621.0 | Intel64 Family 6 Model 183 Stepping 1, GenuineIntel | commit 95a99bd
 
 ## engine
 
-| metric | 0.8.3 (p50/p90/p99) | 0.8.4 (p50/p90/p99) |
-|---|---|---|
-| engine_archive_files_ms | 427.9 / 427.9 / 427.9 | 412.1 / 412.1 / 412.1 (-3.7%) |
-| engine_churn_db_kb_after | 8424.0 / 8424.0 / 8424.0 | 8488.0 / 8488.0 / 8488.0 (0.8%) |
-| engine_churn_db_kb_before | 12382.2 / 12382.2 / 12382.2 | 12430.2 / 12430.2 / 12430.2 (0.4%) |
-| engine_churn_db_kb_vacuum | 8048.0 / 8048.0 / 8048.0 | 8488.0 / 8488.0 / 8488.0 (5.5%) |
-| engine_index_build_100k_ms | 201.9 / 201.9 / 201.9 | 220.9 / 220.9 / 220.9 (9.4%) |
-| engine_query_combined_ms | 26.33 / 27.06 / 27.06 | 27.68 / 27.90 / 27.90 (5.1%) |
-| engine_query_label_cold_ms | 67.62 / 67.62 / 67.62 | 43.11 / 43.11 / 43.11 (-36.2%) :warning: |
-| engine_query_label_ms | 41.29 / 41.73 / 41.73 | 42.25 / 43.13 / 43.13 (2.3%) |
-| engine_query_paged_ms | 92.43 / 92.58 / 92.58 | 96.67 / 97.88 / 97.88 (4.6%) |
-| engine_query_text_cold_ms | 65.00 / 65.00 / 65.00 | 50.98 / 50.98 / 50.98 (-21.6%) :warning: |
-| engine_query_text_ms | 46.99 / 61.57 / 61.57 | 47.72 / 47.73 / 47.73 (1.6%) |
-| engine_query_type_ms | 22.61 / 23.26 / 23.26 | 24.36 / 24.62 / 24.62 (7.7%) |
-| engine_reapply_labels_ms | 152.0 / 220.3 / 220.3 | 156.9 / 225.5 / 225.5 (3.2%) |
-| engine_rescan_10k_ms | 352.8 / 352.8 / 352.8 | 302.0 / 302.0 / 302.0 (-14.4%) |
-| engine_scan_deep_10k_ms | 302.7 / 302.7 / 302.7 | 302.8 / 302.8 / 302.8 (0%) |
-| engine_scan_deep_10k_per_file_ms | 0.0269 / 0.0269 / 0.0269 | 0.0270 / 0.0270 / 0.0270 (0.4%) |
-| engine_scan_mixed_100k_ms | 2821.6 / 2821.6 / 2821.6 | 3025.1 / 3025.1 / 3025.1 (7.2%) |
-| engine_scan_mixed_100k_per_file_ms | 0.0280 / 0.0280 / 0.0280 | 0.0299 / 0.0299 / 0.0299 (6.6%) |
-| engine_scan_mixed_10k_ms | 303.2 / 303.2 / 303.2 | 302.3 / 302.3 / 302.3 (-0.3%) |
-| engine_scan_mixed_10k_per_file_ms | 0.0270 / 0.0270 / 0.0270 | 0.0274 / 0.0274 / 0.0274 (1.5%) |
-| engine_scan_noise_10k_ms | 302.8 / 302.8 / 302.8 | 302.8 / 302.8 / 302.8 (0%) |
-| engine_scan_noise_10k_per_file_ms | 0.0267 / 0.0267 / 0.0267 | 0.0275 / 0.0275 / 0.0275 (3%) |
-| engine_scan_wide_10k_ms | 302.4 / 302.4 / 302.4 | 302.7 / 302.7 / 302.7 (0.1%) |
-| engine_scan_wide_10k_per_file_ms | 0.0266 / 0.0266 / 0.0266 | 0.0274 / 0.0274 / 0.0274 (3%) |
-| engine_undo_files_ms | 320.2 / 320.2 / 320.2 | 326.3 / 326.3 / 326.3 (1.9%) |
+| metric | 0.8.3 (p50/p90/p99) | 0.8.4 (p50/p90/p99) | 0.8.5 (p50/p90/p99) |
+|---|---|---|---|
+| engine_archive_files_ms | 427.9 / 427.9 / 427.9 | 412.1 / 412.1 / 412.1 (-3.7%) | 416.6 / 416.6 / 416.6 (1.1%) |
+| engine_churn_db_kb_after | 8424.0 / 8424.0 / 8424.0 | 8488.0 / 8488.0 / 8488.0 (0.8%) | 16016.0 / 16016.0 / 16016.0 (88.7%) :warning: |
+| engine_churn_db_kb_before | 12382.2 / 12382.2 / 12382.2 | 12430.2 / 12430.2 / 12430.2 (0.4%) | 19537.7 / 19537.7 / 19537.7 (57.2%) :warning: |
+| engine_churn_db_kb_vacuum | 8048.0 / 8048.0 / 8048.0 | 8488.0 / 8488.0 / 8488.0 (5.5%) | 16016.0 / 16016.0 / 16016.0 (88.7%) :warning: |
+| engine_index_build_100k_ms | 201.9 / 201.9 / 201.9 | 220.9 / 220.9 / 220.9 (9.4%) | 624.0 / 624.0 / 624.0 (182.6%) :warning: |
+| engine_query_combined_ms | 26.33 / 27.06 / 27.06 | 27.68 / 27.90 / 27.90 (5.1%) | 12.48 / 12.86 / 12.86 (-54.9%) :warning: |
+| engine_query_label_cold_ms | 67.62 / 67.62 / 67.62 | 43.11 / 43.11 / 43.11 (-36.2%) :warning: | 13.10 / 13.10 / 13.10 (-69.6%) :warning: |
+| engine_query_label_ms | 41.29 / 41.73 / 41.73 | 42.25 / 43.13 / 43.13 (2.3%) | 10.92 / 11.51 / 11.51 (-74.1%) :warning: |
+| engine_query_paged_ms | 92.43 / 92.58 / 92.58 | 96.67 / 97.88 / 97.88 (4.6%) | 3.50 / 3.72 / 3.72 (-96.4%) :warning: |
+| engine_query_text_cold_ms | 65.00 / 65.00 / 65.00 | 50.98 / 50.98 / 50.98 (-21.6%) :warning: | 12.08 / 12.08 / 12.08 (-76.3%) :warning: |
+| engine_query_text_ms | 46.99 / 61.57 / 61.57 | 47.72 / 47.73 / 47.73 (1.6%) | 10.26 / 10.57 / 10.57 (-78.5%) :warning: |
+| engine_query_type_ms | 22.61 / 23.26 / 23.26 | 24.36 / 24.62 / 24.62 (7.7%) | 6.33 / 6.47 / 6.47 (-74%) :warning: |
+| engine_reapply_labels_ms | 152.0 / 220.3 / 220.3 | 156.9 / 225.5 / 225.5 (3.2%) | 159.7 / 274.5 / 274.5 (1.8%) |
+| engine_rescan_10k_ms | 352.8 / 352.8 / 352.8 | 302.0 / 302.0 / 302.0 (-14.4%) | 502.5 / 502.5 / 502.5 (66.4%) :warning: |
+| engine_scan_deep_10k_ms | 302.7 / 302.7 / 302.7 | 302.8 / 302.8 / 302.8 (0%) | 353.1 / 353.1 / 353.1 (16.6%) :warning: |
+| engine_scan_deep_10k_per_file_ms | 0.0269 / 0.0269 / 0.0269 | 0.0270 / 0.0270 / 0.0270 (0.4%) | 0.0311 / 0.0311 / 0.0311 (15.2%) :warning: |
+| engine_scan_mixed_100k_ms | 2821.6 / 2821.6 / 2821.6 | 3025.1 / 3025.1 / 3025.1 (7.2%) | 3882.1 / 3882.1 / 3882.1 (28.3%) :warning: |
+| engine_scan_mixed_100k_per_file_ms | 0.0280 / 0.0280 / 0.0280 | 0.0299 / 0.0299 / 0.0299 (6.6%) | 0.0383 / 0.0383 / 0.0383 (28.2%) :warning: |
+| engine_scan_mixed_10k_ms | 303.2 / 303.2 / 303.2 | 302.3 / 302.3 / 302.3 (-0.3%) | 353.2 / 353.2 / 353.2 (16.9%) :warning: |
+| engine_scan_mixed_10k_per_file_ms | 0.0270 / 0.0270 / 0.0270 | 0.0274 / 0.0274 / 0.0274 (1.5%) | 0.0319 / 0.0319 / 0.0319 (16.4%) :warning: |
+| engine_scan_noise_10k_ms | 302.8 / 302.8 / 302.8 | 302.8 / 302.8 / 302.8 (0%) | 353.3 / 353.3 / 353.3 (16.7%) :warning: |
+| engine_scan_noise_10k_per_file_ms | 0.0267 / 0.0267 / 0.0267 | 0.0275 / 0.0275 / 0.0275 (3%) | 0.0318 / 0.0318 / 0.0318 (15.6%) :warning: |
+| engine_scan_wide_10k_ms | 302.4 / 302.4 / 302.4 | 302.7 / 302.7 / 302.7 (0.1%) | 353.6 / 353.6 / 353.6 (16.8%) :warning: |
+| engine_scan_wide_10k_per_file_ms | 0.0266 / 0.0266 / 0.0266 | 0.0274 / 0.0274 / 0.0274 (3%) | 0.0306 / 0.0306 / 0.0306 (11.7%) |
+| engine_undo_files_ms | 320.2 / 320.2 / 320.2 | 326.3 / 326.3 / 326.3 (1.9%) | 339.7 / 339.7 / 339.7 (4.1%) |
+| engine_query_and_keyword_ms | - | - | 14.82 / 14.88 / 14.88 |
+| engine_query_and_syntax_ms | - | - | 14.63 / 14.70 / 14.70 |
+| engine_query_keyset_page_ms | - | - | 0.0703 / 0.0932 / 0.0932 |
+| engine_query_label_json_ms | - | - | 12.64 / 12.64 / 12.64 |
+| engine_query_label_like_ms | - | - | 7.29 / 7.29 / 7.29 |
+| engine_query_labels_multi_ms | - | - | 12.55 / 12.68 / 12.68 |
+| engine_query_text_fts_ms | - | - | 1.88 / 1.88 / 1.88 |
+| engine_query_text_like_ms | - | - | 4.66 / 4.66 / 4.66 |
 
 ## system
 
-| metric | 0.8.3 (p50/p90/p99) | 0.8.4 (p50/p90/p99) |
-|---|---|---|
-| system_bundle_css_gzip_kb | 13.02 / 13.02 / 13.02 | 13.05 / 13.05 / 13.05 (0.2%) |
-| system_bundle_js_gzip_kb | 143.3 / 143.3 / 143.3 | 144.1 / 144.1 / 144.1 (0.6%) |
-| system_idle_cpu_percent | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
-| system_idle_private_mb | 9.04 / 9.15 / 9.15 | 13.02 / 13.28 / 13.28 (44%) :warning: |
-| system_idle_rss_mb | 30.10 / 30.22 / 30.22 | 35.19 / 35.36 / 35.36 (16.9%) :warning: |
-| system_idle_warm_rss_mb | 30.03 / 30.03 / 30.03 | 40.85 / 40.85 / 40.85 (36%) :warning: |
-| system_index_db_kb | 7620.6 / 7620.6 / 7620.6 | 7612.6 / 7612.6 / 7612.6 (-0.1%) |
-| system_interactive_cold_ms | 1944.8 / 1950.0 / 1950.0 | 1806.2 / 1826.0 / 1826.0 (-7.1%) |
-| system_interactive_warm_ms | 1955.3 / 1955.3 / 1955.3 | 1822.2 / 1822.2 / 1822.2 (-6.8%) |
-| system_io_cold_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
-| system_io_cold_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
-| system_io_warm_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
-| system_io_warm_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) |
-| system_mem_series_cold_mean_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) |
-| system_mem_series_cold_peak_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) |
-| system_mem_series_warm_mean_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: |
-| system_mem_series_warm_peak_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: |
-| system_scan_cold_files_per_sec | 27700.8 / 28490.0 / 28490.0 | 31348.0 / 31746.0 / 31746.0 (13.2%) |
-| system_scan_cold_ms | 361.0 / 372.0 / 372.0 | 319.0 / 327.0 / 327.0 (-11.6%) |
-| system_scan_cold_peak_rss_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) |
-| system_scan_warm_files_per_sec | 26954.2 / 26954.2 / 26954.2 | 30395.1 / 30395.1 / 30395.1 (12.8%) |
-| system_scan_warm_ms | 371.0 / 371.0 / 371.0 | 329.0 / 329.0 / 329.0 (-11.3%) |
-| system_scan_warm_peak_rss_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: |
-| system_startup_cold_ms | 320.7 / 393.9 / 393.9 | 519.6 / 555.3 / 555.3 (62%) :warning: |
-| system_startup_warm_ms | 311.4 / 311.4 / 311.4 | 521.8 / 521.8 / 521.8 (67.6%) :warning: |
+| metric | 0.8.3 (p50/p90/p99) | 0.8.4 (p50/p90/p99) | 0.8.5 (p50/p90/p99) |
+|---|---|---|---|
+| system_bundle_css_gzip_kb | 13.02 / 13.02 / 13.02 | 13.05 / 13.05 / 13.05 (0.2%) | 13.06 / 13.06 / 13.06 (0.1%) |
+| system_bundle_js_gzip_kb | 143.3 / 143.3 / 143.3 | 144.1 / 144.1 / 144.1 (0.6%) | 151.8 / 151.8 / 151.8 (5.3%) |
+| system_idle_cpu_percent | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_idle_private_mb | 9.04 / 9.15 / 9.15 | 13.02 / 13.28 / 13.28 (44%) :warning: | 14.63 / 14.69 / 14.69 (12.4%) |
+| system_idle_rss_mb | 30.10 / 30.22 / 30.22 | 35.19 / 35.36 / 35.36 (16.9%) :warning: | 36.34 / 36.44 / 36.44 (3.3%) |
+| system_idle_warm_rss_mb | 30.03 / 30.03 / 30.03 | 40.85 / 40.85 / 40.85 (36%) :warning: | 34.28 / 34.28 / 34.28 (-16.1%) :warning: |
+| system_index_db_kb | 7620.6 / 7620.6 / 7620.6 | 7612.6 / 7612.6 / 7612.6 (-0.1%) | 9471.6 / 9471.6 / 9471.6 (24.4%) :warning: |
+| system_interactive_cold_ms | 1944.8 / 1950.0 / 1950.0 | 1806.2 / 1826.0 / 1826.0 (-7.1%) | 1808.9 / 1813.2 / 1813.2 (0.1%) |
+| system_interactive_warm_ms | 1955.3 / 1955.3 / 1955.3 | 1822.2 / 1822.2 / 1822.2 (-6.8%) | 1624.9 / 1624.9 / 1624.9 (-10.8%) |
+| system_io_cold_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_io_cold_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_io_warm_read_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_io_warm_write_mb_per_sec | 0.0000 / 0.0000 / 0.0000 | 0.0000 / 0.0000 / 0.0000 (NaN%) | 0.0000 / 0.0000 / 0.0000 (NaN%) |
+| system_mem_series_cold_mean_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) | 32.26 / 33.64 / 33.64 (-1.4%) |
+| system_mem_series_cold_peak_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) | 32.26 / 33.64 / 33.64 (-1.4%) |
+| system_mem_series_warm_mean_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: | 33.73 / 33.73 / 33.73 (-11.3%) |
+| system_mem_series_warm_peak_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: | 33.73 / 33.73 / 33.73 (-11.3%) |
+| system_scan_cold_files_per_sec | 27700.8 / 28490.0 / 28490.0 | 31348.0 / 31746.0 / 31746.0 (13.2%) | 26738.0 / 27397.3 / 27397.3 (-14.7%) |
+| system_scan_cold_ms | 361.0 / 372.0 / 372.0 | 319.0 / 327.0 / 327.0 (-11.6%) | 374.0 / 383.0 / 383.0 (17.2%) :warning: |
+| system_scan_cold_peak_rss_mb | 30.10 / 30.22 / 30.22 | 32.73 / 33.12 / 33.12 (8.7%) | 32.26 / 33.64 / 33.64 (-1.4%) |
+| system_scan_warm_files_per_sec | 26954.2 / 26954.2 / 26954.2 | 30395.1 / 30395.1 / 30395.1 (12.8%) | 25706.9 / 25706.9 / 25706.9 (-15.4%) :warning: |
+| system_scan_warm_ms | 371.0 / 371.0 / 371.0 | 329.0 / 329.0 / 329.0 (-11.3%) | 389.0 / 389.0 / 389.0 (18.2%) :warning: |
+| system_scan_warm_peak_rss_mb | 30.11 / 30.11 / 30.11 | 38.04 / 38.04 / 38.04 (26.3%) :warning: | 33.73 / 33.73 / 33.73 (-11.3%) |
+| system_startup_cold_ms | 320.7 / 393.9 / 393.9 | 519.6 / 555.3 / 555.3 (62%) :warning: | 509.8 / 568.3 / 568.3 (-1.9%) |
+| system_startup_warm_ms | 311.4 / 311.4 / 311.4 | 521.8 / 521.8 / 521.8 (67.6%) :warning: | 495.4 / 495.4 / 495.4 (-5.1%) |
 
 ## Trend charts
 
@@ -74,11 +83,19 @@
 - [engine_churn_db_kb_before p50](charts/engine_churn_db_kb_before.svg)  | [p90](charts/engine_churn_db_kb_before.p90.svg)
 - [engine_churn_db_kb_vacuum p50](charts/engine_churn_db_kb_vacuum.svg)  | [p90](charts/engine_churn_db_kb_vacuum.p90.svg)
 - [engine_index_build_100k_ms p50](charts/engine_index_build_100k_ms.svg)  | [p90](charts/engine_index_build_100k_ms.p90.svg)
+- [engine_query_and_keyword_ms p50](charts/engine_query_and_keyword_ms.svg)  | [p90](charts/engine_query_and_keyword_ms.p90.svg)
+- [engine_query_and_syntax_ms p50](charts/engine_query_and_syntax_ms.svg)  | [p90](charts/engine_query_and_syntax_ms.p90.svg)
 - [engine_query_combined_ms p50](charts/engine_query_combined_ms.svg)  | [p90](charts/engine_query_combined_ms.p90.svg)
+- [engine_query_keyset_page_ms p50](charts/engine_query_keyset_page_ms.svg)  | [p90](charts/engine_query_keyset_page_ms.p90.svg)
 - [engine_query_label_cold_ms p50](charts/engine_query_label_cold_ms.svg)  | [p90](charts/engine_query_label_cold_ms.p90.svg)
+- [engine_query_label_json_ms p50](charts/engine_query_label_json_ms.svg)  | [p90](charts/engine_query_label_json_ms.p90.svg)
+- [engine_query_label_like_ms p50](charts/engine_query_label_like_ms.svg)  | [p90](charts/engine_query_label_like_ms.p90.svg)
 - [engine_query_label_ms p50](charts/engine_query_label_ms.svg)  | [p90](charts/engine_query_label_ms.p90.svg)
+- [engine_query_labels_multi_ms p50](charts/engine_query_labels_multi_ms.svg)  | [p90](charts/engine_query_labels_multi_ms.p90.svg)
 - [engine_query_paged_ms p50](charts/engine_query_paged_ms.svg)  | [p90](charts/engine_query_paged_ms.p90.svg)
 - [engine_query_text_cold_ms p50](charts/engine_query_text_cold_ms.svg)  | [p90](charts/engine_query_text_cold_ms.p90.svg)
+- [engine_query_text_fts_ms p50](charts/engine_query_text_fts_ms.svg)  | [p90](charts/engine_query_text_fts_ms.p90.svg)
+- [engine_query_text_like_ms p50](charts/engine_query_text_like_ms.svg)  | [p90](charts/engine_query_text_like_ms.p90.svg)
 - [engine_query_text_ms p50](charts/engine_query_text_ms.svg)  | [p90](charts/engine_query_text_ms.p90.svg)
 - [engine_query_type_ms p50](charts/engine_query_type_ms.svg)  | [p90](charts/engine_query_type_ms.p90.svg)
 - [engine_reapply_labels_ms p50](charts/engine_reapply_labels_ms.svg)  | [p90](charts/engine_reapply_labels_ms.p90.svg)

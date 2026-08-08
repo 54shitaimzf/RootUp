@@ -11,11 +11,14 @@
 <text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>1917.1</text>
 <line x1='70' y1='30' x2='540' y2='30' stroke='#e2e8f0' stroke-width='1'/>
 <text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>1958.8</text>
-<polyline points='70,45.5 540,198.5' fill='none' stroke='#10b981' stroke-width='2'/>
+<polyline points='70,45.5 305,198.5 540,195.6' fill='none' stroke='#10b981' stroke-width='2'/>
 <circle cx='70' cy='45.5' r='3.5' fill='#10b981'/>
 <text x='70' y='37.5' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>1944.8</text>
 <text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.3</text>
-<circle cx='540' cy='198.5' r='3.5' fill='#10b981'/>
-<text x='540' y='190.5' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>1806.2</text>
-<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.4</text>
+<circle cx='305' cy='198.5' r='3.5' fill='#10b981'/>
+<text x='305' y='190.5' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>1806.2</text>
+<text x='305' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.4</text>
+<circle cx='540' cy='195.6' r='3.5' fill='#10b981'/>
+<text x='540' y='187.6' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>1808.9</text>
+<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5</text>
 </svg>

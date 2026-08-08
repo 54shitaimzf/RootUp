@@ -13,7 +13,7 @@ use rootup_lib::core::study_classify::{reapply_labels, StudyClassifier};
 use rootup_lib::infra::archive_engine::{archive_files, undo_file_batch};
 use rootup_lib::infra::index_store::SqliteIndexStore;
 use rootup_lib::infra::scanner::ScanService;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::env;
 use std::fs;
@@ -420,6 +420,20 @@ fn bench_queries(store: &mut SqliteIndexStore, samples: usize) -> Value {
         ("query_type".into(), parse_query("type:pdf")),
         ("query_label".into(), parse_query("label:course-c-demo-1")),
         ("query_combined".into(), parse_query("type:pdf 高等数学")),
+        (
+            "query_labels_multi".into(),
+            parse_query(
+                "label:document label:audio label:image label:course-c-demo-1 label:nomatch",
+            ),
+        ),
+        (
+            "query_and_syntax".into(),
+            parse_query("label:document +label:course-c-demo-1"),
+        ),
+        (
+            "query_and_keyword".into(),
+            parse_query("label:document AND label:course-c-demo-1"),
+        ),
     ];
     let paged = FileQuery {
         limit: 50,
@@ -444,6 +458,161 @@ fn bench_queries(store: &mut SqliteIndexStore, samples: usize) -> Value {
         durations.push(start.elapsed());
     }
     metric("engine_query_paged_ms", "ms", &durations, &mut out);
+
+    // keyset 分页（COUNT 治理路径）：数据量足够时测“带游标翻页”单页耗时
+    let seed_page = store
+        .query(&FileQuery {
+            limit: 50,
+            need_total: false,
+            ..Default::default()
+        })
+        .unwrap();
+    if let Some(cursor) = seed_page.next_cursor {
+        let keyset_query = FileQuery {
+            limit: 50,
+            cursor: Some(cursor),
+            need_total: false,
+            ..Default::default()
+        };
+        let mut durations = Vec::new();
+        for _ in 0..samples {
+            let start = Instant::now();
+            let page = store.query(&keyset_query).unwrap();
+            assert_eq!(page.items.len(), 50);
+            assert!(page.next_cursor.is_some());
+            durations.push(start.elapsed());
+        }
+        metric("engine_query_keyset_page_ms", "ms", &durations, &mut out);
+    }
+    out
+}
+
+/// 标签过滤与文本查询的实现评估：逗号串 LIKE vs json_each、LIKE vs FTS5 trigram。
+/// 只产指标、不改默认实现；决策记录见 benchmarks/label-index-evaluation.md。
+fn bench_query_eval_options(count: usize, samples: usize) -> Value {
+    let mut out = Value::Object(Default::default());
+    let eval_count = count.min(100_000);
+    let mut like_durations = Vec::new();
+    let mut json_durations = Vec::new();
+    let mut text_like_durations = Vec::new();
+    let mut text_fts_durations = Vec::new();
+    let mut fts_available = true;
+
+    for _ in 0..samples {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, labels TEXT);
+             CREATE TABLE tj(id INTEGER PRIMARY KEY, name TEXT, labels TEXT);",
+        )
+        .unwrap();
+        {
+            let mut like_stmt = conn.prepare("INSERT INTO t VALUES (?1, ?2, ?3)").unwrap();
+            let mut json_stmt = conn.prepare("INSERT INTO tj VALUES (?1, ?2, ?3)").unwrap();
+            let mut rng = Rng::new(20260808);
+            for i in 0..eval_count {
+                let name = if rng.ratio() < 0.3 {
+                    format!("高等数学-第{}章-notes-{i}", i % 20 + 1)
+                } else {
+                    format!("file{i:06}")
+                };
+                let labels = match i % 4 {
+                    0 => "document,audio",
+                    1 => "document",
+                    2 => "audio,image",
+                    _ => "",
+                };
+                let labels_json = if labels.is_empty() {
+                    "[]".to_string()
+                } else {
+                    format!("[\"{}\"]", labels.replace(',', "\",\""))
+                };
+                like_stmt.execute(params![i, name, labels]).unwrap();
+                json_stmt.execute(params![i, name, labels_json]).unwrap();
+            }
+        }
+
+        let start = Instant::now();
+        let like_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM t WHERE ',' || labels || ',' LIKE '%,document,%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(like_count, (eval_count / 2) as i64);
+        like_durations.push(start.elapsed());
+
+        let start = Instant::now();
+        let json_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tj WHERE EXISTS \
+                 (SELECT 1 FROM json_each(tj.labels) WHERE value = 'document')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(json_count, (eval_count / 2) as i64);
+        json_durations.push(start.elapsed());
+
+        let fts_ok = conn
+            .execute_batch("CREATE VIRTUAL TABLE ft USING fts5(name, tokenize='trigram')")
+            .is_ok();
+        fts_available &= fts_ok;
+        if fts_ok {
+            conn.execute("INSERT INTO ft(name) SELECT name FROM t", [])
+                .unwrap();
+            let start = Instant::now();
+            let fts_count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM ft WHERE name MATCH '\"高等数学\"'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(fts_count > 0);
+            text_fts_durations.push(start.elapsed());
+        }
+
+        let start = Instant::now();
+        let like_text_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM t WHERE name LIKE '%高等数学%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(like_text_count > 0);
+        text_like_durations.push(start.elapsed());
+    }
+
+    metric(
+        "engine_query_label_like_ms",
+        "ms",
+        &like_durations,
+        &mut out,
+    );
+    metric(
+        "engine_query_label_json_ms",
+        "ms",
+        &json_durations,
+        &mut out,
+    );
+    metric(
+        "engine_query_text_like_ms",
+        "ms",
+        &text_like_durations,
+        &mut out,
+    );
+    if fts_available {
+        metric(
+            "engine_query_text_fts_ms",
+            "ms",
+            &text_fts_durations,
+            &mut out,
+        );
+    } else {
+        eprintln!("[eval] FTS5 trigram 不可用（bundled SQLite 未启用 FTS5），跳过 fts 指标");
+    }
     out
 }
 
@@ -728,6 +897,10 @@ fn main() {
     let mut store = SqliteIndexStore::open(":memory:").unwrap();
     seed_records(&mut store, memory_count, 20260003);
     merge(&mut metrics, bench_queries(&mut store, samples));
+    merge(
+        &mut metrics,
+        bench_query_eval_options(memory_count, samples.min(3)),
+    );
     merge(&mut metrics, bench_reapply(&mut store, samples));
     merge(
         &mut metrics,
