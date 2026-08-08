@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { HelpCenterProvider } from "../../../components/HelpCenter";
+import { ONBOARDING_STORAGE_KEY } from "../../../components/OnboardingDialog";
 import { CourseFormDialog } from "./CourseFormDialog";
 import { CourseScheduleView } from "./CourseScheduleView";
 import { HomeworkFormDialog } from "./HomeworkFormDialog";
@@ -15,10 +18,15 @@ function pick(label: string, optionText: string) {
   fireEvent.click(screen.getByRole("option", { name: new RegExp(optionText) }));
 }
 
+function renderWithHelp(node: ReactNode) {
+  window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+  return render(<HelpCenterProvider>{node}</HelpCenterProvider>);
+}
+
 describe("CourseFormDialog", () => {
   it("空名称提交显示错误且不保存", () => {
     const onSave = vi.fn();
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -33,7 +41,7 @@ describe("CourseFormDialog", () => {
 
   it("填写后保存为课程草稿", () => {
     const onSave = vi.fn();
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -58,7 +66,7 @@ describe("CourseFormDialog", () => {
 
   it("新建默认自动配色，按最少使用解析具体颜色", () => {
     const onSave = vi.fn();
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -77,7 +85,7 @@ describe("CourseFormDialog", () => {
   });
 
   it("非指定周次时不渲染周次范围输入，指定后出现", () => {
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -95,7 +103,7 @@ describe("CourseFormDialog", () => {
   });
 
   it("时间对包含“至”连接符", () => {
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -107,7 +115,7 @@ describe("CourseFormDialog", () => {
   });
 
   it("指定周次非法时提示错误", () => {
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -124,7 +132,7 @@ describe("CourseFormDialog", () => {
   });
 
   it("使用分隔线分区渲染三个区块", () => {
-    render(
+    renderWithHelp(
       <CourseFormDialog
         open
         initial={null}
@@ -142,7 +150,7 @@ describe("CourseFormDialog", () => {
 
 describe("HomeworkFormDialog", () => {
   it("空标题提交显示错误", () => {
-    render(
+    renderWithHelp(
       <HomeworkFormDialog
         open
         initial={null}
@@ -158,7 +166,7 @@ describe("HomeworkFormDialog", () => {
 
   it("保存无课程作业草稿", () => {
     const onSave = vi.fn();
-    render(
+    renderWithHelp(
       <HomeworkFormDialog
         open
         initial={null}
@@ -182,7 +190,7 @@ describe("HomeworkFormDialog", () => {
   });
 
   it("备注与详情字段带长度上限", () => {
-    render(
+    renderWithHelp(
       <HomeworkFormDialog
         open
         initial={null}
@@ -197,7 +205,7 @@ describe("HomeworkFormDialog", () => {
   });
 
   it("使用分隔线分区渲染三个区块", () => {
-    render(
+    renderWithHelp(
       <HomeworkFormDialog
         open
         initial={null}
@@ -236,7 +244,7 @@ describe("视图空态", () => {
   };
 
   it("课程表空数据提示添加课程", () => {
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[]}
         homework={[]}
@@ -247,7 +255,7 @@ describe("视图空态", () => {
   });
 
   it("仅当前周且无匹配课程时提示", () => {
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[2]]}
         homework={[]}
@@ -259,7 +267,7 @@ describe("视图空态", () => {
   });
 
   it("作业空数据与筛选空态", () => {
-    render(
+    renderWithHelp(
       <HomeworkView
         homework={[]}
         courses={DEMO_COURSES}
@@ -277,7 +285,7 @@ describe("视图空态", () => {
   });
 
   it("筛选无结果时提示", () => {
-    render(
+    renderWithHelp(
       <HomeworkView
         homework={DEMO_HOMEWORK}
         courses={DEMO_COURSES}
@@ -296,7 +304,7 @@ describe("视图空态", () => {
   });
 
   it("筛选分组显示状态与课程小标题", () => {
-    render(
+    renderWithHelp(
       <HomeworkView
         homework={DEMO_HOMEWORK}
         courses={DEMO_COURSES}
@@ -327,20 +335,20 @@ describe("视图空态", () => {
       onArchive: () => {},
       onDelete: () => {},
     };
-    const { unmount } = render(
+    const { unmount } = renderWithHelp(
       <HomeworkView {...props} reminderEnabled leadDays={3} />,
     );
     expect(screen.getByText(/已逾期（\d+）/)).toBeInTheDocument();
     expect(screen.getByText(/临期（\d+）/)).toBeInTheDocument();
     unmount();
 
-    render(<HomeworkView {...props} />);
+    renderWithHelp(<HomeworkView {...props} />);
     expect(screen.queryByText(/已逾期（\d+）/)).not.toBeInTheDocument();
     expect(screen.queryByText(/临期（\d+）/)).not.toBeInTheDocument();
   });
 
   it("课程表容器无圆角且课程卡收敛为最小圆角", () => {
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}
         homework={[]}
@@ -357,7 +365,7 @@ describe("视图空态", () => {
   });
 
   it("周次徽章与今天标记使用最小圆角而非胶囊", () => {
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[2]]}
         homework={[]}
@@ -373,7 +381,7 @@ describe("视图空态", () => {
   });
 
   it("时间刻度与表体对齐且表头不再有内部空列", () => {
-    const { container } = render(
+    const { container } = renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}
         homework={[]}
@@ -402,7 +410,7 @@ describe("视图空态", () => {
       weekRule: "even" as const,
     };
     const onOpenDetail = vi.fn();
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[odd, even]}
         homework={[]}
@@ -448,7 +456,7 @@ describe("视图空态", () => {
   });
 
   it("长标题课程卡在课表中截断", () => {
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[4]]}
         homework={[]}
@@ -471,7 +479,7 @@ describe("视图空态", () => {
       id: "even",
       weekRule: "even" as const,
     };
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[odd, even]}
         homework={[]}
@@ -522,7 +530,7 @@ describe("视图空态", () => {
         weekRange: "5-6",
       },
     ];
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={courses}
         homework={[]}
@@ -543,7 +551,7 @@ describe("视图空态", () => {
       weekRule: "range" as const,
       weekRange: `${index * 2 - 1}-${index * 2}`,
     }));
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={courses}
         homework={[]}
@@ -572,7 +580,7 @@ describe("视图空态", () => {
       startMin: 480 + index * 20,
       endMin: 580 + index * 20,
     }));
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={courses}
         homework={[]}
@@ -596,7 +604,7 @@ describe("视图空态", () => {
       startMin: 480,
       endMin: 510,
     };
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[short, DEMO_COURSES[0]]}
         homework={[]}
@@ -616,7 +624,7 @@ describe("视图空态", () => {
   it("学期选择与周步进回调", () => {
     const onSemesterChange = vi.fn();
     const onWeekChange = vi.fn();
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}
         homework={[]}
@@ -638,7 +646,7 @@ describe("视图空态", () => {
 
   it("当前周不等于实际周时显示回到本周", () => {
     const onResetWeek = vi.fn();
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}
         homework={[]}
@@ -657,7 +665,7 @@ describe("视图空态", () => {
   });
 
   it("工具栏显示学期管理入口与普通学期名", () => {
-    render(
+    renderWithHelp(
       <CourseScheduleView
         courses={[DEMO_COURSES[0]]}
         homework={[]}

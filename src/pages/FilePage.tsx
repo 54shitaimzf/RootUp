@@ -11,12 +11,14 @@ import {
 import { CATEGORY_ICON, FileTypeIcon } from "../components/FileTypeIcon";
 import { FilterBar } from "../components/FilterBar";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
+import { useHelpCenter } from "../components/HelpCenter";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
+import { PageHelpButton } from "../components/PageHelpButton";
 import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
@@ -118,6 +120,7 @@ export function FilePage({
   scan: ScanController;
 }) {
   const { t } = useTranslation();
+  const { openHelp } = useHelpCenter();
   const { settings } = useSettings();
   const { habits, touch } = useFilterHabits();
   const labelDefs = useLabelDefs();
@@ -435,6 +438,7 @@ export function FilePage({
       <PageHeader
         title={t("pages.files.title")}
         description={t("pages.files.description")}
+        actions={<PageHelpButton target="tasks.files" />}
       />
 
       <SearchAutocomplete
@@ -653,17 +657,37 @@ export function FilePage({
           <EmptyState
             title={t("files.empty")}
             action={
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => onNavigate("settings")}
-              >
-                {t("files.goSettings")}
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => onNavigate("settings")}
+                >
+                  {t("files.goSettings")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={() => openHelp("tasks.gettingStarted")}
+                >
+                  {t("files.helpGettingStarted")}
+                </Button>
+              </div>
             }
           />
         ) : items.length === 0 ? (
-          <EmptyState title={t("files.noResults")} />
+          <EmptyState
+            title={t("files.noResults")}
+            action={
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => openHelp("tasks.searchTips")}
+              >
+                {t("files.helpSearchTips")}
+              </Button>
+            }
+          />
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-4 py-2 dark:border-slate-800">

@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { SettingsPage } from "./SettingsPage";
 import { SettingsProvider } from "../hooks/useSettings";
 import { ThemeProvider } from "../theme/ThemeProvider";
+import { HelpCenterProvider } from "../components/HelpCenter";
+import { ONBOARDING_STORAGE_KEY } from "../components/OnboardingDialog";
 import type { ScanController } from "../hooks/useScan";
 import type { Settings } from "../lib/tauri";
 
@@ -121,7 +123,9 @@ function renderPage() {
   return render(
     <SettingsProvider>
       <ThemeProvider>
-        <SettingsPage scan={scan()} />
+        <HelpCenterProvider>
+          <SettingsPage scan={scan()} />
+        </HelpCenterProvider>
       </ThemeProvider>
     </SettingsProvider>,
   );
@@ -130,6 +134,7 @@ function renderPage() {
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     vi.mocked(getSettings).mockResolvedValue(SETTINGS);
     vi.mocked(saveSettings).mockResolvedValue(undefined);
     vi.mocked(listWatchedDirs).mockResolvedValue([]);

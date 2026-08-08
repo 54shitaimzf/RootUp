@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "../../../components/Button";
 import { EmptyState } from "../../../components/EmptyState";
+import { useHelpCenter } from "../../../components/HelpCenter";
 import { IconButton } from "../../../components/IconButton";
 import { Select } from "../../../components/Select";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -209,6 +210,7 @@ export function CourseScheduleView({
   onOpenCourseHomework: (courseId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const { openHelp } = useHelpCenter();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [slotCourses, setSlotCourses] = useState<Course[] | null>(null);
   const [stackOverlay, setStackOverlay] = useState<{
@@ -379,9 +381,20 @@ export function CourseScheduleView({
                 : t("study.noVisibleCoursesDesc")
             }
             action={
-              <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
-                {t("study.addCourse")}
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
+                  {t("study.addCourse")}
+                </Button>
+                {courses.length === 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openHelp("tasks.study")}
+                  >
+                    {t("study.helpAddCourse")}
+                  </Button>
+                )}
+              </div>
             }
           />
         </div>

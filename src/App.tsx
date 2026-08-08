@@ -63,9 +63,7 @@ function renderPage(
 export default function App() {
   return (
     <SettingsProvider>
-      <HelpCenterProvider>
-        <Shell />
-      </HelpCenterProvider>
+      <Shell />
     </SettingsProvider>
   );
 }
@@ -136,22 +134,24 @@ function Shell() {
 
   return (
     <ThemeProvider>
-      <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
-        <Sidebar current={page} onNavigate={setPage} />
-        <main className="flex-1 overflow-auto p-8 [scrollbar-gutter:stable]">
-          {renderPage(page, {
-            onNavigate: setPage,
-            scan,
-            studyFocus,
-            setStudyFocus,
-            reminderEnabled: settings?.reminder_enabled ?? false,
-            leadDays: settings?.reminder_lead_days ?? 3,
-          })}
-        </main>
-      </div>
-      <CloseConfirmDialog
-        onRemember={(action) => update({ close_action: action })}
-      />
+      <HelpCenterProvider onNavigate={setPage}>
+        <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+          <Sidebar current={page} onNavigate={setPage} />
+          <main className="flex-1 overflow-auto p-8 [scrollbar-gutter:stable]">
+            {renderPage(page, {
+              onNavigate: setPage,
+              scan,
+              studyFocus,
+              setStudyFocus,
+              reminderEnabled: settings?.reminder_enabled ?? false,
+              leadDays: settings?.reminder_lead_days ?? 3,
+            })}
+          </main>
+        </div>
+        <CloseConfirmDialog
+          onRemember={(action) => update({ close_action: action })}
+        />
+      </HelpCenterProvider>
     </ThemeProvider>
   );
 }

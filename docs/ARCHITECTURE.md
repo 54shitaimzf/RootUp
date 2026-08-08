@@ -258,7 +258,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **动效令牌与微交互**：`tokens.css` 定义 `--duration-fast/base/slow` 与 `--ease-out/in-out`；`global.css` 提供 `.micro-press`（按压轻缩）与 `.list-enter`（列表项入场），并全局 `prefers-reduced-motion` 降级；新动画一律引用令牌，仅 transform/opacity，禁止散落硬编码时长。
 - **悬浮提示契约**：`components/Tooltip.tsx` 为唯一悬浮提示组件（portal 到 body 防裁剪、位置/延迟/Esc 关闭、移出关闭）；IconButton 的 `label` 自动生成 tooltip 与 aria-label；提示内容优先 i18n。
 - **清理原语与可靠性预留**：移除监控目录即调用 `mark_under_roots_deleted`（作为 v0.8.8 分类变更日志的“删除事件”来源）；启动归档对账挂载在 `app.rs setup` 紧随 `refresh_managed_state`；`local_file` 临时文件统一 `*.json.tmp` 供启动清理；`archive_ops` 的 source/dest/undone_at 结构即对账依据（v0.8.8 实现，本轮只固化约定）。
-- **帮助中心与新手引导**：`HelpCenterProvider` 全局装配（侧栏入口 + 首次欢迎 + 分组帮助弹窗）；首次欢迎用 localStorage `rootup.onboarding.v1` 一次性标记，帮助中心可重看；IDE 指导数据在 `lib/ideGuide.ts`（仅官方链接）；后端 `list_detected_tools` 返回已检测工具 key，`open_url` 仅允许 https 且命中 `core/tools.rs` 白名单域名（`ALLOWED_DOWNLOAD_DOMAINS`），非法 URL 拒绝并记日志。
+- **帮助中心与新手引导**：`HelpCenterProvider` 全局装配（侧栏入口 + 首次欢迎 + 五分区帮助弹窗：新手入门 / 任务指南 / 搜索语法 / 设置说明 / 遇到问题）；内容单一数据源为 `lib/helpContent.ts` 注册表（文章、更新亮点、搜索源），文案一律 i18n key 且 zh/en 成对；帮助内搜索为 `lib/helpSearch.ts` 纯函数（标题 > 关键词 > 摘要，稳定排序）；文章反馈走 `lib/helpFeedback.ts` 本地存储（`rootup.help.feedback.v1`，不上传）；首次欢迎用 localStorage `rootup.onboarding.v1` 一次性标记，帮助中心可重看；IDE 指导数据在 `lib/ideGuide.ts`（仅官方链接）；后端 `list_detected_tools` 返回已检测工具 key，`open_url` 仅允许 https 且命中 `core/tools.rs` 白名单域名（`ALLOWED_DOWNLOAD_DOMAINS`），非法 URL 拒绝并记日志。
 - **打包与发布约定**：`tauri.conf.json` 启用 NSIS（`installMode: currentUser`、中英语言选择、开始菜单 RootUp），图标由 `npm run tauri icon resources/icons/rootup-sprout.svg` 生成全套；发布前必须 `npm run check:version` 全绿（规则见"版本号规则与发布纪律"）；发布验证统一走 `scripts/verify-installer.ps1`（静默安装 → 冒烟 → 卸载），日常 CI 为 `ci.yml`（构建 + smoke + 架构校验），发布为 `release.yml`（打 `v*` tag 构建安装包 → 验证 → 上传 GitHub Release）；不签名、不启用 updater，SmartScreen 提示写入发布说明。
 - **新页面**：在 `pages/` 新增页面，注册到 `Sidebar` 的导航项与 i18n 文案；当页面长出多个私有组件时，提级为 `features/<name>/components/`（页面级组件与测试），`pages/` 只保留入口。
 - **托盘菜单与图标**：在 `infra/tray.rs` 中扩展菜单项与事件处理。菜单模型由纯函数生成（`core/tray_menu.rs`：临期/逾期作业前 8 项、自动归档与主题勾选态、tooltip 计数；`tray_icon_has_badge` 判定红点角标），在启动、`save_study_data`、`set_settings` 后经 `refresh_tray` 动态重建（`TrayIcon::set_menu/set_tooltip/set_icon`），不轮询；图标资产为 `resources/icons/rootup-tray.ico` 与 `rootup-tray-badge.ico`（16/20/24/32/48/64 多帧）及 `rootup-menu-open/quit.png`（16px 菜单图标），由 `scripts/generate-tray-icons.ps1` 构建期生成并提交，运行时零依赖；临期/逾期计数 > 0 时切换红点版；“打开 / 退出”使用 `IconMenuItem`（Windows 位图图标），勾选项（自动归档/主题）与子菜单本身不支持图标、保持文字；左键单击打开主窗口；临期作业项与 `--open-homework` 启动参数均通过 `study-homework-open` 事件深链到学业页（App 层监听并转发一次性 `focusHomework` 意图）。深链聚焦规则：`--open-project` 不聚焦前台（热唤起不调起窗口、首次启动隐藏主窗口驻留托盘，仅打开 IDE/资源管理器并后台切到项目页），`--open-homework` 与普通启动保持聚焦。
@@ -280,3 +280,11 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **默认规则单一来源**：后端默认忽略规则唯一来源为 `Settings::default().ignore_rules`，`IgnoreMatcher::new()` 由其构造；前端 `DEFAULT_IGNORE_RULES`（`lib/tauri.ts`）与 `fixtures/default-ignore-rules.json` 保持同步并由双端测试断言。
 - **共享一致性 fixtures**：`fixtures/` 下的 JSON 由 Rust（`include_str!`）与 TS（JSON import）共同消费；新增跨语言语义（如提醒分组、默认值）一律先落 fixture 再实现/断言，不引入代码生成工具链。
 - **公共时间工具**：Unix 毫秒时间戳统一走 `infra/time.rs::now_millis()`，禁止各 infra 模块重复实现。
+
+## 0.8.5 前置帮助中心契约
+
+- **页面帮助入口**：`PageHeader` 的 `actions` 为可选插槽，不传时渲染结构与历史版本完全一致（标题 + 描述）；四个主页面（文件 / 项目 / 学业 / 设置）经 `PageHelpButton` 传入文章 id 或分区 id 打开帮助。`PageHeader` 保持通用，禁止 import 任何帮助内容。
+- **帮助内容注册表**：新增一篇帮助文章 = `lib/helpContent.ts` 注册一项 + i18n 双语 key，组件零改动；文章 id（如 `tasks.files`）是稳定深链契约，供搜索、页面入口、相关条目与未来 v1.2 知识库 / v1.4 语言包复用。文章字段（title/summary/steps/keywords/related/action）由测试强制校验，禁止绕过注册表在组件内硬编码文案。
+- **帮助内搜索**：`lib/helpSearch.ts` 纯函数，仅消费注册表聚合的 `HELP_SEARCH_SOURCES`；不得引入全文检索依赖，也不得在 UI 层自行实现匹配逻辑。
+- **反馈边界**：`lib/helpFeedback.ts` 只依赖 localStorage，无后端接口；未来接入 0.8.10 动作日志 / 诊断包时替换该模块实现，UI 层不感知。
+- **文案质量门禁**：帮助相关 i18n 命名空间（`help*`）禁止 AI 腔表达与内部实现标识符，由 `lib/helpCopy.test.ts` 与 i18n 双端 key 一致性测试强制；写作规范见 `docs/COPYWRITING.md`。

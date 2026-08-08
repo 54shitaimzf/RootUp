@@ -61,6 +61,27 @@ describe("共享基础组件", () => {
     expect(screen.getByText("描述")).toBeInTheDocument();
   });
 
+  it("PageHeader 不传 actions 时保持原有结构", () => {
+    const { container } = render(
+      <PageHeader title="标题" description="描述" />,
+    );
+    expect(container.firstElementChild?.tagName).toBe("H1");
+    expect(container.querySelector(".justify-between")).toBeNull();
+  });
+
+  it("PageHeader 传 actions 时右侧渲染操作区", () => {
+    const { container } = render(
+      <PageHeader
+        title="标题"
+        description="描述"
+        actions={<button type="button">帮助</button>}
+      />,
+    );
+    expect(container.querySelector(".justify-between")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "标题" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "帮助" })).toBeInTheDocument();
+  });
+
   it("SyntaxTable 渲染语法行", () => {
     render(<SyntaxTable />);
     expect(screen.getByText("type")).toBeInTheDocument();

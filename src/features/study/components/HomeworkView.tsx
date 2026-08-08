@@ -12,6 +12,7 @@ import { Button } from "../../../components/Button";
 import { Chip } from "../../../components/Chip";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { EmptyState } from "../../../components/EmptyState";
+import { useHelpCenter } from "../../../components/HelpCenter";
 import { IconButton } from "../../../components/IconButton";
 import { LABEL_COLORS } from "../../../lib/labelDefs";
 import {
@@ -61,6 +62,7 @@ export function HomeworkView({
   onDelete: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const { openHelp } = useHelpCenter();
   const [statusFilter, setStatusFilter] =
     useState<HomeworkStatusFilter>("active");
   const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null);
@@ -210,9 +212,18 @@ export function HomeworkView({
             title={t("study.homeworkEmpty")}
             description={t("study.homeworkEmptyDesc")}
             action={
-              <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
-                {t("study.addHomework")}
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button variant="primary" size="sm" icon={Plus} onClick={onAdd}>
+                  {t("study.addHomework")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openHelp("tasks.study")}
+                >
+                  {t("study.helpAddHomework")}
+                </Button>
+              </div>
             }
           />
         </div>

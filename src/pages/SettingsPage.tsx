@@ -66,6 +66,7 @@ import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
+import { PageHelpButton } from "../components/PageHelpButton";
 
 const THEME_OPTIONS: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.themeSystem" },
@@ -378,6 +379,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       <PageHeader
         title={t("pages.settings.title")}
         description={t("pages.settings.description")}
+        actions={<PageHelpButton target="settings" />}
       />
 
       {scan.status?.active && (

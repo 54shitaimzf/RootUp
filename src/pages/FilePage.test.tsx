@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FilePage } from "./FilePage";
 import { SettingsProvider } from "../hooks/useSettings";
+import { HelpCenterProvider } from "../components/HelpCenter";
+import { ONBOARDING_STORAGE_KEY } from "../components/OnboardingDialog";
 import type { ScanController } from "../hooks/useScan";
 import { formatTimestamp } from "../lib/fileUtils";
 
@@ -99,7 +101,9 @@ const SETTINGS: Settings = {
 function renderPage() {
   return render(
     <SettingsProvider>
-      <FilePage onNavigate={() => {}} scan={scan()} />
+      <HelpCenterProvider>
+        <FilePage onNavigate={() => {}} scan={scan()} />
+      </HelpCenterProvider>
     </SettingsProvider>,
   );
 }
@@ -107,6 +111,7 @@ function renderPage() {
 describe("FilePage 行操作", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     vi.mocked(queryFiles).mockResolvedValue({
       items: [
         {

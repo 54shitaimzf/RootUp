@@ -35,6 +35,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
+import { PageHelpButton } from "../components/PageHelpButton";
 import { useHelpCenter } from "../components/HelpCenter";
 import { DirectoryAdder } from "../components/DirectoryAdder";
 
@@ -183,6 +184,7 @@ export function ProjectsPage({
       <PageHeader
         title={t("pages.projects.title")}
         description={t("pages.projects.description")}
+        actions={<PageHelpButton target="tasks.projects" />}
       />
 
       {notice && (
@@ -301,13 +303,22 @@ export function ProjectsPage({
             <EmptyState
               title={t("projects.empty")}
               action={
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => onNavigate("settings")}
-                >
-                  {t("projects.goSettings")}
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={() => onNavigate("settings")}
+                  >
+                    {t("projects.goSettings")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="md"
+                    onClick={() => openHelp("tasks.projects")}
+                  >
+                    {t("projects.help")}
+                  </Button>
+                </div>
               }
             />
           </div>

@@ -6,7 +6,10 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { StudyPage } from "./StudyPage";
+import { HelpCenterProvider } from "../components/HelpCenter";
+import { ONBOARDING_STORAGE_KEY } from "../components/OnboardingDialog";
 import { createSeedStudyData, ensureDemoScenario } from "../lib/studyStore";
 import {
   getStudyData,
@@ -31,7 +34,14 @@ vi.mock("../lib/tauri", async (importOriginal) => {
 const TODAY = new Date("2026-08-04T12:00:00");
 
 function renderStudy() {
-  return render(<StudyPage today={TODAY} initialData={createSeedStudyData()} />);
+  return renderWithHelp(
+    <StudyPage today={TODAY} initialData={createSeedStudyData()} />,
+  );
+}
+
+function renderWithHelp(node: ReactNode) {
+  window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+  return render(<HelpCenterProvider>{node}</HelpCenterProvider>);
 }
 
 function pick(label: string, optionText: string) {
@@ -427,7 +437,7 @@ describe("StudyPage", () => {
     vi.mocked(studyStoreExists).mockResolvedValueOnce(false);
     const migrated = ensureDemoScenario(legacy);
     vi.mocked(getStudyData).mockResolvedValueOnce(migrated);
-    render(<StudyPage today={TODAY} />);
+    renderWithHelp(<StudyPage today={TODAY} />);
     expect(await screen.findByText("高等数学")).toBeInTheDocument();
     expect(localStorage.getItem("rootup.study.data.v1")).toBeNull();
     expect(saveStudyData).toHaveBeenCalledWith(
@@ -442,7 +452,7 @@ describe("StudyPage", () => {
   it("初始加载不触发整份保存，用户变更后才保存", async () => {
     const seed = createSeedStudyData();
     vi.mocked(getStudyData).mockResolvedValueOnce(seed);
-    render(<StudyPage today={TODAY} />);
+    renderWithHelp(<StudyPage today={TODAY} />);
     expect(await screen.findByText("高等数学")).toBeInTheDocument();
     expect(saveStudyData).not.toHaveBeenCalled();
 
@@ -457,7 +467,7 @@ describe("StudyPage", () => {
   });
 
   it("开启提醒后显示临期提示条并可关闭本次", () => {
-    render(
+    renderWithHelp(
       <StudyPage
         today={TODAY}
         initialData={createSeedStudyData()}
@@ -472,7 +482,7 @@ describe("StudyPage", () => {
 
   it("托盘深链：focusHomework 切到作业视图并展开对应作业", () => {
     const onFocusConsumed = vi.fn();
-    render(
+    renderWithHelp(
       <StudyPage
         today={TODAY}
         initialData={createSeedStudyData()}
@@ -578,7 +588,7 @@ describe("StudyPage", () => {
         status: "archived",
       },
     ];
-    render(<StudyPage today={TODAY} initialData={data} />);
+    renderWithHelp(<StudyPage today={TODAY} initialData={data} />);
     fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     fireEvent.click(screen.getByRole("button", { name: "已归档" }));
     const row = screen.getByText("已归档作业").closest("li")!;
@@ -610,7 +620,7 @@ describe("StudyPage", () => {
         status: "archived",
       },
     ];
-    render(<StudyPage today={TODAY} initialData={data} />);
+    renderWithHelp(<StudyPage today={TODAY} initialData={data} />);
     fireEvent.click(screen.getByRole("button", { name: /^作业/ }));
     expect(screen.getByText("活跃作业")).toBeInTheDocument();
     expect(screen.queryByText("归档作业")).not.toBeInTheDocument();

@@ -5,6 +5,7 @@ import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { InlineNotice } from "../components/InlineNotice";
 import { PageHeader } from "../components/PageHeader";
+import { PageHelpButton } from "../components/PageHelpButton";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { CourseDetailDialog } from "../features/study/components/CourseDetailDialog";
 import { CourseFormDialog } from "../features/study/components/CourseFormDialog";
@@ -397,13 +398,18 @@ export function StudyPage({
       (isOverdue(item, today) || isDueSoon(item.dueAt, leadDays, today)),
   ).length;
 
+  const studyHeader = (
+    <PageHeader
+      title={t("pages.study.title")}
+      description={t("pages.study.description")}
+      actions={<PageHelpButton target="tasks.study" />}
+    />
+  );
+
   if (loadError) {
     return (
       <div className="mx-auto max-w-6xl">
-        <PageHeader
-          title={t("pages.study.title")}
-          description={t("pages.study.description")}
-        />
+        {studyHeader}
         <InlineNotice variant="error" className="mt-5">
           {loadError}
         </InlineNotice>
@@ -422,10 +428,7 @@ export function StudyPage({
   if (!data || !semester) {
     return (
       <div className="mx-auto max-w-6xl">
-        <PageHeader
-          title={t("pages.study.title")}
-          description={t("pages.study.description")}
-        />
+        {studyHeader}
         <p className="mt-8 text-center text-sm text-muted">
           {t("study.loading")}
         </p>
@@ -435,10 +438,7 @@ export function StudyPage({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader
-        title={t("pages.study.title")}
-        description={t("pages.study.description")}
-      />
+      {studyHeader}
 
       {reminderEnabled && !reminderBannerHidden && reminderCount > 0 && (
         <Banner
