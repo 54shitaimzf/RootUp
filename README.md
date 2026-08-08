@@ -1,200 +1,204 @@
-# RootUp
+<p align="center">
+  <img src="resources/icons/rootup-sprout.png" width="96" alt="RootUp" />
+</p>
 
-[![CI](https://github.com/54shitaimzf/RootUp/actions/workflows/ci.yml/badge.svg)](https://github.com/54shitaimzf/RootUp/actions/workflows/ci.yml)
+<h1 align="center">RootUp</h1>
 
-## 中文
+<p align="center"><strong>把散落的文件，变成随找随到的秩序。</strong></p>
 
-RootUp 是一款面向学生场景的智能自动化文件整理与分类桌面工具：自动分类、一键归档，把碎片化的整理行为沉淀为可复用的规则资产，让文件"随下随理、随找随到"。
+<p align="center">
+  <a href="https://github.com/54shitaimzf/RootUp/actions/workflows/ci.yml">
+    <img src="https://github.com/54shitaimzf/RootUp/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  </a>
+</p>
 
-### 当前能力（v0.8.4 已发布）
+RootUp 是一款面向学生和日常桌面整理的 Windows 工具。下载、桌面、课程资料、作业文件散落各处时，它会自动完成分类与索引，让你随时搜索、一键归档，并且任何归档都能反悔。
 
-- Tauri v2 + React 桌面应用框架
-- 系统托盘驻留（打开 / 退出）
-- 关闭窗口时确认：后台运行（销毁窗口、后台零浏览器内存）或退出程序
-- 单实例运行，二次启动自动唤起已有窗口
-- 主题：浅色 / 深色 / 跟随系统
-- 界面语言：中文 / English，可随时切换
-- 设置持久化，重启后保留
-- 文件监听与索引：监控目录全量扫描、实时索引、快照差集与误删防护
-- 自动分类标签：文档/图片/视频/音频/压缩包/代码/安装包/数据（扩展名映射，接口可扩展）
-- 搜索为核心：输入自动补全类别/状态/标签，问号内提供完整语法说明；筛选 chips 按使用频率排序
-- 可配置规则：忽略规则与分类映射各自独立弹窗编辑，附默认/编程开发/素材创作三套模板，支持保存为自定义方案随时套用（重启生效）
-- 标签管理：自定义标签的显示名/图标/预设色板，内置大类只读，筛选与搜索统一显示
-- 受控归档与撤销：单文件/批量/筛选结果归档、项目单元整体归档（桌面快捷方式自动联动）、自动归档开关（仅分类明确的新文件），全部可撤销
-- 项目识别与智能打开：自动识别 Rust/Node/Python/Java/C#/Go/Unity/C++/PHP/Ruby/Dart/Flutter/Kotlin/Swift/Android 项目（卡片显示命中特征文件），自动发现 IDE 与常用工具（VS Code/Cursor/JetBrains/MATLAB/Typora/Obsidian 等），文件行一键打开/定位/用 IDE 打开，桌面快捷方式双击唤起 RootUp 打开项目
-- 新手引导与帮助中心：首次启动欢迎弹窗、侧栏全局帮助入口（新手入门 / 搜索与高级用法）、IDE 选择与官方下载指导、检测到代码项目但无 IDE 时按需引导
-- 首个公开发布：NSIS 安装包（per-user、免管理员、中英语言选择）、品牌图标全套、安装包自动验证
-- 学业页（v0.8.0）：课程表（时间轴周视图、日期与“今天”标识、当前时间线、单双周 / 指定周次、周起始日切换、堆叠卡与铺开查看）与作业（截止排序、状态 / 课程筛选、短备注 + 可展开详情、逾期/剩余天数、标记完成确认、默认只看活跃）；学期即课表，支持新建/编辑/复制/删除，数据持久化到后端 `study.json`，课程名自动纳入文件分类标签；全应用按钮遵循 Windows“是左否右”
-- 学业提醒与设置（v0.8.1）：作业截止提醒（默认关闭、可设提前量，学业页提示条 + 列表分组 + 托盘计数直达）；关闭默认行为持久化（每次询问 / 后台运行 / 退出）；语言下拉与 i18n 注册表；设置页按常规/监控与分类/归档/学业提醒/高级分组；托盘左键打开、动态菜单（临期作业直达、自动归档与主题快速切换）；桌面“打开未完成作业”快捷方式
-- 监控体验与视觉（v0.8.2）：移除监控目录即清理索引（可重扫恢复）；原生“浏览…”目录选择器、文件夹拖拽、常用目录一键添加；动效令牌与全局“减少动画”降级、按钮微动、悬浮提示体系；设置项“点行看说明 / 编辑按钮才编辑”，说明中心新增“设置说明”分区
-- 体验补课（v0.8.3）：自绘下拉与输入过滤（替换全部原生下拉）；项目页原生浏览/拖拽/常用目录/粘贴清洗，来源（手动/自动）与识别依据展示，向上查找跳过噪音目录；托盘多尺寸图标与临期/逾期红点角标；设置与帮助中心观感统一
-- 存储与扫描地基（v0.8.4）：扫描器接口化（`FileEnumerator`/`ScanDiffStore`，差集落库 SQLite 临时表/keyset）、SQLite 调优与存储治理（PRAGMA 组、墓碑 30 天清理、损坏备份保留 3 份、快捷图标对账、设置保存防抖）、启动与后台优化（阶段埋点、延迟服务、事件驱动、日志缓冲）、文件列表五维排序与加载更多、统一输入边界（目录强校验 + 前端即时校验双保险）；发布前审查修复：搜索框标签对齐、多标签/组合查询、习惯持久化、列表高度与滚动条稳定性
+## 核心功能
 
-### 搜索语法
+### 文件整理与搜索
 
-搜索框是文件页的核心入口：输入文字按文件名/路径查找，输入特殊语法按条件筛选；输入时自动补全，也可直接点击下方筛选 chips（按使用频率排序）。完整语法说明见搜索框右侧的问号。
+- **自动分类**：新文件进入监控目录后自动按类型归类——文档、图片、视频、音频、压缩包、代码、安装包、数据；也支持自定义标签（显示名、图标、颜色）。
+- **实时索引**：监控目录全量扫描 + 实时更新，文件一出现就能搜到；课程名称会自动成为标签，学业资料随课程归位。
+- **强搜索**：支持文件名/路径搜索和条件语法（见下文），输入时自动补全，常用筛选条件以 chips 一键点选。
+- **规则与方案**：忽略规则和分类映射可自由编辑，内置默认/编程开发/素材创作三套模板，也可以保存为自己的方案随时套用。
 
-- `type:pdf` — 按扩展名筛选
-- `label:document` — 按分类标签筛选
-- `state:pending` — 按状态筛选
-- `size:>10MB` — 按大小筛选
-- `before:2026-08-01` — 按修改时间筛选
-- 可组合使用，如 `type:pdf 高数`
+### 安全归档，随时反悔
 
-### 规划能力
+- 单文件、批量、筛选结果、整个项目都可以归档；项目归档时桌面快捷方式自动联动。
+- 可选“自动归档”：只归档分类明确的新文件，默认关闭。
+- 所有归档都记录在案，一键撤销。
 
-已固定版本规划：v0.8.4 已发布（存储与扫描地基），后续 v0.8.5 快速扫描与查询、v0.8.6 规模与体积、v0.8.7 单元同构，直至 v2.0 的完整路线见 [docs/ROADMAP.md](docs/ROADMAP.md)；架构与皮肤约定见 [docs/VISION.md](docs/VISION.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+### 学业管理
 
-### 技术栈
+- **课程表**：周视图时间轴，支持单双周/指定周次、堆叠与铺开查看；学期即课表，可新建、编辑、复制、删除。
+- **作业管理**：按截止时间排序，支持状态/课程筛选、短备注与详情、逾期/剩余天数提示、标记完成。
+- **截止提醒**：可选提前 N 天提醒（默认关闭），学业页提示条、列表分组、托盘计数直达；还有“打开未完成作业”桌面快捷方式。
 
-- 桌面壳：Tauri v2（Rust）
-- 前端：React + TypeScript + Vite + Tailwind CSS
-- 图标：lucide-react
-- 国际化：i18next
+### 项目识别与智能打开
 
-### 质量检查
+- 自动识别 15 种常见项目类型（Rust、Node、Python、Java、C#、Go、Unity、C++、PHP、Ruby、Dart、Flutter、Kotlin、Swift、Android 等）。
+- 自动发现 VS Code、Cursor、JetBrains、MATLAB、Typora、Obsidian 等工具，文件行一键打开 / 定位 / 用 IDE 打开。
+- 桌面快捷方式双击即可唤起 RootUp 直达项目。
 
-- 前端测试：`npm test`（纯函数 + 组件交互，402 用例）
-- Rust 测试：`cargo test`（298 用例）
-- 架构依赖校验：`npm run check:arch`（单向依赖防回归）
-- Rust 分层校验：`npm run check:arch:rust`（core 纯业务、命令层不依赖组合根）
-- Rust 全量：`cargo test` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check`
-- 日志驱动冒烟：`scripts/smoke.ps1`（需先 `npm run tauri build -- --no-bundle`）
-- Agent 引导验收：`scripts/agent-acceptance.ps1`（真实夹具 + 带参启动 + 主窗口/托盘截图核对清单）
-- 发布门禁（版本提交前强制）：`scripts/pre-release-check.ps1`（全部单测/构建/冒烟 + AI 真实全链路深链验收，需桌面会话与提权）
-- 性能基准（自研唯一标准，仅本地运行）：`scripts/bench-all.ps1` 一键执行引擎（`-EngineOnly`）与系统（`-SystemOnly`）基准并渲染（README 对比表与 SVG 趋势图），0.8.4 官方基线含时间/空间/IO 共 50 项指标、churn VACUUM 硬断言；host 指纹扩展（OS/CPU/rustc/node/npm/RAM/commit），确定性语料自检，渲染器只对同指纹版本计算 delta 与 15% 警示；结果见 [benchmarks/README.md](benchmarks/README.md)
+### 桌面体验
 
-0.8.4 官方基线（引擎 Full + 系统 10k）关键值：
+- 系统托盘驻留：左键打开，动态菜单直达临期作业、快速切换主题与自动归档；临期/逾期作业有红点角标。
+- 关闭即后台：后台运行不占浏览器内存，随时可从托盘唤回；也可选择直接退出，行为可记忆。
+- 浅色 / 深色 / 跟随系统主题，中文 / English 界面随时切换。
+- 首次启动欢迎引导与内置帮助中心；常用目录一键添加，支持文件夹拖拽。
+- 文件列表可按名称 / 类型 / 大小 / 修改时间 / 标签排序，加载更多时保持滚动位置。
 
-| 指标 | p50 |
-|---|---|
+## 搜索语法
+
+搜索框是文件页的核心入口：输入文字按文件名/路径查找，输入语法按条件筛选；自动补全与常用 chips 让大部分筛选不用手打。
+
+| 语法 | 含义 | 示例 |
+| --- | --- | --- |
+| `type:` | 按扩展名 | `type:pdf` |
+| `label:` | 按标签 | `label:document` |
+| `state:` | 按状态 | `state:pending` |
+| `size:` | 按大小 | `size:>10MB` |
+| `before:` / `after:` | 按修改时间 | `before:2026-08-01` |
+
+- 多个条件可组合，如 `type:pdf 高数`（同时满足）。
+- 同一维度多个标签为“任一命中”，如 `label:math label:english`（满足其一即可）。
+- 完整语法说明见搜索框右侧的“?”按钮。
+
+## 快速上手
+
+1. 安装 RootUp（见下文），启动后按引导添加要整理的文件夹（下载、桌面、文档等）。
+2. 首次扫描完成后，文件页即可搜索与筛选。
+3. 可选：开启自动归档、编辑分类规则，或在学业页建立课程表。
+4. 一切归档均可撤销，放心整理。
+
+## 性能
+
+RootUp 使用本地索引，扫描、搜索与归档都很快。以下为 0.8.4 官方基线（开发机本地基准，p50）：
+
+| 指标 | 0.8.4 |
+| --- | --- |
 | 冷启动 | 519.6 ms |
 | 可交互耗时（冷） | 1806.2 ms |
-| 全量扫描 10k | 319 ms（31348 files/s） |
-| 空闲 RSS | 35.2 MB |
-| 索引库体积（10k） | 7612.6 KB |
-| 前端 JS gzip | 144.1 KB |
+| 全量扫描 10k 文件 | 319 ms（约 31k files/s） |
+| 空闲内存占用 | 35.2 MB |
+| 索引库体积（10k 文件） | 7.6 MB |
+| 前端包体积（JS gzip） | 144.1 KB |
 | 引擎扫描 10k（mixed） | 302.3 ms |
 | 引擎扫描 100k（mixed） | 3025.1 ms |
 | 标签重分类 100k | 156.9 ms |
 
-- 安装包验证：`scripts/verify-installer.ps1 -InstallerPath <nsis-setup.exe>`（静默安装 → 冒烟 → 卸载）
+完整的 50 项指标、逐版本对比与趋势图见 [benchmarks/README.md](benchmarks/README.md)。
 
-### 安装与发布
+## 安装
 
-- 从 GitHub Releases 下载 `*-setup.exe`（NSIS，per-user 安装，无需管理员权限，安装时可选择中文或 English）。
-- 安装包未做数字签名，Windows SmartScreen 首次运行会提示“未知发布者”，选择“仍要运行”即可；功能不受影响。
-- 需要 WebView2 运行时（Windows 10/11 一般已内置）；缺失时安装器会引导下载。
+- 从 [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases) 下载 `RootUp_0.8.4_x64-setup.exe`。
+- per-user 安装，无需管理员权限，安装时可选中文或 English。
+- 安装包未做数字签名，Windows SmartScreen 首次运行会提示“未知发布者”，选择“仍要运行”即可，功能不受影响。
+- 需要 WebView2 运行时（Windows 10/11 一般已内置，缺失时安装器会引导下载）。
 
-### 快速开始
+## 路线图
 
-1. 安装 Rust（建议 stable）与 Node.js（建议 20+）
-2. 克隆仓库并进入项目目录
-3. 安装前端依赖：`npm install`
-4. 开发运行：`npm run tauri dev`
-5. 发布构建：`npm run tauri build`
-> 注意：发布构建必须使用 `npm run tauri build`。直接运行 `cargo build --release` 不会把前端资源嵌入程序，窗口会显示 `localhost 拒绝连接`。
+- **v0.8.4（已发布）**：存储与扫描地基——更稳的索引、更快的扫描、更可靠的数据。
+- **v0.8.5（下一步）**：快速扫描与查询——NTFS 快速扫描、分页与搜索性能优化、更明确的组合筛选语法。
+- **v0.8.6 及以后**：更大文件量的流畅体验、更小的安装包、文件/项目/软件统一管理。
 
-### 项目结构（简要）
+完整路线与设计文档见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md)。
 
-- `src/`：React 前端（页面、组件、主题、i18n）
-- `src-tauri/`：Rust 桌面壳（commands / core / infra 分层）
-- `docs/`：项目文档（愿景、路线图、架构）
-- `docs/reports/`：版本审查与汇报（0.8.4 边界审查、UI 审查清单、版本汇报）
-- `resources/`：图标等非代码资源
+## 从源码构建
 
-架构与依赖规则详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+前置：Rust（stable）与 Node.js（20+）。
 
-### 开发者
+```bash
+npm install
+npm run tauri dev      # 开发运行
+npm run tauri build    # 发布构建
+```
 
-- 余烬
+> 注意：发布构建必须使用 `npm run tauri build`；直接运行 `cargo build --release` 不会嵌入前端资源。
 
-### 许可证
+### 质量与测试
 
-本项目使用 **GNU GPLv3**，详见 `LICENSE`。
+- 前端测试 402 项、Rust 测试 298 项
+- `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`
+- 架构单向依赖校验：`npm run check:arch` / `npm run check:arch:rust`
+- 发布门禁 `scripts/pre-release-check.ps1`：全部测试、构建、日志冒烟与真实链路验收
+
+### 项目结构
+
+- `src/`：React 前端（页面、组件、主题、国际化）
+- `src-tauri/`：Rust 后端与桌面壳（commands / core / infra 分层）
+- `docs/`：愿景、路线图、架构与版本报告
+- `scripts/`：构建、测试、基准与发布脚本
+- `resources/`：图标等资源
+
+## 文档
+
+[路线图](docs/ROADMAP.md) · [架构](docs/ARCHITECTURE.md) · [版本报告](docs/reports/) · [变更日志](CHANGELOG.md)
+
+## 许可证
+
+本项目使用 **GNU GPLv3**，详见 [LICENSE](LICENSE)。
 
 ---
 
 ## English
 
-RootUp is a smart file-organizing desktop app built for students. It auto-sorts downloads, archives files with one click, and turns scattered cleanup habits into reusable rules.
+RootUp is a Windows desktop app that keeps your files organized without the effort: automatic classification, one-click archive with undo, project-aware quick open, and study tools for course schedules and homework.
 
-### Current Features (v0.8.4 released)
+### Features
 
-- Tauri v2 + React desktop app framework
-- System tray with Open / Quit actions
-- Close confirmation: run in background (destroy window, zero background memory) or quit
-- Single-instance guard
-- Theme: Light / Dark / Follow system
-- UI language: 中文 / English, switchable anytime
-- Persistent settings across restarts
-- File watching & indexing: full scan of watched folders, real-time indexing, snapshot diff with accidental-deletion protection
-- Auto category labels: Documents / Images / Videos / Audio / Archives / Code / Installers / Data (extension mapping, pluggable interface)
-- Search syntax: `type:` / `label:` / `state:` / `size:` / `before:` / `after:` combined with plain text
-- Configurable rules: ignore rules and classification mapping with three presets (default / developer / creative); takes effect after restart
-- Label management: custom display names, icons and a preset palette for labels; built-in categories stay read-only
-- Project detection & smart open: auto-detects Rust / Node / Python / Java / C# / Go / Unity / C++ / PHP / Ruby / Dart / Flutter / Kotlin / Swift / Android projects (cards show the matched feature file), finds IDEs and common tools automatically, opens / reveals / opens-in-IDE from file rows, and desktop shortcuts can wake RootUp into the project
-- Onboarding & help center: first-run welcome dialog, global sidebar help (getting started / search & advanced usage), IDE selection guidance, and on-demand IDE setup hints
-- First public release: NSIS installer (per-user, no admin, Chinese/English language choice), full brand icon set, installer verification
-- Controlled archive & undo: single / batch / filtered-file archiving, whole-folder project archiving with shortcut updates, and an optional auto-archive toggle (clear categories only); everything is undoable
-- Study page (v0.8.0): timeline weekly schedule (dates, today marker, current-time line, odd/even/custom weeks, Monday/Sunday start, stacked cards with spread-out viewing) plus homework tracking (deadline sorting, status/course filters, short notes + expandable details, overdue/days-left labels, mark-done confirmation, active-only default); semesters act as schedules with create/edit/copy/delete and backend `study.json` persistence; course names feed file labels automatically; buttons follow the Windows yes-left/no-right convention
-- Reminders & settings (v0.8.1): homework deadline reminders (off by default, configurable lead days; study-page banner + list grouping + tray count/direct open); persistent close behavior (ask / background / quit); language dropdown with a language registry; settings grouped into General / Monitoring & classification / Archive / Study reminders / Advanced; tray left-click open, dynamic menu (due-homework shortcuts, auto-archive and theme toggles); desktop “Open homework” shortcut
-- Storage & scan foundation (v0.8.4): pluggable scanner contracts (`FileEnumerator` / `ScanDiffStore`, SQLite temp-table diff), SQLite tuning & storage governance (PRAGMA group, 30-day tombstone purge, 3 backup copies, shortcut icon reconcile, debounced settings save), startup/background optimization (stage timing, delayed services, event-driven workers, buffered logging), five-dimension file sorting with load-more pagination, and a unified input boundary (strict directory validation + mirrored frontend checks); release-review fixes include search-box tag alignment, multi-label/combined queries, habit persistence, list height and scrollbar stability
-- Monitoring UX & visuals (v0.8.2): removing a watched folder also cleans its index (restorable by rescanning); native “Browse…” folder picker, folder drag & drop, one-click common folders; motion tokens with global reduced-motion support, button micro-interactions, a unified tooltip system, and a settings guide (row click = explain, edit button = edit) with a new “Settings guide” help section
-- Experience catch-up (v0.8.3): custom dropdowns with type-to-filter replace all native selects; project page gains browse / drag & drop / common folders / paste cleaning with manual-vs-auto source and detection-basis badges; recognition matrix expanded and noise folders skipped; tray uses multi-size icons with a due-homework red-dot badge; settings & help center visuals unified
+- **File organization & search** — watch folders, auto-classify into Documents / Images / Videos / Audio / Archives / Code / Installers / Data, custom labels, full-text search with syntax (`type:` / `label:` / `state:` / `size:` / `before:` / `after:`), editable ignore rules and classification presets.
+- **Safe archiving** — archive files, filtered results or whole projects (desktop shortcuts update automatically); optional auto-archive for clearly classified files; everything can be undone.
+- **Study tools** — weekly course schedule (odd/even/custom weeks), homework tracking with deadlines and reminders, tray badge and one-click jump to unfinished homework.
+- **Projects & IDEs** — auto-detects 15 common project types and tools like VS Code, Cursor, JetBrains, MATLAB, Typora and Obsidian; open / reveal / open in IDE from any file row.
+- **Desktop experience** — tray residency with zero background browser memory, light/dark/system theme, 中文/English UI, first-run onboarding and built-in help center.
 
-### Search Syntax
+### Search syntax
 
-- `type:pdf` — filter by extension
-- `label:document` — filter by category label
-- `state:pending` — filter by state
-- `size:>10MB` — filter by size
-- `before:2026-08-01` — filter by modified date
-- Combine conditions, e.g. `type:pdf notes`
+| Syntax | Meaning | Example |
+| --- | --- | --- |
+| `type:` | Filter by extension | `type:pdf` |
+| `label:` | Filter by label | `label:document` |
+| `state:` | Filter by state | `state:pending` |
+| `size:` | Filter by size | `size:>10MB` |
+| `before:` / `after:` | Filter by modified date | `before:2026-08-01` |
 
-### Planned Features
+Conditions can be combined, e.g. `type:pdf notes`. Multiple labels of the same dimension match with OR semantics.
 
-Fixed version roadmap: v0.8.4 released (storage & scan foundation), then v0.8.5 fast scan & query, v0.8.6 size & performance, v0.8.7 unit unification, up to v2.0. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/VISION.md](docs/VISION.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+### Performance (v0.8.4 baseline, p50)
 
-### Tech Stack
+| Metric | Value |
+| --- | --- |
+| Cold startup | 519.6 ms |
+| Time to interactive (cold) | 1806.2 ms |
+| Full scan of 10k files | 319 ms (~31k files/s) |
+| Idle memory | 35.2 MB |
+| Index DB size (10k files) | 7.6 MB |
+| Engine scan 10k (mixed) | 302.3 ms |
+| Engine scan 100k (mixed) | 3025.1 ms |
+| Label reclassification 100k | 156.9 ms |
 
-- Desktop shell: Tauri v2 (Rust)
-- Frontend: React + TypeScript + Vite + Tailwind CSS
-- Icons: lucide-react
-- i18n: i18next
+All 50 metrics, per-version comparisons and trend charts: [benchmarks/README.md](benchmarks/README.md).
 
-### Quality Checks
+### Install
 
-- Frontend tests: `npm test` (402 cases)
-- Rust tests: `cargo test` (298 cases)
-- Architecture check: `npm run check:arch` (one-way dependencies)
-- Rust layer check: `npm run check:arch:rust` (pure core, commands never depend on the composition root)
-- Release gate: `scripts/pre-release-check.ps1` (unit tests, build, smoke, AI deep-link acceptance; requires a desktop session)
-- Performance baseline (custom harness, local-only): `scripts/bench-all.ps1` with deterministic corpus self-check and extended host fingerprint; only same-machine versions are compared, see [benchmarks/README.md](benchmarks/README.md)
+Download `RootUp_0.8.4_x64-setup.exe` from [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases). Per-user NSIS installer, no admin required, Chinese/English installer languages. WebView2 runtime is required (usually preinstalled on Windows 10/11). The installer is unsigned — SmartScreen may show "Unknown publisher"; choose "Run anyway".
 
-### Quick Start
+### Roadmap
 
-1. Install Rust (stable recommended) and Node.js (20+ recommended)
-2. Clone the repository and enter the project directory
-3. Install frontend dependencies: `npm install`
-4. Run in development: `npm run tauri dev`
-5. Build for release: `npm run tauri build`
-> Note: release builds must use `npm run tauri build`. Running `cargo build --release` directly does not embed the frontend assets, and the window will show `localhost connection refused`.
+v0.8.4 released (storage & scan foundation). Next: v0.8.5 fast scanning & query (NTFS MFT/USN), pagination and search optimizations, explicit multi-label AND syntax. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
-### Project Layout (Brief)
+### Build from source
 
-- `src/`: React frontend (pages, components, theme, i18n)
-- `src-tauri/`: Rust desktop shell (commands / core / infra layers)
-- `docs/`: project documents (vision, roadmap, architecture)
-- `docs/reports/`: version reviews & release reports (0.8.4 boundary review, UI review checklist, release report)
-- `resources/`: non-code assets such as icons
+Prerequisites: Rust (stable) and Node.js (20+).
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture and dependency rules.
-
-### Developer
-
-- Yujin (余烬)
+```bash
+npm install
+npm run tauri dev
+npm run tauri build
+```
 
 ### License
 
-This project is licensed under **GNU GPLv3**. See `LICENSE` for details.
+GNU GPLv3. See [LICENSE](LICENSE).
