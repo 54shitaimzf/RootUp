@@ -8,6 +8,7 @@ pub mod label_store;
 pub mod local_file;
 pub mod logging;
 pub mod managed_state;
+pub mod ntfs;
 pub mod scanner;
 pub mod scheme_store;
 pub mod shortcut;

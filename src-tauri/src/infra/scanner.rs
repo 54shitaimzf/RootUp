@@ -3,8 +3,8 @@ use crate::core::classify::Classifier;
 use crate::core::index::{FileRecord, ScanDiffStore};
 use crate::core::path::{normalize_path, path_key};
 use crate::core::scan::{
-    record_from_scan, FileEnumerator, ScanEvent, ScanEventSink, ScanParams, ScanProgress,
-    ScanSummary,
+    record_from_scan, EnumerateStats, FileEntry, FileEnumerator, ScanEvent, ScanEventSink,
+    ScanParams, ScanProgress, ScanSummary,
 };
 use crate::infra::enumerator::WalkDirEnumerator;
 use crate::infra::time::now_millis;
@@ -250,7 +250,7 @@ impl ScanLoop {
         let mut cancelled = false;
         let mut flush_errors = 0usize;
 
-        let enumerate_result = self.enumerator.enumerate(dir, &mut |entry| {
+        let mut handle_entry = |entry: FileEntry| -> bool {
             if self.shared.cancel.load(Ordering::SeqCst) {
                 cancelled = true;
                 return false;
@@ -284,7 +284,28 @@ impl ScanLoop {
                 self.emit_progress(dir, processed, processed, 0, 0);
             }
             true
-        });
+        };
+        // 快速扫描（实验性，ROOTUP_FAST_SCAN=1 且卷能力/权限满足时启用）；失败一律回退 walkdir
+        let fast_entries = crate::infra::ntfs::try_full_scan(dir);
+        let enumerate_result = match fast_entries {
+            Ok(entries) => {
+                let stats = EnumerateStats {
+                    discovered: entries.len(),
+                    ignored: 0,
+                    errors: 0,
+                };
+                for entry in entries {
+                    if !handle_entry(entry) {
+                        break;
+                    }
+                }
+                Ok(stats)
+            }
+            Err(reason) => {
+                log::info!("scan: 快速扫描不可用 dir={dir} reason={reason}，回退 walkdir");
+                self.enumerator.enumerate(dir, &mut handle_entry)
+            }
+        };
         let enumerate_stats = match enumerate_result {
             Ok(stats) => stats,
             Err(e) => {
