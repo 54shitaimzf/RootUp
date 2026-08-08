@@ -2,6 +2,7 @@
 use crate::core::classify::{Classifier, ClassifyInput};
 use crate::core::index::IndexStore;
 use crate::core::study::StudyData;
+use aho_corasick::AhoCorasick;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
@@ -9,6 +10,8 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, Default)]
 pub struct StudyClassifier {
     matchers: Vec<(String, String)>,
+    /// 课程名的 Aho-Corasick 自动机（一次多模式匹配，替代逐课程 contains）
+    ac: Option<AhoCorasick>,
 }
 
 impl StudyClassifier {
@@ -55,6 +58,15 @@ impl StudyClassifier {
                 .cmp(&a.0.chars().count())
                 .then_with(|| a.0.cmp(&b.0))
         });
+        let names: Vec<String> = matchers.iter().map(|(name, _)| name.clone()).collect();
+        self.ac = if names.is_empty() {
+            None
+        } else {
+            Some(
+                AhoCorasick::new(&names)
+                    .expect("课程名构建 Aho-Corasick 自动机失败（不应包含空模式）"),
+            )
+        };
         self.matchers = matchers;
     }
 
@@ -75,10 +87,22 @@ impl Classifier for StudyClassifier {
             input.path.to_lowercase(),
             input.name.to_lowercase()
         );
+        let Some(ac) = &self.ac else {
+            return Vec::new();
+        };
+        let mut found: Vec<(usize, String)> = Vec::new();
+        // 重叠迭代器：原语义是“文件名/路径包含课程名即命中”，
+        // 默认模式会跳过被更长命中覆盖的短名，必须用重叠扫描保持等价。
+        for matched in ac.find_overlapping_iter(&haystack) {
+            let idx = matched.pattern().as_usize();
+            found.push((idx, self.matchers[idx].1.clone()));
+        }
+        // matchers 已按“长名优先”排序，按 pattern 序号排序即恢复原语义
+        found.sort_by_key(|(idx, _)| *idx);
         let mut out = Vec::new();
-        for (name, key) in &self.matchers {
-            if haystack.contains(name) && !out.contains(key) {
-                out.push(key.clone());
+        for (_, key) in found {
+            if !out.contains(&key) {
+                out.push(key);
             }
         }
         out
@@ -168,6 +192,94 @@ mod tests {
         let labels = classifier.labels(&input("C:/x/高等数学与程序设计.pdf"));
         assert!(labels.contains(&"course-c-demo-1".to_string()));
         assert!(labels.contains(&"course-c-demo-2".to_string()));
+    }
+
+    #[test]
+    fn aho_corasick_matches_linear_reference() {
+        use crate::core::study::{Course, Semester};
+
+        let mut data = seed_study_data();
+        let sem = Semester {
+            id: "overlap-sem".into(),
+            name: "重叠学期".into(),
+            start_date: "2099-02-20".into(),
+            end_date: None,
+            week_count: 20,
+        };
+        data.semesters.push(sem.clone());
+        data.courses_by_semester.insert(
+            sem.id.clone(),
+            vec![
+                Course {
+                    id: "c-overlap-1".into(),
+                    name: "高等数学".into(),
+                    teacher: "李老师".into(),
+                    location: "A 楼".into(),
+                    day: 1,
+                    start_min: 480,
+                    end_min: 570,
+                    week_rule: "all".into(),
+                    week_range: None,
+                    color: "blue".into(),
+                    label_key: "course-overlap-1".into(),
+                },
+                Course {
+                    id: "c-overlap-2".into(),
+                    name: "高等数学（上）".into(),
+                    teacher: "王老师".into(),
+                    location: "B 楼".into(),
+                    day: 3,
+                    start_min: 600,
+                    end_min: 690,
+                    week_rule: "all".into(),
+                    week_range: None,
+                    color: "green".into(),
+                    label_key: "course-overlap-2".into(),
+                },
+                Course {
+                    id: "c-overlap-3".into(),
+                    name: "数学".into(),
+                    teacher: "赵老师".into(),
+                    location: "C 楼".into(),
+                    day: 5,
+                    start_min: 720,
+                    end_min: 810,
+                    week_rule: "all".into(),
+                    week_range: None,
+                    color: "red".into(),
+                    label_key: "course-overlap-3".into(),
+                },
+            ],
+        );
+
+        let mut classifier = StudyClassifier::new();
+        classifier.refresh(&data);
+
+        let haystacks = [
+            "C:/x/高等数学（上）第1章.pdf",
+            "C:/x/高等数学.pdf",
+            "C:/x/数学分析.pdf",
+            "C:/x/大学物理与高等数学.pdf",
+            "C:/x/高等数学与数学分析.pdf",
+            "C:/x/普通文件.txt",
+        ];
+        let linear = |haystack: &str| {
+            let lower = haystack.to_lowercase();
+            let mut out = Vec::new();
+            for (name, key) in &classifier.matchers {
+                if lower.contains(name) && !out.contains(key) {
+                    out.push(key.clone());
+                }
+            }
+            out
+        };
+        for haystack in haystacks {
+            assert_eq!(
+                classifier.labels(&input(haystack)),
+                linear(haystack),
+                "Aho-Corasick 与线性匹配不一致: {haystack}"
+            );
+        }
     }
 
     #[test]
