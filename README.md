@@ -21,6 +21,7 @@ RootUp 是一款面向学生和日常桌面整理的 Windows 工具。下载、�
 - **自动分类**：新文件进入监控目录后自动按类型归类——文档、图片、视频、音频、压缩包、代码、安装包、数据；也支持自定义标签（显示名、图标、颜色）。
 - **实时索引**：监控目录全量扫描 + 实时更新，文件一出现就能搜到；课程名称会自动成为标签，学业资料随课程归位。
 - **强搜索**：支持文件名/路径搜索和条件语法（见下文），输入时自动补全，常用筛选条件以 chips 一键点选。
+- **快速查询**：0.8.5 起查询提速 70%+，翻页改用稳定的游标分页；支持显式 AND 标签语法（`+label:` 或 `label:a AND label:b`）。
 - **规则与方案**：忽略规则和分类映射可自由编辑，内置默认/编程开发/素材创作三套模板，也可以保存为自己的方案随时套用。
 
 ### 安全归档，随时反悔
@@ -60,9 +61,10 @@ RootUp 是一款面向学生和日常桌面整理的 Windows 工具。下载、�
 | `state:` | 按状态 | `state:pending` |
 | `size:` | 按大小 | `size:>10MB` |
 | `before:` / `after:` | 按修改时间 | `before:2026-08-01` |
+| `+label:` / `AND` | 按标签且需同时满足 | `label:高数 +label:物理` |
 
 - 多个条件可组合，如 `type:pdf 高数`（同时满足）。
-- 同一维度多个标签为“任一命中”，如 `label:math label:english`（满足其一即可）。
+- 同一维度多个标签默认为“任一命中”，如 `label:math label:english`（满足其一即可）；需要同时命中时用 `+label:` 或 `AND`。
 - 完整语法说明见搜索框右侧的“?”按钮。
 
 ## 快速上手
@@ -74,34 +76,35 @@ RootUp 是一款面向学生和日常桌面整理的 Windows 工具。下载、�
 
 ## 性能
 
-RootUp 使用本地索引，扫描、搜索与归档都很快。以下为 0.8.4 官方基线（开发机本地基准，p50）：
+RootUp 使用本地索引，扫描、搜索与归档都很快。以下为 0.8.5 官方基线（开发机本地基准，p50，对比 0.8.4）：
 
-| 指标 | 0.8.4 |
-| --- | --- |
-| 冷启动 | 519.6 ms |
-| 可交互耗时（冷） | 1806.2 ms |
-| 全量扫描 10k 文件 | 319 ms（约 31k files/s） |
-| 空闲内存占用 | 35.2 MB |
-| 索引库体积（10k 文件） | 7.6 MB |
-| 前端包体积（JS gzip） | 144.1 KB |
-| 引擎扫描 10k（mixed） | 302.3 ms |
-| 引擎扫描 100k（mixed） | 3025.1 ms |
-| 标签重分类 100k | 156.9 ms |
+| 指标 | 0.8.5 | 对比 0.8.4 |
+| --- | --- | --- |
+| 冷启动 | 509.8 ms | -1.9% |
+| 可交互耗时（冷） | 1808.9 ms | 持平 |
+| 引擎扫描 10k（mixed） | 302.4 ms | 持平 |
+| 引擎扫描 100k（mixed） | 4281.4 ms | +41.5%（索引维护代价，待安静环境复核） |
+| 文本查询（100k 库） | 10.2 ms | -78.7% |
+| 标签查询（100k 库） | 10.9 ms | -74.3% |
+| 翻页单页（OFFSET / keyset） | 10.5 / 0.1 ms | 游标分页生效 |
+| 空闲内存占用 | 36.3 MB | +3.2% |
+| 索引库体积（10k 文件） | 9.5 MB | +24.4%（新增索引） |
+| 前端包体积（JS gzip） | 151.8 KB | +5.4% |
 
 完整的 50 项指标、逐版本对比与趋势图见 [benchmarks/README.md](benchmarks/README.md)。
 
 ## 安装
 
-- 从 [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases) 下载 `RootUp_0.8.4_x64-setup.exe`。
+- 从 [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases) 下载 `RootUp_0.8.5_x64-setup.exe`。
 - per-user 安装，无需管理员权限，安装时可选中文或 English。
 - 安装包未做数字签名，Windows SmartScreen 首次运行会提示“未知发布者”，选择“仍要运行”即可，功能不受影响。
 - 需要 WebView2 运行时（Windows 10/11 一般已内置，缺失时安装器会引导下载）。
 
 ## 路线图
 
-- **v0.8.4（已发布）**：存储与扫描地基——更稳的索引、更快的扫描、更可靠的数据。
-- **v0.8.5（下一步）**：快速扫描与查询——NTFS 快速扫描、分页与搜索性能优化、更明确的组合筛选语法。
-- **v0.8.6 及以后**：更大文件量的流畅体验、更小的安装包、文件/项目/软件统一管理。
+- **v0.8.5（已发布）**：快速扫描与查询——查询提速 70%+、游标分页、显式 AND 语法、NTFS 快速扫描能力。
+- **v0.8.6（下一步）**：更大文件量的流畅体验（虚拟滚动）、更小的安装包、MFT 快速基线。
+- **v0.8.7 及以后**：文件/项目/软件统一管理。
 
 完整路线与设计文档见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md)。
 
@@ -119,7 +122,7 @@ npm run tauri build    # 发布构建
 
 ### 质量与测试
 
-- 前端测试 402 项、Rust 测试 298 项
+- 前端测试 440 项、Rust 测试 313 项
 - `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`
 - 架构单向依赖校验：`npm run check:arch` / `npm run check:arch:rust`
 - 发布门禁 `scripts/pre-release-check.ps1`：全部测试、构建、日志冒烟与真实链路验收
@@ -148,7 +151,7 @@ RootUp is a Windows desktop app that keeps your files organized without the effo
 
 ### Features
 
-- **File organization & search** — watch folders, auto-classify into Documents / Images / Videos / Audio / Archives / Code / Installers / Data, custom labels, full-text search with syntax (`type:` / `label:` / `state:` / `size:` / `before:` / `after:`), editable ignore rules and classification presets.
+- **File organization & search** — watch folders, auto-classify into Documents / Images / Videos / Audio / Archives / Code / Installers / Data, custom labels, full-text search with syntax (`type:` / `label:` / `state:` / `size:` / `before:` / `after:`), editable ignore rules and classification presets. Since 0.8.5, queries are 70%+ faster with stable cursor pagination, and explicit AND syntax (`+label:` or `label:a AND label:b`) is supported.
 - **Safe archiving** — archive files, filtered results or whole projects (desktop shortcuts update automatically); optional auto-archive for clearly classified files; everything can be undone.
 - **Study tools** — weekly course schedule (odd/even/custom weeks), homework tracking with deadlines and reminders, tray badge and one-click jump to unfinished homework.
 - **Projects & IDEs** — auto-detects 15 common project types and tools like VS Code, Cursor, JetBrains, MATLAB, Typora and Obsidian; open / reveal / open in IDE from any file row.
@@ -163,31 +166,34 @@ RootUp is a Windows desktop app that keeps your files organized without the effo
 | `state:` | Filter by state | `state:pending` |
 | `size:` | Filter by size | `size:>10MB` |
 | `before:` / `after:` | Filter by modified date | `before:2026-08-01` |
+| `+label:` / `AND` | Filter by labels that must all match | `label:math +label:physics` |
 
-Conditions can be combined, e.g. `type:pdf notes`. Multiple labels of the same dimension match with OR semantics.
+Conditions can be combined, e.g. `type:pdf notes`. Multiple labels of the same dimension match with OR semantics by default; use `+label:` or `AND` to require all of them.
 
-### Performance (v0.8.4 baseline, p50)
+### Performance (v0.8.5 baseline, p50, vs 0.8.4)
 
-| Metric | Value |
-| --- | --- |
-| Cold startup | 519.6 ms |
-| Time to interactive (cold) | 1806.2 ms |
-| Full scan of 10k files | 319 ms (~31k files/s) |
-| Idle memory | 35.2 MB |
-| Index DB size (10k files) | 7.6 MB |
-| Engine scan 10k (mixed) | 302.3 ms |
-| Engine scan 100k (mixed) | 3025.1 ms |
-| Label reclassification 100k | 156.9 ms |
+| Metric | 0.8.5 | vs 0.8.4 |
+| --- | --- | --- |
+| Cold startup | 509.8 ms | -1.9% |
+| Time to interactive (cold) | 1808.9 ms | flat |
+| Engine scan 10k (mixed) | 302.4 ms | flat |
+| Engine scan 100k (mixed) | 4281.4 ms | +41.5% (index maintenance; to re-verify) |
+| Text query (100k index) | 10.2 ms | -78.7% |
+| Label query (100k index) | 10.9 ms | -74.3% |
+| Paged query (OFFSET / keyset) | 10.5 / 0.1 ms | cursor pagination |
+| Idle memory | 36.3 MB | +3.2% |
+| Index DB size (10k files) | 9.5 MB | +24.4% (new indexes) |
+| JS bundle gzip | 151.8 KB | +5.4% |
 
 All 50 metrics, per-version comparisons and trend charts: [benchmarks/README.md](benchmarks/README.md).
 
 ### Install
 
-Download `RootUp_0.8.4_x64-setup.exe` from [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases). Per-user NSIS installer, no admin required, Chinese/English installer languages. WebView2 runtime is required (usually preinstalled on Windows 10/11). The installer is unsigned — SmartScreen may show "Unknown publisher"; choose "Run anyway".
+Download `RootUp_0.8.5_x64-setup.exe` from [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases). Per-user NSIS installer, no admin required, Chinese/English installer languages. WebView2 runtime is required (usually preinstalled on Windows 10/11). The installer is unsigned — SmartScreen may show "Unknown publisher"; choose "Run anyway".
 
 ### Roadmap
 
-v0.8.4 released (storage & scan foundation). Next: v0.8.5 fast scanning & query (NTFS MFT/USN), pagination and search optimizations, explicit multi-label AND syntax. See [docs/ROADMAP.md](docs/ROADMAP.md).
+v0.8.5 released (fast scanning & query: 70%+ faster queries, cursor pagination, explicit AND syntax, NTFS/USN fast-scan capability). Next: v0.8.6 (virtual scrolling, smaller bundles, MFT fast baseline). See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Build from source
 

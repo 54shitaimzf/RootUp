@@ -35,7 +35,11 @@ function rec(
 }
 
 function page(items: FileRecord[], total: number): QueryPage {
-  return { items, total };
+  return { items, total, nextCursor: null };
+}
+
+function pageWithCursor(items: FileRecord[], nextCursor: string | null): QueryPage {
+  return { items, total: -1, nextCursor };
 }
 
 function deferred<T>() {
@@ -172,5 +176,44 @@ describe("useFiles", () => {
       eventHandler!({ payload: [rec("C:/new.txt", 1)] });
     });
     expect(result.current.stale).toBe(true);
+  });
+
+  it("加载更多时向后端传递 keyset 游标", async () => {
+    const first = deferred<QueryPage>();
+    const second = deferred<QueryPage>();
+    vi.mocked(queryFiles)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const { result, rerender } = renderHook(
+      (props) => useFiles("", 50, props.offset, props.refreshKey),
+      { initialProps: { offset: 0, refreshKey: 0 } },
+    );
+    await act(async () => {
+      first.resolve(pageWithCursor([rec("C:/a.txt", 1)], "cursor-1"));
+    });
+    rerender({ offset: 50, refreshKey: 0 });
+    await act(async () => {
+      second.resolve(pageWithCursor([rec("C:/b.txt", 2)], null));
+    });
+    expect(queryFiles).toHaveBeenLastCalledWith(
+      "",
+      50,
+      50,
+      undefined,
+      undefined,
+      "cursor-1",
+    );
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it("total 未知时 hasMore 由 nextCursor 决定", async () => {
+    const d = deferred<QueryPage>();
+    vi.mocked(queryFiles).mockReturnValue(d.promise);
+    const { result } = renderHook(() => useFiles("", 50, 0, 0));
+    await act(async () => {
+      d.resolve(pageWithCursor([rec("C:/a.txt", 1)], "cursor-1"));
+    });
+    expect(result.current.total).toBe(-1);
+    expect(result.current.hasMore).toBe(true);
   });
 });

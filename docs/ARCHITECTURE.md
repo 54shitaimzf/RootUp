@@ -283,8 +283,18 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 ## 0.8.5 前置帮助中心契约
 
-- **页面帮助入口**：`PageHeader` 的 `actions` 为可选插槽，不传时渲染结构与历史版本完全一致（标题 + 描述）；四个主页面（文件 / 项目 / 学业 / 设置）经 `PageHelpButton` 传入文章 id 或分区 id 打开帮助。`PageHeader` 保持通用，禁止 import 任何帮助内容。
+- **页面帮助入口**：`PageHeader` 的 `actions` 为可选插槽，不传时渲染结构与历史版本完全一致（标题 + 描述）；项目 / 学业 / 设置三个主页面经 `PageHelpButton` 传入文章 id 或分区 id 打开帮助。文件页刻意不加页头按钮——搜索框内已有“搜索语法”帮助按钮（同为 HelpCircle 图标），避免双问号重复，文件页帮助由空状态与侧栏入口承担。`PageHeader` 保持通用，禁止 import 任何帮助内容。
 - **帮助内容注册表**：新增一篇帮助文章 = `lib/helpContent.ts` 注册一项 + i18n 双语 key，组件零改动；文章 id（如 `tasks.files`）是稳定深链契约，供搜索、页面入口、相关条目与未来 v1.2 知识库 / v1.4 语言包复用。文章字段（title/summary/steps/keywords/related/action）由测试强制校验，禁止绕过注册表在组件内硬编码文案。
 - **帮助内搜索**：`lib/helpSearch.ts` 纯函数，仅消费注册表聚合的 `HELP_SEARCH_SOURCES`；不得引入全文检索依赖，也不得在 UI 层自行实现匹配逻辑。
 - **反馈边界**：`lib/helpFeedback.ts` 只依赖 localStorage，无后端接口；未来接入 0.8.10 动作日志 / 诊断包时替换该模块实现，UI 层不感知。
 - **文案质量门禁**：帮助相关 i18n 命名空间（`help*`）禁止 AI 腔表达与内部实现标识符，由 `lib/helpCopy.test.ts` 与 i18n 双端 key 一致性测试强制；写作规范见 `docs/COPYWRITING.md`。
+
+## 0.8.5 契约（快速扫描与查询）
+
+- **查询分页**：`FileQuery.cursor`（不透明 keyset 游标，JSON `[排序值, id]`）优先于 OFFSET；`QueryPage.next_cursor` 表示还有下一页（多取一行探测）。排序恒为 `ORDER BY <白名单列> <dir>, id DESC`，游标类型必须与排序列一致，否则查询被拒。
+- **COUNT 治理**：`FileQuery.need_total=false` 时 `total=-1`；命令层默认仅“首页且无筛选”返回精确总数；归档批量上限等内部查询显式置 `need_total=true`。
+- **显式 AND 语法**：`+label:v` 与 `label:a AND label:b`（AND 大小写不敏感、仅相邻标签生效、孤立 AND 回落普通文本）解析进 `labels_all`，SQL 逐条 LIKE 且 AND 连接；同维度默认 OR 语义不变。解析契约见 `core/query.rs` 单测。
+- **索引集（实测收窄）**：`files` 表仅保留 `idx_files_state(state, deleted_at)`、`idx_files_modified(modified)`、`idx_files_type(file_type COLLATE NOCASE)`；`name/labels` 为前导通配 LIKE 无法利用索引，`state_modified` 组合索引在 `state !=` 范围下不支撑 ORDER BY，均为写放大已删除；存量库启动时 `DROP INDEX IF EXISTS` 收敛。新增索引必须经过基准决策门。
+- **NTFS 快速扫描**：`infra/ntfs.rs` 提供卷能力探测、USN 记录解析与路径重建；快速全量路径由 `ROOTUP_FAST_SCAN=1` 显式开启且 probe（NTFS + USN 完整 + 权限）全部通过才生效，任何失败回退 `WalkDirEnumerator` 并记录 `scan: 快速扫描不可用 ...`；USN 无文件大小，快速路径逐文件补元数据；MFT 基线顺延 0.8.6（决策见 `benchmarks/mft-usn-evaluation.md`）。
+- **分类匹配**：课程分类器使用 Aho-Corasick 重叠匹配保持“包含即命中”语义（见等价测试）；忽略规则因语义（前缀/精确/包裹）不适用 AC。
+- **性能基准契约**：0.8.5 起对比目标为“0.8.5 vs 0.8.4”单轨；新增指标 `query_keyset_page` / `query_labels_multi` / `query_and_syntax` / `query_and_keyword` / `query_label_json` / `query_text_fts`；标签与文本实现评估结论见 `benchmarks/label-index-evaluation.md`。
