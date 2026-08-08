@@ -208,6 +208,8 @@ pub fn list_watched_dirs(app: AppHandle) -> Vec<String> {
     storage::load_settings(&app).watched_dirs
 }
 
+// 参数即命令线契约（query/limit/offset/sort/cursor/need_total），保留平铺签名。
+#[allow(clippy::too_many_arguments)]
 fn run_query(
     store: &Mutex<dyn IndexStore>,
     query: Option<&str>,
@@ -215,6 +217,8 @@ fn run_query(
     offset: i64,
     sort_by: Option<String>,
     sort_dir: Option<String>,
+    cursor: Option<String>,
+    need_total: Option<bool>,
 ) -> Result<QueryPage, String> {
     let started = Instant::now();
     let raw = query.unwrap_or("");
@@ -235,14 +239,34 @@ fn run_query(
     parsed.sort_dir = dir;
     parsed.limit = limit.clamp(1, 1000);
     parsed.offset = offset.max(0);
+    parsed.cursor = cursor;
+    // COUNT 治理：仅首页且无筛选时返回精确总数；其余（含加载更多）total=-1
+    let has_filter = !parsed.words.is_empty()
+        || !parsed.types.is_empty()
+        || !parsed.labels.is_empty()
+        || !parsed.labels_all.is_empty()
+        || !parsed.states.is_empty()
+        || parsed.size_min.is_some()
+        || parsed.size_max.is_some()
+        || parsed.before.is_some()
+        || parsed.after.is_some();
+    parsed.need_total =
+        need_total.unwrap_or_else(|| parsed.cursor.is_none() && offset == 0 && !has_filter);
     let store = store.lock().map_err(|e| e.to_string())?;
     let page = store.query(&parsed)?;
     let ms = started.elapsed().as_millis();
-    log::info!("query: q=\"{raw}\" results={} ms={ms}", page.total);
+    let results = if page.total >= 0 {
+        page.total
+    } else {
+        page.items.len() as i64
+    };
+    log::info!("query: q=\"{raw}\" results={results} ms={ms}");
     Ok(page)
 }
 
 /// 结构化查询（搜索语法 + 分页 + 总数）。
+// 参数即命令线契约（query/limit/offset/sort/cursor/need_total），保留平铺签名。
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn query_files(
     store: State<'_, Arc<Mutex<dyn IndexStore>>>,
@@ -251,6 +275,8 @@ pub fn query_files(
     offset: Option<i64>,
     sort_by: Option<String>,
     sort_dir: Option<String>,
+    cursor: Option<String>,
+    need_total: Option<bool>,
 ) -> Result<QueryPage, String> {
     run_query(
         &store,
@@ -259,6 +285,8 @@ pub fn query_files(
         offset.unwrap_or(0),
         sort_by,
         sort_dir,
+        cursor,
+        need_total,
     )
 }
 

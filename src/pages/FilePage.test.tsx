@@ -127,6 +127,7 @@ describe("FilePage 行操作", () => {
         },
       ],
       total: 1,
+      nextCursor: null,
     });
     vi.mocked(listCategories).mockResolvedValue(["document"]);
     vi.mocked(listLabelDefs).mockResolvedValue([]);
@@ -187,6 +188,7 @@ describe("FilePage 行操作", () => {
         },
       ],
       total: 1,
+      nextCursor: null,
     });
     renderPage();
     await screen.findByText("main.rs");
@@ -324,6 +326,7 @@ describe("FilePage 行操作", () => {
         },
       ],
       total: 1,
+      nextCursor: null,
     });
     const { container } = renderPage();
     await screen.findByText("高等数学-第1章.pdf");
@@ -338,5 +341,41 @@ describe("FilePage 行操作", () => {
     expect(row?.querySelectorAll("span.w-px").length).toBe(0);
     expect(screen.queryByText(formatTimestamp(2))).not.toBeInTheDocument();
     expect(container.querySelector("li span.opacity-0")).not.toBeNull();
+  });
+
+  it("总数未知时显示已显示数量，有下一页时显示加载更多", async () => {
+    vi.mocked(queryFiles).mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          path: "C:/docs/notes.pdf",
+          name: "notes.pdf",
+          size: 100,
+          file_type: "pdf",
+          labels: "",
+          first_seen: 1,
+          modified: 2,
+          state: "indexed",
+        },
+      ],
+      total: -1,
+      nextCursor: "[\"notes.pdf\",1]",
+    });
+    renderPage();
+    expect(await screen.findByText("已显示 1 个")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "加载更多" }),
+    ).toBeInTheDocument();
+  });
+
+  it("文件页只保留搜索框语法帮助，不出现重复的页头帮助按钮", async () => {
+    renderPage();
+    await screen.findByText("notes.pdf");
+    expect(
+      screen.queryByRole("button", { name: "查看本页帮助" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "搜索语法" }),
+    ).toBeInTheDocument();
   });
 });

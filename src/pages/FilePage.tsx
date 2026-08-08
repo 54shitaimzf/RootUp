@@ -18,7 +18,6 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
-import { PageHelpButton } from "../components/PageHelpButton";
 import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
@@ -106,6 +105,7 @@ const CODE_EDITOR_EXTENSIONS = new Set([
 const KEYWORD_DISPLAY_KEY: Record<string, string> = {
   "type:": "files.acKeywordType",
   "label:": "files.acKeywordLabel",
+  "+label:": "files.acKeywordLabelAll",
   "state:": "files.acKeywordState",
   "size:": "files.acKeywordSize",
   "before:": "files.acKeywordBefore",
@@ -248,7 +248,7 @@ export function FilePage({
     ];
   }, [categories, orderedAvailableLabels, mergedLabelDefs, t]);
 
-  const { items, total, loading, stale } = useFiles(
+  const { items, total, loading, stale, hasMore } = useFiles(
     queryString,
     PAGE_SIZE,
     offset,
@@ -438,7 +438,6 @@ export function FilePage({
       <PageHeader
         title={t("pages.files.title")}
         description={t("pages.files.description")}
-        actions={<PageHelpButton target="tasks.files" />}
       />
 
       <SearchAutocomplete
@@ -892,13 +891,15 @@ export function FilePage({
                   })}
                 </span>
                 <span>
-                  {t("files.countInfo", {
-                    shown: items.length,
-                    total,
-                  })}
+                  {total >= 0
+                    ? t("files.countInfo", {
+                        shown: items.length,
+                        total,
+                      })
+                    : t("files.countShown", { shown: items.length })}
                 </span>
               </div>
-              {items.length < total && (
+              {hasMore && (
                 <Button
                   variant="secondary"
                   size="sm"

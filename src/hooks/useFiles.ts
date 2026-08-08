@@ -23,16 +23,19 @@ export function useFiles(
 ) {
   const [items, setItems] = useState<FileRecord[]>([]);
   const [total, setTotal] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    queryFiles(query, limit, offset, sortBy, sortDir)
+    const cursor = offset === 0 ? null : nextCursor;
+    queryFiles(query, limit, offset, sortBy, sortDir, cursor)
       .then((page) => {
         if (cancelled) return;
         setTotal(page.total);
+        setNextCursor(page.nextCursor);
         setStale(false);
         setItems((prev) =>
           offset === 0
@@ -75,5 +78,5 @@ export function useFiles(
     };
   }, [query, offset, limit]);
 
-  return { items, total, loading, stale };
+  return { items, total, loading, stale, hasMore: nextCursor !== null };
 }

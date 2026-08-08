@@ -61,6 +61,7 @@ pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome,
     file_query.states = vec!["indexed".to_string()];
     file_query.limit = MAX_BATCH_FILES as i64 + 1;
     file_query.offset = 0;
+    file_query.need_total = true;
     let page = store(&app)
         .lock()
         .map_err(|e| e.to_string())?

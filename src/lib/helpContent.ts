@@ -192,6 +192,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     ],
     keywords: ["更新", "新功能", "0.8.4", "排序", "启动", "校验", "归档", "what's", "new"],
   },
+  {
+    version: "0.8.5",
+    items: [
+      "helpWhatsNew.v085Item1",
+      "helpWhatsNew.v085Item2",
+      "helpWhatsNew.v085Item3",
+      "helpWhatsNew.v085Item4",
+    ],
+    keywords: ["更新", "新功能", "0.8.5", "查询", "搜索", "分页", "AND", "标签", "扫描", "what's", "new"],
+  },
 ];
 
 /** 帮助内搜索的全部条目：文章 + 设置说明 + 语法 + 更新亮点。 */
@@ -215,7 +225,7 @@ export const HELP_SEARCH_SOURCES: HelpSearchSource[] = [
     tab: "syntax",
     titleKey: "help.sectionSyntax",
     summaryKey: "files.syntaxHelpIntro",
-    keywords: ["搜索", "语法", "筛选", "type", "label", "state", "size", "before", "after", "search", "syntax", "filter"],
+    keywords: ["搜索", "语法", "筛选", "type", "label", "state", "size", "before", "after", "and", "+label", "search", "syntax", "filter"],
   },
   ...WHATS_NEW.flatMap((entry) =>
     entry.items.map((itemKey) => ({

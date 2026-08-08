@@ -5,7 +5,7 @@ use chrono::TimeZone;
 use serde::Serialize;
 
 /// 结构化查询：同维度多值 OR，跨维度与文本 token AND。
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileQuery {
     /// 普通文本 token（按 name/path LIKE 匹配，多个 token 全部命中）
@@ -14,6 +14,8 @@ pub struct FileQuery {
     pub types: Vec<String>,
     /// `label:` / `tag:` 标签 key
     pub labels: Vec<String>,
+    /// 显式 AND 标签组：`+label:` 与 `label:a AND label:b` 语法；与 labels（OR）同时满足
+    pub labels_all: Vec<String>,
     /// `state:` / `status:` 状态
     pub states: Vec<String>,
     pub size_min: Option<i64>,
@@ -26,8 +28,34 @@ pub struct FileQuery {
     pub sort_by: Option<String>,
     /// 排序方向：asc / desc（默认 desc）。
     pub sort_dir: String,
+    /// keyset 分页游标（不透明字符串，由 query 结果回传）；提供时忽略 offset
+    pub cursor: Option<String>,
+    /// 是否需要精确总数；false 时 total 返回 -1（COUNT 治理）
+    pub need_total: bool,
     pub limit: i64,
     pub offset: i64,
+}
+
+impl Default for FileQuery {
+    fn default() -> Self {
+        Self {
+            words: Vec::new(),
+            types: Vec::new(),
+            labels: Vec::new(),
+            labels_all: Vec::new(),
+            states: Vec::new(),
+            size_min: None,
+            size_max: None,
+            before: None,
+            after: None,
+            sort_by: None,
+            sort_dir: "desc".to_string(),
+            cursor: None,
+            need_total: true,
+            limit: 0,
+            offset: 0,
+        }
+    }
 }
 
 /// 查询结果页：记录与总数（分页用）。
@@ -36,22 +64,61 @@ pub struct FileQuery {
 pub struct QueryPage {
     pub items: Vec<FileRecord>,
     pub total: i64,
+    /// 下一页游标；无更多数据时为 None
+    pub next_cursor: Option<String>,
 }
 
 /// 解析搜索字符串为结构化查询；非法值与未知前缀回落为普通文本。
 pub fn parse_query(input: &str) -> FileQuery {
     let mut query = FileQuery::default();
-    for token in input.split_whitespace() {
-        if let Some(value) = token.strip_prefix("type:") {
+    let tokens: Vec<&str> = input.split_whitespace().collect();
+    let is_label = |token: &str| {
+        token.starts_with("label:") || token.starts_with("tag:") || token.starts_with("+label:")
+    };
+    // AND 判定：`label:a AND label:b`（两侧均为标签 token）或 `+label:` 前缀
+    let mut and_required = vec![false; tokens.len()];
+    for (i, token) in tokens.iter().enumerate() {
+        if !is_label(token) {
+            continue;
+        }
+        let plus = token.starts_with("+label:");
+        let next_and = i + 1 < tokens.len()
+            && tokens[i + 1].eq_ignore_ascii_case("and")
+            && i + 2 < tokens.len()
+            && is_label(tokens[i + 2]);
+        let prev_and =
+            i >= 2 && tokens[i - 1].eq_ignore_ascii_case("and") && is_label(tokens[i - 2]);
+        and_required[i] = plus || next_and || prev_and;
+    }
+
+    for (i, token) in tokens.iter().enumerate() {
+        if let Some(value) = token.strip_prefix("+label:") {
+            push_non_empty(&mut query.labels_all, value);
+        } else if let Some(value) = token.strip_prefix("type:") {
             push_non_empty(&mut query.types, &value.to_ascii_lowercase());
         } else if let Some(value) = token.strip_prefix("label:") {
-            push_non_empty(&mut query.labels, value);
+            if and_required[i] {
+                push_non_empty(&mut query.labels_all, value);
+            } else {
+                push_non_empty(&mut query.labels, value);
+            }
         } else if let Some(value) = token.strip_prefix("tag:") {
-            push_non_empty(&mut query.labels, value);
+            if and_required[i] {
+                push_non_empty(&mut query.labels_all, value);
+            } else {
+                push_non_empty(&mut query.labels, value);
+            }
         } else if let Some(value) = token.strip_prefix("state:") {
             push_state(&mut query, value);
         } else if let Some(value) = token.strip_prefix("status:") {
             push_state(&mut query, value);
+        } else if token.eq_ignore_ascii_case("and") {
+            // 合法 AND 已被标签 token 消费；孤立 AND 回落普通文本
+            let prev_label = i >= 1 && is_label(tokens[i - 1]);
+            let next_label = i + 1 < tokens.len() && is_label(tokens[i + 1]);
+            if !(prev_label && next_label) {
+                query.words.push(token.to_string());
+            }
         } else if let Some(value) = token.strip_prefix("size:") {
             if !apply_size(value, &mut query) {
                 query.words.push(token.to_string());
@@ -71,6 +138,22 @@ pub fn parse_query(input: &str) -> FileQuery {
         }
     }
     query
+}
+
+/// keyset 游标编码：`[排序值, id]`，排序值类型与排序字段一致（文本/整数）。
+pub fn encode_cursor(sort_value: serde_json::Value, id: i64) -> String {
+    serde_json::json!([sort_value, id]).to_string()
+}
+
+/// keyset 游标解码；非法游标返回错误（调用方拒绝查询）。
+pub fn decode_cursor(cursor: &str) -> Result<(serde_json::Value, i64), String> {
+    let arr: Vec<serde_json::Value> =
+        serde_json::from_str(cursor).map_err(|e| format!("无效的游标: {e}"))?;
+    if arr.len() != 2 {
+        return Err("无效的游标".into());
+    }
+    let id = arr[1].as_i64().ok_or_else(|| "无效的游标".to_string())?;
+    Ok((arr[0].clone(), id))
 }
 
 fn push_non_empty(target: &mut Vec<String>, value: &str) {
@@ -281,5 +364,69 @@ mod tests {
         assert_eq!(q.labels, vec!["course".to_string()]);
         assert_eq!(q.states, vec!["pending".to_string()]);
         assert_eq!(q.size_min, Some(1024 * 1024));
+    }
+
+    #[test]
+    fn explicit_and_syntax_both_forms() {
+        let q = parse_query("label:a AND label:b");
+        assert_eq!(q.labels_all, vec!["a".to_string(), "b".to_string()]);
+        assert!(q.labels.is_empty());
+
+        let q = parse_query("+label:a +label:b");
+        assert_eq!(q.labels_all, vec!["a".to_string(), "b".to_string()]);
+
+        let q = parse_query("label:a label:b");
+        assert_eq!(q.labels, vec!["a".to_string(), "b".to_string()]);
+        assert!(q.labels_all.is_empty());
+    }
+
+    #[test]
+    fn and_is_case_insensitive_and_chains() {
+        let q = parse_query("label:a and label:b AND label:c");
+        assert_eq!(
+            q.labels_all,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()]
+        );
+        assert!(q.words.is_empty());
+    }
+
+    #[test]
+    fn isolated_and_falls_back_to_text() {
+        let q = parse_query("AND label:a");
+        assert_eq!(q.words, vec!["AND".to_string()]);
+        assert_eq!(q.labels, vec!["a".to_string()]);
+        assert!(q.labels_all.is_empty());
+
+        let q = parse_query("label:a AND");
+        assert_eq!(q.labels, vec!["a".to_string()]);
+        assert_eq!(q.words, vec!["AND".to_string()]);
+    }
+
+    #[test]
+    fn or_and_mix() {
+        let q = parse_query("label:a label:b +label:c");
+        assert_eq!(q.labels, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(q.labels_all, vec!["c".to_string()]);
+
+        let q = parse_query("label:a AND label:b label:c");
+        assert_eq!(q.labels_all, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(q.labels, vec!["c".to_string()]);
+    }
+
+    #[test]
+    fn cursor_roundtrip_and_invalid() {
+        let cursor = encode_cursor(serde_json::json!("高等数学"), 42);
+        let (value, id) = decode_cursor(&cursor).unwrap();
+        assert_eq!(value, serde_json::json!("高等数学"));
+        assert_eq!(id, 42);
+
+        let cursor = encode_cursor(serde_json::json!(123456), 7);
+        let (value, id) = decode_cursor(&cursor).unwrap();
+        assert_eq!(value, serde_json::json!(123456));
+        assert_eq!(id, 7);
+
+        assert!(decode_cursor("not-json").is_err());
+        assert!(decode_cursor("[1]").is_err());
+        assert!(decode_cursor(r#"["a","b","c"]"#).is_err());
     }
 }

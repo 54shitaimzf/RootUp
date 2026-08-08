@@ -47,6 +47,7 @@ export function habitKeyForTag(tag: TagValue): string {
 export const KEYWORD_PREFIXES = [
   "type:",
   "label:",
+  "+label:",
   "state:",
   "size:",
   "before:",

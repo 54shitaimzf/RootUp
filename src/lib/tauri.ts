@@ -190,6 +190,8 @@ export interface FileRecord {
 export interface QueryPage {
   items: FileRecord[];
   total: number;
+  /** keyset 下一页游标；无更多数据为 null */
+  nextCursor: string | null;
 }
 
 export type SortField = "name" | "type" | "size" | "modified" | "labels";
@@ -322,6 +324,7 @@ export function queryFiles(
   offset: number,
   sortBy?: SortField | null,
   sortDir?: SortDir,
+  cursor?: string | null,
 ): Promise<QueryPage> {
   return invoke<QueryPage>("query_files", {
     query: query || null,
@@ -329,6 +332,7 @@ export function queryFiles(
     offset,
     sortBy: sortBy ?? null,
     sortDir: sortDir ?? "desc",
+    cursor: cursor ?? null,
   });
 }
 

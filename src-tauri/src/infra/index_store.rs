@@ -3,7 +3,7 @@
 use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::events::FileState;
 use crate::core::index::{FileRecord, IndexStore, ScanDiffStore};
-use crate::core::query::{FileQuery, QueryPage};
+use crate::core::query::{decode_cursor, encode_cursor, FileQuery, QueryPage};
 use crate::core::scan::ScanDiffSummary;
 use crate::infra::time::now_millis;
 use rusqlite::types::Value;
@@ -25,6 +25,20 @@ CREATE TABLE IF NOT EXISTS files (
     state TEXT NOT NULL DEFAULT 'pending',
     deleted_at INTEGER
 );
+"#;
+
+/// 0.8.5 索引集（schema v4）：存量库迁移与全新库共用同一份幂等语句。
+/// name/labels 为前导通配 LIKE（`%x%`）无法利用索引；state_modified 组合索引在
+/// `state !=` 范围条件下不能支撑 ORDER BY modified，实际排序与 COUNT 分别由
+/// idx_files_modified / idx_files_state 承担，故只保留三个索引并删除其余。
+const INDEX_SCHEMA: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_files_state ON files(state, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_files_modified ON files(modified);
+CREATE INDEX IF NOT EXISTS idx_files_type ON files(file_type COLLATE NOCASE);
+DROP INDEX IF EXISTS idx_files_state_modified;
+DROP INDEX IF EXISTS idx_files_name;
+DROP INDEX IF EXISTS idx_files_size;
+DROP INDEX IF EXISTS idx_files_labels;
 "#;
 
 const ARCHIVE_SCHEMA: &str = r#"
@@ -87,6 +101,13 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
         tx.pragma_update(None, "user_version", 3)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    if version < 4 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch(INDEX_SCHEMA).map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 4)
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
@@ -332,6 +353,10 @@ impl IndexStore for SqliteIndexStore {
                     .map(|label| Value::Text(format!("%,{},%", label))),
             );
         }
+        for label in &query.labels_all {
+            conditions.push(format!("',' || labels || ',' LIKE ?{}", params.len() + 1));
+            params.push(Value::Text(format!("%,{label},%")));
+        }
         if !query.states.is_empty() {
             let placeholders: Vec<String> = (0..query.states.len())
                 .map(|i| format!("?{}", params.len() + i + 1))
@@ -358,31 +383,93 @@ impl IndexStore for SqliteIndexStore {
 
         let where_sql = conditions.join(" AND ");
         let (order_col, order_dir) = sort_clause(query);
-        let total: i64 = conn
-            .query_row(
+
+        // keyset 游标：提供时忽略 offset；游标值类型必须与排序字段一致
+        let mut page_conditions = conditions.clone();
+        let mut page_params = params.clone();
+        if let Some(cursor) = &query.cursor {
+            let (sort_value, cursor_id) = decode_cursor(cursor)?;
+            let is_text_col = order_col.contains("COLLATE NOCASE");
+            let sort_param = if is_text_col {
+                Value::Text(
+                    sort_value
+                        .as_str()
+                        .ok_or_else(|| "无效的游标：排序字段为文本".to_string())?
+                        .to_string(),
+                )
+            } else {
+                Value::Integer(
+                    sort_value
+                        .as_i64()
+                        .ok_or_else(|| "无效的游标：排序字段为整数".to_string())?,
+                )
+            };
+            let ph = page_params.len() + 1;
+            page_params.push(sort_param);
+            page_params.push(Value::Integer(cursor_id));
+            let cmp = if order_dir == "ASC" { ">" } else { "<" };
+            page_conditions.push(format!(
+                "({order_col} {cmp} ?{ph} OR ({order_col} = ?{ph} AND id < ?{}))",
+                ph + 1
+            ));
+        }
+        let page_where = page_conditions.join(" AND ");
+
+        let total: i64 = if query.need_total {
+            conn.query_row(
                 &format!("SELECT COUNT(*) FROM files WHERE {where_sql}"),
                 params_from_iter(params.iter()),
                 |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?
+        } else {
+            -1
+        };
 
+        let order_sql = if query.cursor.is_some() {
+            format!(
+                "ORDER BY {order_col} {order_dir}, id DESC LIMIT ?{}",
+                page_params.len() + 1
+            )
+        } else {
+            format!(
+                "ORDER BY {order_col} {order_dir}, id DESC LIMIT ?{} OFFSET ?{}",
+                page_params.len() + 1,
+                page_params.len() + 2
+            )
+        };
         let mut stmt = conn
             .prepare(&format!(
-                "SELECT * FROM files WHERE {where_sql} \
-                 ORDER BY {order_col} {order_dir}, id DESC LIMIT ?{} OFFSET ?{}",
-                params.len() + 1,
-                params.len() + 2
+                "SELECT * FROM files WHERE {page_where} {order_sql}"
             ))
             .map_err(|e| e.to_string())?;
-        params.push(Value::Integer(limit));
-        params.push(Value::Integer(offset));
+        page_params.push(Value::Integer(limit + 1));
+        if query.cursor.is_none() {
+            page_params.push(Value::Integer(offset));
+        }
         let rows = stmt
-            .query_map(params_from_iter(params.iter()), row_to_record)
+            .query_map(params_from_iter(page_params.iter()), row_to_record)
             .map_err(|e| e.to_string())?;
-        let items = rows
+        let mut items = rows
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
-        Ok(QueryPage { items, total })
+        let has_more = items.len() > limit as usize;
+        if has_more {
+            items.truncate(limit as usize);
+        }
+        let next_cursor = if has_more {
+            let last = items
+                .last()
+                .ok_or_else(|| "分页计算失败：空页".to_string())?;
+            Some(encode_cursor(sort_value_of(&order_col, last), last.id))
+        } else {
+            None
+        };
+        Ok(QueryPage {
+            items,
+            total,
+            next_cursor,
+        })
     }
 
     fn upsert_many(&mut self, records: &[FileRecord]) -> Result<(), String> {
@@ -926,6 +1013,21 @@ fn sort_clause(query: &FileQuery) -> (String, String) {
     (col.to_string(), dir.to_string())
 }
 
+/// 从记录提取排序字段值（与 sort_clause 的列表达式一一对应），用于 keyset 游标编码。
+fn sort_value_of(order_col: &str, record: &FileRecord) -> serde_json::Value {
+    if order_col.starts_with("name") {
+        serde_json::Value::String(record.name.clone())
+    } else if order_col.starts_with("file_type") {
+        serde_json::Value::String(record.file_type.clone())
+    } else if order_col.starts_with("labels") {
+        serde_json::Value::String(record.labels.clone())
+    } else if order_col == "size" {
+        serde_json::Value::Number(record.size.into())
+    } else {
+        serde_json::Value::Number(record.modified.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1297,6 +1399,53 @@ mod tests {
     }
 
     #[test]
+    fn migrate_v3_to_v4_creates_query_indexes_and_drops_legacy() {
+        let dir = temp_db_dir("migrate_v3_v4");
+        let db = dir.join("rootup.db");
+        {
+            let conn = Connection::open(&db).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    path TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    size INTEGER NOT NULL DEFAULT 0,
+                    file_type TEXT NOT NULL DEFAULT '',
+                    labels TEXT NOT NULL DEFAULT '',
+                    first_seen INTEGER NOT NULL,
+                    modified INTEGER NOT NULL,
+                    state TEXT NOT NULL DEFAULT 'pending',
+                    deleted_at INTEGER
+                 );
+                 CREATE INDEX idx_files_name ON files(name COLLATE NOCASE);
+                 PRAGMA user_version = 3;",
+            )
+            .unwrap();
+        }
+        let store = SqliteIndexStore::open(db.to_str().unwrap()).unwrap();
+        let conn = store.conn.lock().unwrap();
+        let indexes: Vec<String> = conn
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_files_%'",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 4);
+        assert!(indexes.contains(&"idx_files_state".to_string()));
+        assert!(indexes.contains(&"idx_files_modified".to_string()));
+        assert!(indexes.contains(&"idx_files_type".to_string()));
+        assert!(!indexes.contains(&"idx_files_name".to_string()));
+        assert!(!indexes.contains(&"idx_files_state_modified".to_string()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn escape_like_function() {
         assert_eq!(escape_like("100%"), "100\\%");
         assert_eq!(escape_like("a_b"), "a\\_b");
@@ -1394,6 +1543,135 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(page.total, 1);
+    }
+
+    #[test]
+    fn keyset_pagination_matches_offset() {
+        let mut store = store();
+        for i in 0..37 {
+            let r = FileRecord::new(
+                &format!("C:/keyset/{i:02}.txt"),
+                i * 10,
+                1000 + i,
+                "indexed",
+            );
+            store.upsert(&r).unwrap();
+        }
+
+        let mut offset_items = Vec::new();
+        let mut off = 0;
+        loop {
+            let page = store
+                .query(&FileQuery {
+                    limit: 10,
+                    offset: off,
+                    need_total: true,
+                    ..Default::default()
+                })
+                .unwrap();
+            offset_items.extend(page.items.iter().map(|r| r.id));
+            if page.items.len() < 10 {
+                break;
+            }
+            off += 10;
+        }
+
+        let mut cursor_items = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = store
+                .query(&FileQuery {
+                    limit: 10,
+                    cursor: cursor.clone(),
+                    need_total: false,
+                    ..Default::default()
+                })
+                .unwrap();
+            assert_eq!(page.total, -1);
+            cursor_items.extend(page.items.iter().map(|r| r.id));
+            cursor = page.next_cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(offset_items, cursor_items);
+        assert_eq!(offset_items.len(), 37);
+    }
+
+    #[test]
+    fn keyset_cursor_type_mismatch_is_rejected() {
+        let mut store = store();
+        store
+            .upsert(&FileRecord::new("C:/x/a.txt", 1, 1, "indexed"))
+            .unwrap();
+        let numeric_field_text_cursor = FileQuery {
+            cursor: Some(encode_cursor(serde_json::json!("abc"), 1)),
+            ..Default::default()
+        };
+        assert!(store.query(&numeric_field_text_cursor).is_err());
+        let text_field_numeric_cursor = FileQuery {
+            cursor: Some(encode_cursor(serde_json::json!(5), 1)),
+            sort_by: Some("name".to_string()),
+            ..Default::default()
+        };
+        assert!(store.query(&text_field_numeric_cursor).is_err());
+    }
+
+    #[test]
+    fn need_total_false_returns_minus_one() {
+        let mut store = store();
+        store
+            .upsert(&FileRecord::new("C:/x/a.txt", 1, 1, "indexed"))
+            .unwrap();
+        let page = store
+            .query(&FileQuery {
+                need_total: false,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, -1);
+        assert_eq!(page.items.len(), 1);
+        let page = store
+            .query(&FileQuery {
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1);
+    }
+
+    #[test]
+    fn labels_all_requires_every_label() {
+        let mut store = store();
+        for (path, labels) in [
+            ("C:/x/a.txt", "a,b"),
+            ("C:/x/b.txt", "a"),
+            ("C:/x/c.txt", "b"),
+            ("C:/x/d.txt", "c"),
+            ("C:/x/e.txt", ""),
+        ] {
+            let mut r = FileRecord::new(path, 1, 1, "indexed");
+            r.labels = labels.to_string();
+            store.upsert(&r).unwrap();
+        }
+        let page = store
+            .query(&FileQuery {
+                labels_all: vec!["a".to_string(), "b".to_string()],
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.items[0].path, "C:/x/a.txt");
+
+        let page = store
+            .query(&FileQuery {
+                labels: vec!["a".to_string(), "c".to_string()],
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 3);
     }
 
     #[test]
@@ -1526,7 +1804,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 3);
+            assert_eq!(version, 4);
         }
         // 重复打开幂等，不报错
         {
@@ -1535,7 +1813,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 3);
+            assert_eq!(version, 4);
         }
         fs::remove_dir_all(&dir).unwrap();
     }

@@ -1,6 +1,6 @@
 [package]
 name = "rootup"
-version = "0.8.4"
+version = "0.8.5"
 description = "RootUp - 面向学生的智能文件整理工具"
 authors = ["余烬"]
 license = "GPL-3.0-or-later"
@@ -37,3 +37,5 @@ chrono = { version = "0.4", features = ["clock"] }
 tauri-plugin-opener = "2"
 mslnk = "0.1.8"
 winreg = "0.56.0"
+aho-corasick = "1"
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl"] }
