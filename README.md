@@ -122,7 +122,7 @@ npm run tauri build    # 发布构建
 
 ### 质量与测试
 
-- 前端测试 440 项、Rust 测试 313 项
+- 前端测试 444 项、Rust 测试 314 项
 - `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`
 - 架构单向依赖校验：`npm run check:arch` / `npm run check:arch:rust`
 - 发布门禁 `scripts/pre-release-check.ps1`：全部测试、构建、日志冒烟与真实链路验收
