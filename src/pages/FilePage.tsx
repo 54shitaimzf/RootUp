@@ -18,6 +18,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
+import { PageHelpButton } from "../components/PageHelpButton";
 import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
@@ -438,6 +439,7 @@ export function FilePage({
       <PageHeader
         title={t("pages.files.title")}
         description={t("pages.files.description")}
+        actions={<PageHelpButton target="tasks.files" />}
       />
 
       <SearchAutocomplete

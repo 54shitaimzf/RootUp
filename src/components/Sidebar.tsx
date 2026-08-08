@@ -1,8 +1,8 @@
 import {
   FolderKanban,
   FolderOpen,
+  BookOpen,
   GraduationCap,
-  HelpCircle,
   Settings,
   Sprout,
   Wrench,
@@ -11,6 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { APP_NAME, APP_VERSION } from "../lib/constants";
 import type { PageKey } from "../lib/nav";
+import { Tooltip } from "./Tooltip";
 import { useHelpCenter } from "./HelpCenter";
 
 const NAV_ITEMS: { key: PageKey; icon: LucideIcon; labelKey: string }[] = [
@@ -70,16 +71,31 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto px-3 py-3">
-        <button
-          type="button"
-          onClick={() => openHelp("guide")}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition-colors duration-[var(--duration-fast)] hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+        <Tooltip
+          className="block w-full"
+          content={`${t("help.title")} · ${t("help.cardSubtitleFull")}`}
         >
-          <HelpCircle className="size-4 shrink-0" />
-          <span className="truncate">{t("help.title")}</span>
-        </button>
-        <div className="px-3 pt-2 text-xs text-slate-500 dark:text-slate-400">
-          {APP_NAME} v{APP_VERSION}
+          <button
+            type="button"
+            onClick={() => openHelp("guide")}
+            className="flex w-full items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition-colors duration-[var(--duration-fast)] hover:border-brand-300 hover:bg-brand-50/60 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10"
+          >
+            <BookOpen className="mt-0.5 size-4 shrink-0 text-brand-600 dark:text-brand-300" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-slate-600 dark:text-slate-300">
+                {t("help.title")}
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-slate-400 dark:text-slate-500">
+                {t("help.cardSubtitle")}
+              </span>
+            </span>
+          </button>
+        </Tooltip>
+        <div className="mt-2 flex items-center justify-center gap-1">
+          <Sprout className="size-3 text-brand-500/70" />
+          <span className="font-mono text-[10px] tracking-wide text-slate-400 dark:text-slate-500">
+            {APP_NAME} {APP_VERSION}
+          </span>
         </div>
       </div>
     </aside>

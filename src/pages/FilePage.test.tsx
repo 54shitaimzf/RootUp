@@ -368,12 +368,12 @@ describe("FilePage 行操作", () => {
     ).toBeInTheDocument();
   });
 
-  it("文件页只保留搜索框语法帮助，不出现重复的页头帮助按钮", async () => {
+  it("文件页页头“帮助”文字按钮与搜索框“?”语法帮助并存且形态不同", async () => {
     renderPage();
     await screen.findByText("notes.pdf");
-    expect(
-      screen.queryByRole("button", { name: "查看本页帮助" }),
-    ).not.toBeInTheDocument();
+    const headerHelp = screen.getByRole("button", { name: "帮助" });
+    expect(headerHelp).toBeInTheDocument();
+    expect(headerHelp.textContent).toContain("帮助");
     expect(
       screen.getByRole("button", { name: "搜索语法" }),
     ).toBeInTheDocument();

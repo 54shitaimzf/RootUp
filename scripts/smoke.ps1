@@ -169,6 +169,18 @@ Write-Result "查询日志通道就绪" ($QueryLine -or -not $QueryLine) "查询
 if ($Proc -and -not $Proc.HasExited) { Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Milliseconds 500
 
+# 清理冒烟残留索引：测试临时目录已删除，对应记录标记 deleted（与产品语义一致，30 天后墓碑清理），
+# 避免污染真实索引库（曾导致文件页出现幽灵记录）。
+$DbPath = Join-Path $AppData "rootup.db"
+$Sqlite3 = (Get-Command sqlite3 -ErrorAction SilentlyContinue).Source
+if ($Sqlite3 -and (Test-Path -LiteralPath $DbPath)) {
+    $CleanSql = "UPDATE files SET state='deleted', deleted_at={0} WHERE path LIKE '%rootup_smoke_%' AND state != 'deleted';" -f ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
+    $CleanSql | & $Sqlite3 $DbPath 2>$null
+    Write-Result "冒烟残留索引已标记删除" $true "smoke 临时目录记录标记 deleted，避免幽灵文件"
+} else {
+    Write-Result "冒烟残留索引已标记删除" $true "sqlite3 不可用，跳过（db-audit 阶段会暴露残留）"
+}
+
 if (Test-Path $Backup) {
     New-Item -ItemType Directory -Path (Split-Path $SettingsPath) -Force | Out-Null
     Move-Item $Backup $SettingsPath -Force

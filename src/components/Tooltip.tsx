@@ -10,11 +10,14 @@ export function Tooltip({
   children,
   position = "top",
   delay = 300,
+  className = "inline-flex",
 }: {
   content: string;
   children: ReactNode;
   position?: "top" | "bottom";
   delay?: number;
+  /** 宿主容器类名；默认 inline-flex，需要撑满父容器时传 block w-full 等 */
+  className?: string;
 }) {
   const hostRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<number | null>(null);
@@ -65,7 +68,7 @@ export function Tooltip({
   return (
     <span
       ref={hostRef}
-      className="inline-flex"
+      className={className}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}
