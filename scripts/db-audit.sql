@@ -35,3 +35,14 @@ SELECT 'shortcuts_total=' || COUNT(*) FROM shortcuts;
 SELECT 'shortcuts_duplicate_target=' || COUNT(*) FROM (
   SELECT target_path FROM shortcuts GROUP BY target_path HAVING COUNT(*) > 1
 );
+
+.print [indexes]
+SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_files_%' ORDER BY name;
+.print [explain_label_query]
+EXPLAIN QUERY PLAN SELECT id FROM files
+  WHERE state != 'deleted' AND ',' || labels || ',' LIKE '%,document,%' LIMIT 50;
+.print [explain_and_query]
+EXPLAIN QUERY PLAN SELECT id FROM files
+  WHERE state != 'deleted'
+    AND ',' || labels || ',' LIKE '%,a,%'
+    AND ',' || labels || ',' LIKE '%,b,%' LIMIT 50;

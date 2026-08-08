@@ -87,6 +87,9 @@ try {
     $userVer = @(Get-Section "user_version")
     $journal = @(Get-Section "journal_mode")
     $stats = @(Get-Section "stats")
+    $indexes = @(Get-Section "indexes")
+    $explainLabel = @(Get-Section "explain_label_query")
+    $explainAnd = @(Get-Section "explain_and_query")
 
     Add-Check "integrity_check" (($integrity | Where-Object { $_.Trim() -eq "ok" }).Count -gt 0) "lines=$($integrity.Count)"
     Add-Check "foreign_key_check" ($fk.Count -eq 0) "violations=$($fk.Count)"
@@ -105,11 +108,21 @@ try {
     if ($tables -notcontains "files") {
         Add-Check "fresh DB (schema initializes on first launch)" $true "user_version=$userVersion journal=$journalMode tables=[$($tables -join ',')]"
     } else {
-        Add-Check "user_version" ($userVersion -eq "3") "got=$userVersion expected=3"
+        Add-Check "user_version" ($userVersion -eq "4") "got=$userVersion expected=4"
         Add-Check "journal_mode" ($journalMode -eq "wal") "got=$journalMode expected=wal"
         Add-Check "no duplicate path_key" ($map["duplicate_path_keys"] -eq 0) "count=$($map['duplicate_path_keys'])"
         Add-Check "no malformed labels" ($map["malformed_labels"] -eq 0) "count=$($map['malformed_labels'])"
         Add-Check "no pending archive without source" ($map["archive_pending_without_source"] -eq 0) "count=$($map['archive_pending_without_source'])"
+        $expectedIndexes = @(
+            "idx_files_state",
+            "idx_files_modified",
+            "idx_files_type"
+        )
+        $indexNames = @($indexes | ForEach-Object { $_.Trim() })
+        $missing = @($expectedIndexes | Where-Object { $indexNames -notcontains $_ })
+        Add-Check "0.8.5 query indexes present" ($missing.Count -eq 0) "missing=$($missing -join ',')"
+        Add-Check "label query plan captured" ($explainLabel.Count -gt 0) "lines=$($explainLabel.Count)"
+        Add-Check "AND query plan captured" ($explainAnd.Count -gt 0) "lines=$($explainAnd.Count)"
     }
 
     # ---- JSON data files ----
@@ -146,7 +159,7 @@ try {
 
     # ---- report ----
     $report = [System.Collections.Generic.List[string]]::new()
-    $report.Add("# 0.8.4 数据库审计报告")
+    $report.Add("# RootUp 数据库审计报告")
     $report.Add("")
     $report.Add("- 时间：$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
     $report.Add("- 数据库：$DbPath（副本审计，只读）")
