@@ -270,6 +270,9 @@ pub fn resolve_record_paths(
     let file_count = files.len();
     let mut failed = 0usize;
     let mut failed_samples: Vec<String> = Vec::new();
+    let records_by_num: HashMap<u64, &MftRecord> =
+        records.iter().map(|r| (r.record_number, r)).collect();
+    let mut missing_dir_probe: Vec<String> = Vec::new();
     for (record_number, attr) in files {
         let parent = attr.parent_ref & MFT_REFERENCE_MASK;
         match resolve_dir_path(parent, &dirs, &mut cache, drive) {
@@ -283,6 +286,26 @@ pub fn resolve_record_paths(
             }
             Err(fail) => {
                 failed += 1;
+                if let PathFail::MissingDir { record, child } = &fail {
+                    if missing_dir_probe.len() < 6 {
+                        let detail = records_by_num
+                            .get(record)
+                            .map(|r| {
+                                let names: Vec<(String, u8)> = r
+                                    .file_names
+                                    .iter()
+                                    .map(|n| (n.name.clone(), n.namespace))
+                                    .collect();
+                                format!(
+                                    "parsed in_use={} dir={} names={names:?}",
+                                    r.in_use, r.is_directory
+                                )
+                            })
+                            .unwrap_or_else(|| "NOT_PARSED".to_string());
+                        missing_dir_probe
+                            .push(format!("record={record:#x} child={child:?} => {detail}"));
+                    }
+                }
                 if failed_samples.len() < 8 {
                     failed_samples.push(format!(
                         "{} parent={parent:#x} dir_exists={} fail={}",
@@ -295,12 +318,13 @@ pub fn resolve_record_paths(
         }
     }
     log::info!(
-        "scan: MFT 解析 dirs={} files={} resolved={} failed={} failed_samples={:?}",
+        "scan: MFT 解析 dirs={} files={} resolved={} failed={} failed_samples={:?} missing_dir_probe={:?}",
         dirs.len(),
         file_count,
         resolved.len(),
         failed,
-        failed_samples
+        failed_samples,
+        missing_dir_probe
     );
     let census: Vec<String> = ["Users", "Administrator", "AppData", "Local", "Temp"]
         .iter()
@@ -543,6 +567,7 @@ pub fn try_full_scan(
     }
 
     let mut records: Vec<MftRecord> = Vec::new();
+    let mut parse_fail_samples: Vec<String> = Vec::new();
     let chunk_size = (MFT_READ_TARGET / record_size).max(1) * record_size;
     let mut chunk = vec![0u8; chunk_size];
     let mut position = mft_offset;
@@ -564,8 +589,18 @@ pub fn try_full_scan(
         while off + record_size <= read as usize {
             let record_buf = &chunk[off..off + record_size];
             if record_buf[0..4] == FILE_RECORD_SIGNATURE {
-                if let Ok(record) = parse_file_record(record_buf) {
-                    records.push(record);
+                match parse_file_record(record_buf) {
+                    Ok(record) => records.push(record),
+                    Err(e) => {
+                        if parse_fail_samples.len() < 20 {
+                            let rn = if record_buf.len() >= 0x30 {
+                                read_u32(record_buf, 0x2C)
+                            } else {
+                                0
+                            };
+                            parse_fail_samples.push(format!("record={rn} err={e}"));
+                        }
+                    }
                 }
             }
             off += record_size;
@@ -588,6 +623,9 @@ pub fn try_full_scan(
     );
     if records.is_empty() {
         return Err("MFT 未解析出任何记录".into());
+    }
+    if !parse_fail_samples.is_empty() {
+        log::info!("scan: MFT 解析失败 samples={parse_fail_samples:?}",);
     }
 
     let mut stats = EnumerateStats::default();
