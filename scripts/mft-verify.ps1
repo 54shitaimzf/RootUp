@@ -46,18 +46,24 @@ function New-Corpus([string]$dir, [int]$count) {
 }
 
 function Get-LongPath([string]$path) {
+    $memberDef = '[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern IntPtr CreateFileW(string lpFileName, uint dwDesiredAccess, uint dwShareMode, IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile); [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern uint GetFinalPathNameByHandle(IntPtr hFile, System.Text.StringBuilder lpszFilePath, uint cchFilePath, uint dwFlags); [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr hObject);'
     try {
-        Add-Type -Namespace RootUp.Tools -Name LongPath -MemberDefinition @'
-[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-public static extern uint GetLongPathNameW(string lpszShortPath, System.Text.StringBuilder lpszLongPath, uint cchBuffer);
-'@ -ErrorAction Stop
+        Add-Type -Namespace RootUp.Tools -Name LongPath -MemberDefinition $memberDef -ErrorAction Stop
     } catch {
-        # 类型已加载或编译失败时降级：使用原始路径（若为 8.3 短路径，MFT 前缀可能失配）。
+        # Type already loaded or compile failed: fall back to the raw path (8.3 may mismatch MFT prefix).
     }
-    $sb = New-Object System.Text.StringBuilder 32768
-    $len = [RootUp.Tools.LongPath]::GetLongPathNameW($path, $sb, $sb.Capacity)
-    if ($len -eq 0 -or $len -gt $sb.Capacity) { return $path }
-    return $sb.ToString(0, [int]$len)
+    $h = [RootUp.Tools.LongPath]::CreateFileW($path, 0x80, 0x1 -bor 0x2, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)
+    if ($h -eq [IntPtr]::Zero -or $h -eq [IntPtr](-1)) { return $path }
+    try {
+        $sb = New-Object System.Text.StringBuilder 32768
+        $len = [RootUp.Tools.LongPath]::GetFinalPathNameByHandle($h, $sb, $sb.Capacity, 0)
+        if ($len -eq 0 -or $len -gt $sb.Capacity) { return $path }
+        $final = $sb.ToString(0, [int]$len)
+        if ($final.StartsWith('\\?\')) { $final = $final.Substring(4) }
+        return $final
+    } finally {
+        [RootUp.Tools.LongPath]::CloseHandle($h) | Out-Null
+    }
 }
 
 function Invoke-OneScan([string]$dir, [bool]$mft) {
@@ -148,7 +154,7 @@ try {
             Remove-Item $rawDir -Recurse -Force -ErrorAction SilentlyContinue
             New-Corpus $rawDir $size
         }
-        # 统一使用长路径：walkdir 与 MFT 两侧的路径前缀必须一致（%TEMP% 可能是 8.3 短路径）。
+        # Use long paths so walkdir and MFT share the same prefix (%TEMP% may be an 8.3 short path).
         $dir = Get-LongPath $rawDir
         $label = if ($Root) { "real" } else { $size }
         $walk = @(); $mft = @(); $countOk = $true

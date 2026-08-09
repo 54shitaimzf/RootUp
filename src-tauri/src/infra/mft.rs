@@ -334,10 +334,19 @@ fn long_path_of(path: &str) -> String {
     let short_wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
     let mut buf = vec![0u16; LONG_PATH_BUF];
     let len = unsafe { GetLongPathNameW(PCWSTR(short_wide.as_ptr()), Some(&mut buf)) };
-    if len == 0 || len as usize >= buf.len() {
-        return path.to_string();
+    if len != 0 && (len as usize) < buf.len() {
+        return String::from_utf16_lossy(&buf[..len as usize]);
     }
-    String::from_utf16_lossy(&buf[..len as usize])
+    // GetLongPathNameW 可能因权限拒绝（如 8.3 别名路径），退回 canonicalize：
+    // Windows 上它内部走 GetFinalPathNameByHandle，返回 \\?\ 前缀的长路径。
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        let s = canonical.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix(r"\\?\") {
+            return stripped.to_string();
+        }
+        return s.to_string();
+    }
+    path.to_string()
 }
 
 /// 读取卷布局：记录大小、MFT 起始字节偏移、MFT 有效数据长度。
