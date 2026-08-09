@@ -519,8 +519,13 @@ pub fn try_full_scan(
             continue;
         };
         let full = normalize_path(&format!("{root_prefix}{relative}"));
-        let name = full.rsplit('/').next().unwrap_or(&full).to_string();
-        if matcher.is_ignored(&name) {
+        let parts: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
+        let name = parts.last().copied().unwrap_or(relative);
+        // 与 walkdir 的 filter_entry 对齐：被忽略规则命中的祖先目录整棵跳过。
+        let ignored_dir = parts[..parts.len().saturating_sub(1)]
+            .iter()
+            .any(|seg| matcher.is_ignored(seg));
+        if ignored_dir || matcher.is_ignored(name) {
             stats.ignored += 1;
             continue;
         }
