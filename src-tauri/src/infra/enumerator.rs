@@ -172,7 +172,7 @@ fn enumerate_win32(
 ) -> Result<bool, String> {
     let mut stack: Vec<String> = vec![root.trim_end_matches(['/', '\\']).to_string()];
     while let Some(path) = stack.pop() {
-        let pattern: Vec<u16> = format!("{path}\\*")
+        let pattern: Vec<u16> = win32_search_pattern(&path)
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();
@@ -188,6 +188,9 @@ fn enumerate_win32(
             }
         };
         let _guard = Win32FindHandle(handle);
+        // walkdir/std 在单条目出错时记录错误并继续枚举，这里保持一致；
+        // 连续错误上限防止句柄异常时死循环。
+        let mut consecutive_errors = 0usize;
         loop {
             let name = utf16_until_nul(&data.cFileName);
             if name != "." && name != ".." {
@@ -227,13 +230,34 @@ fn enumerate_win32(
                 Err(e) if e.code() == ERROR_NO_MORE_FILES.into() => break,
                 Err(e) => {
                     stats.errors += 1;
+                    consecutive_errors += 1;
                     log::debug!("scan: Win32 枚举下一项失败 {path}: {e}");
-                    break;
+                    if consecutive_errors >= 64 {
+                        log::warn!("scan: Win32 枚举连续错误过多，放弃目录 {path}");
+                        break;
+                    }
+                    continue;
                 }
             }
+            consecutive_errors = 0;
         }
     }
     Ok(false)
+}
+
+/// 生成 `FindFirstFileW` 搜索模式：绝对路径加 `\\?\` 前缀以支持超过 MAX_PATH 的路径
+/// （walkdir/std 在 Windows 上同样支持长路径）；UNC 转换为 `\\?\UNC\` 形式。
+#[cfg(all(windows, any(test, feature = "bench")))]
+fn win32_search_pattern(path: &str) -> String {
+    let back = path.replace('/', "\\");
+    if path.starts_with("//") || path.starts_with("\\\\") {
+        let rest = path.trim_start_matches(['/', '\\']).replace('/', "\\");
+        format!("\\\\?\\UNC\\{rest}\\*")
+    } else if path.len() >= 2 && path.as_bytes()[1] == b':' {
+        format!("\\\\?\\{back}\\*")
+    } else {
+        format!("{back}\\*")
+    }
 }
 
 #[cfg(all(windows, any(test, feature = "bench")))]
@@ -347,10 +371,14 @@ mod tests {
         let dir = temp_dir("win32");
         fs::create_dir_all(dir.join("proj")).unwrap();
         fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::create_dir_all(dir.join("empty")).unwrap();
         fs::write(dir.join("proj").join("main.rs"), b"x").unwrap();
         fs::write(dir.join("sub").join("a.txt"), b"x").unwrap();
         fs::write(dir.join("top.pdf"), b"x").unwrap();
         fs::write(dir.join("tmp.crdownload"), b"x").unwrap();
+        fs::write(dir.join("课程 作业（第1章）.pdf"), b"x").unwrap();
+        fs::write(dir.join("notes😀.md"), b"x").unwrap();
+        fs::write(dir.join(".hidden"), b"x").unwrap();
         let matcher = IgnoreMatcher::new();
         let skip = Arc::new(Mutex::new(vec![normalize_path(
             &dir.join("proj").to_string_lossy(),
@@ -372,5 +400,102 @@ mod tests {
             assert_eq!(x.size, y.size, "大小应一致: {}", x.path);
         }
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn win32_long_path_probe() {
+        let base = std::env::temp_dir().join(format!("rootup_win32_long_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let deep = base
+            .join("a".repeat(60))
+            .join("b".repeat(60))
+            .join("c".repeat(60))
+            .join("d".repeat(60));
+        let verbatim = format!(
+            r"\\?\{}\{}",
+            base.to_string_lossy().replace('/', "\\"),
+            deep.strip_prefix(&base)
+                .unwrap()
+                .to_string_lossy()
+                .replace('/', "\\")
+        );
+        std::fs::create_dir_all(&verbatim).unwrap();
+        std::fs::write(format!(r"{verbatim}\long.txt"), b"x").unwrap();
+        let normal = normalize_path(&deep.to_string_lossy());
+        assert!(
+            normal.len() > 260,
+            "fixture should exceed MAX_PATH: {}",
+            normal.len()
+        );
+
+        let matcher = IgnoreMatcher::new();
+        let skip = Arc::new(Mutex::new(Vec::<String>::new()));
+        let (we, ws) = collect(
+            &WalkDirEnumerator::new(matcher.clone(), skip.clone()),
+            &normal,
+        );
+        let (ve, vs) = collect(&Win32Enumerator::new(matcher, skip), &normal);
+        assert_eq!(ws.discovered, vs.discovered, "长路径发现数应一致");
+        assert_eq!(ws.errors, vs.errors, "长路径错误数应一致");
+        assert_eq!(we.len(), 1, "应发现长路径文件");
+        assert_eq!(ve.len(), 1, "原生枚举应支持长路径");
+        assert_eq!(we[0].path, ve[0].path);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn win32_junction_matches_walkdir() {
+        let dir = temp_dir("junc");
+        let target = temp_dir("junc_target");
+        fs::create_dir_all(target.join("sub")).unwrap();
+        fs::write(target.join("sub").join("inner.txt"), b"x").unwrap();
+        fs::write(dir.join("top.txt"), b"x").unwrap();
+        let link = dir.join("link");
+        let out = std::process::Command::new("cmd")
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                &link.to_string_lossy(),
+                &target.to_string_lossy(),
+            ])
+            .output()
+            .expect("mklink 运行失败");
+        if !out.status.success() {
+            eprintln!("junction 创建失败，跳过测试");
+            let _ = std::fs::remove_dir_all(&dir);
+            let _ = std::fs::remove_dir_all(&target);
+            return;
+        }
+        let matcher = IgnoreMatcher::new();
+        let skip = Arc::new(Mutex::new(Vec::<String>::new()));
+        let root = normalize_path(&dir.to_string_lossy());
+        let (we, ws) = collect(
+            &WalkDirEnumerator::new(matcher.clone(), skip.clone()),
+            &root,
+        );
+        let (ve, vs) = collect(&Win32Enumerator::new(matcher, skip), &root);
+        let mut a: Vec<String> = we.iter().map(|e| e.path.clone()).collect();
+        let mut b: Vec<String> = ve.iter().map(|e| e.path.clone()).collect();
+        a.sort();
+        b.sort();
+        eprintln!(
+            "junction walk_files={} native_files={} stats=({},{},{})/({},{},{})",
+            a.len(),
+            b.len(),
+            ws.discovered,
+            ws.ignored,
+            ws.errors,
+            vs.discovered,
+            vs.ignored,
+            vs.errors
+        );
+        assert_eq!(a, b, "junction 语义应一致");
+        assert_eq!(ws.discovered, vs.discovered);
+        assert_eq!(ws.errors, vs.errors);
+        fs::remove_dir_all(&dir).unwrap();
+        fs::remove_dir_all(&target).unwrap();
     }
 }
