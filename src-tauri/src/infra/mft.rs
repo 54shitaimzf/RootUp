@@ -863,10 +863,12 @@ pub fn try_full_scan(
     let resolve_started = Instant::now();
     let located = locate_root_record(&index.dirs, &root_long);
     log::info!("scan: MFT 根定位 root={root_long} record={located:?}");
-    let (entries, stats) = match located {
+    let (entries, mut stats) = match located {
         Some(root_record) => emit_subtree(&index, root_record, &base_path, matcher, skip_roots),
         None => emit_fallback(&index, &drive, &root_long, &base_path, matcher, skip_roots),
     };
+    stats.read_ms = read_ms as u64;
+    stats.parse_ms = parse_ms as u64;
     let resolve_ms = resolve_started.elapsed().as_millis();
     log::info!(
         "scan: MFT 阶段 read_ms={read_ms} parse_ms={parse_ms} resolve_ms={resolve_ms} read_mb={} dirs={} files={} parsed={} extents={} with_names={} skipped_reparse_dirs={}",

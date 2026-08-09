@@ -10,6 +10,7 @@
 - 原生枚举器边界审查：对照 walkdir 源码补齐长路径（`\\?\`）、单条目错误续枚举、junction / Unicode / 空目录语义，见 `benchmarks/enumerator-safety-review.md`。
 - 原生枚举器落地为默认：全链路等价 PASS（合成 1k/10k/50k + 真实 Desktop 71,923，DB 零差异；50k 12.6x、真实 4.3x），`ROOTUP_ENUM=walkdir` 诊断回退；jwalk 复评未达门槛不引入（原型已移除），见 `benchmarks/enum-compare.md` / `benchmarks/jwalk-evaluation.md`。
 - MFT 读取策略落地：**parallel 为默认**（read_ms 约 -27%，合成 50k / 边界 / 真实 71,923 严格零差异），`ROOTUP_MFT_READ=sequential` 诊断回退；mftfile（`$MFT` 直读）本机被拒、nobuffer 无收益，均已移除；`scripts/mft-read-variants.ps1` 一键验证，结论见 `benchmarks/mft-read-variants.md`。
+- 扫描选择优化器：双线性成本模型（MFT 固定成本随整卷文件表大小缩放，每文件成本实测校准），动态计算交叉点并带迟滞决策，替代固定阈值；决策与校准日志 `scan: 快速扫描决策`，模型 `core/scan_choice.rs`。
 - 交叉点实验：1k/10k 时 walkdir 胜出（MFT 读全卷 2.6GB 固定成本），50k 起 MFT 胜出（5977ms vs 8828ms）；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认（不影响默认策略）；真实目录 71,923 文件 MFT 与 walkdir 数量、大小、时间全等（attribute-list 大小兜底后 size diff=0）；读取微优化（`FILE_FLAG_SEQUENTIAL_SCAN` + 32MiB 块 + FTS 表存在性单次检查 + DB 子批 1000 + 枚举器快照）带来 MFT 总耗时约 5%–8% 可测量下降；默认扫描策略仍 walkdir。
 - MFT 快速基线（原始 `$MFT`，布局参考 Linux-ntfs / ntfs-3g / Sleuth Kit，不复制代码）：FILE 记录解析、USA 修复、extent/元文件/重解析点跳过、硬链接主名策略、路径重建；`ROOTUP_MFT_SCAN=1` + 管理员门控，任何失败回退 walkdir。
 - USN 启动补账：`DeltaSource` 契约 + `usn_state`（schema v5），应用关闭期间变更启动时一次性对齐，运行期 notify 为主不轮询；无基线自动记录当前 USN。

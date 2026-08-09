@@ -6,6 +6,7 @@ use crate::core::scan::{
     record_from_scan, FileEntry, FileEnumerator, ScanEvent, ScanEventSink, ScanParams,
     ScanProgress, ScanSummary,
 };
+use crate::core::scan_choice::ScanCostModel;
 use crate::infra::enumerator::WalkDirEnumerator;
 #[cfg(windows)]
 use crate::infra::enumerator::Win32Enumerator;
@@ -50,6 +51,7 @@ pub struct ScanService {
     skip_roots: Arc<Mutex<Vec<String>>>,
     enumerator: Arc<dyn FileEnumerator>,
     matcher: crate::core::ignore::IgnoreMatcher,
+    calibration: Arc<Mutex<ScanCostModel>>,
 }
 
 impl ScanService {
@@ -78,6 +80,7 @@ impl ScanService {
                 Arc::new(WalkDirEnumerator::new(matcher.clone(), skip_roots.clone()))
             }
         };
+        let calibration = Arc::new(Mutex::new(ScanCostModel::default()));
         Self {
             store,
             classifier,
@@ -93,6 +96,7 @@ impl ScanService {
             skip_roots,
             enumerator,
             matcher,
+            calibration,
         }
     }
 
@@ -117,6 +121,7 @@ impl ScanService {
             enumerator: self.enumerator.clone(),
             matcher: self.matcher.clone(),
             skip_roots: self.skip_roots.clone(),
+            calibration: self.calibration.clone(),
         };
         let handle = std::thread::Builder::new()
             .name("rootup-scanner".into())
@@ -200,6 +205,7 @@ struct ScanLoop {
     enumerator: Arc<dyn FileEnumerator>,
     matcher: crate::core::ignore::IgnoreMatcher,
     skip_roots: Arc<Mutex<Vec<String>>>,
+    calibration: Arc<Mutex<ScanCostModel>>,
 }
 
 impl ScanLoop {
@@ -324,27 +330,54 @@ impl ScanLoop {
             }
             true
         };
-        // 快速扫描（实验性，ROOTUP_MFT_SCAN=1 且管理员/NTFS 满足时启用）；失败一律回退 walkdir
+        // 快速扫描（实验性，ROOTUP_MFT_SCAN=1 且管理员/NTFS 满足时启用）；
+        // 启用时由扫描选择优化器按实测系数决策（MFT vs 默认枚举），失败一律回退默认枚举。
         let skip_roots = self
             .skip_roots
             .lock()
             .map(|roots| roots.clone())
             .unwrap_or_default();
-        let fast_entries = crate::infra::mft::try_full_scan(dir, &self.matcher, &skip_roots);
-        let enumerate_result = match fast_entries {
+        let mft_enabled = std::env::var_os("ROOTUP_MFT_SCAN").is_some();
+        let root_count = if mft_enabled {
+            self.store
+                .lock()
+                .ok()
+                .and_then(|s| s.count_under_root(dir).ok())
+                .unwrap_or(0)
+                .max(0) as u64
+        } else {
+            0
+        };
+        let use_mft = {
+            let cal = self.calibration.lock().unwrap();
+            let decided = cal.should_use_mft(root_count, mft_enabled);
+            log::info!(
+                "scan: 快速扫描决策 dir={dir} root_count={root_count} crossover={:?} use_mft={decided}",
+                cal.crossover()
+            );
+            decided
+        };
+        let enumerate_started = Instant::now();
+        let fast_entries = if use_mft {
+            crate::infra::mft::try_full_scan(dir, &self.matcher, &skip_roots)
+        } else {
+            Err("MFT 扫描未启用（优化器决策走默认枚举）".into())
+        };
+        let (enumerate_result, used_mft) = match fast_entries {
             Ok((entries, stats)) => {
                 for entry in entries {
                     if !handle_entry(entry) {
                         break;
                     }
                 }
-                Ok(stats)
+                (Ok(stats), true)
             }
             Err(reason) => {
-                log::info!("scan: 快速扫描不可用 dir={dir} reason={reason}，回退 walkdir");
-                self.enumerator.enumerate(dir, &mut handle_entry)
+                log::info!("scan: 快速扫描不可用 dir={dir} reason={reason}，回退默认枚举");
+                (self.enumerator.enumerate(dir, &mut handle_entry), false)
             }
         };
+        let enumerate_ms = enumerate_started.elapsed().as_millis() as f64;
         let enumerate_stats = match enumerate_result {
             Ok(stats) => stats,
             Err(e) => {
@@ -358,6 +391,20 @@ impl ScanLoop {
                 return;
             }
         };
+        // 校准扫描选择优化器：MFT 固定成本 = read_ms（随整卷文件表大小缩放），
+        // 每文件成本 = (枚举耗时 - 固定读取) / 文件数；原生直接按枚举耗时/文件数。
+        if used_mft {
+            self.calibration.lock().unwrap().record_mft(
+                enumerate_stats.discovered,
+                enumerate_ms,
+                enumerate_stats.read_ms as f64,
+            );
+        } else {
+            self.calibration
+                .lock()
+                .unwrap()
+                .record_native(enumerate_stats.discovered, enumerate_ms);
+        }
 
         let db_started = Instant::now();
         if let Err(e) = self.flush_seen(&mut seen_batch) {
@@ -619,6 +666,7 @@ mod tests {
             )),
             matcher: crate::core::ignore::IgnoreMatcher::new(),
             skip_roots,
+            calibration: Arc::new(Mutex::new(ScanCostModel::default())),
         };
         (loop_body, events)
     }

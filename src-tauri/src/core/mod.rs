@@ -12,6 +12,7 @@ pub mod project;
 pub mod query;
 pub mod reminder;
 pub mod scan;
+pub mod scan_choice;
 pub mod schemes;
 pub mod settings;
 pub mod study;

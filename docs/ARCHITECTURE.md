@@ -320,5 +320,6 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **walkdir 微优化**：跳过集与时间戳在枚举开始时快照一次（不再逐目录加锁/取时钟），忽略规则与符号链接语义不变。
 - **默认枚举器转正**：原生 Win32 枚举成为扫描默认（全链路等价 PASS：合成 1k/10k/50k + 真实 Desktop 71,923，DB 集合零差异；50k 12.6x、真实 4.3x）；`ROOTUP_ENUM=walkdir` 诊断回退。
 - **MFT 读取策略（0.8.6 实验结论）**：默认 **parallel**（按记录对齐字节范围分线程读+解析再合并，`ROOTUP_MFT_PARALLEL` 控制线程数默认 4），read_ms 约 -27%（2.3–2.5s vs 3.3–3.4s），三语料严格零差异；`ROOTUP_MFT_READ=sequential` 诊断回退。mftfile（`$MFT` 文件直读）本机打开被拒已移除、nobuffer 无收益已移除；解析/紧凑索引/子树逻辑对所有读取策略完全复用，验证见 `benchmarks/mft-read-variants.md`。
+- **扫描选择优化器**：`core/scan_choice.rs` 双线性模型（MFT 固定成本 = 最近 `read_ms`，随整卷文件表大小缩放；`mft_per_file` / `native_per_file` 由最近扫描实测校准）；交叉点 `N* = fixed/(native_per - mft_per)`，`per_native <= per_mft` 时原生恒优；启用带 1.25× 迟滞。扫描器在 `ROOTUP_MFT_SCAN` 开启时按上次索引根计数决策，并把每次扫描的耗时/`read_ms` 回写校准（`scan: 快速扫描决策` 日志）；系数随 HDD/SSD 与目录结构自动适应，不预设固定阈值。
 - **交叉点实验**：1k/10k 时 walkdir 胜出（MFT 需读全卷 2.6GB 固定成本）；50k 起 MFT 稳定胜出；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；MFT 默认策略仍不启用，切换动作留待后续里程碑。
 - **jwalk 复评**：deep/wide 语料实测未达“收益 ≥30%”门槛（相对 walkdir 仅 wide +13%、deep -16%，相对原生慢 8.8–11.9 倍），不引入；原型已移除，见 `benchmarks/jwalk-evaluation.md`。

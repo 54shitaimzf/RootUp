@@ -21,6 +21,10 @@ pub struct EnumerateStats {
     pub discovered: usize,
     pub ignored: usize,
     pub errors: usize,
+    /// MFT 全卷读取耗时（ms）；非 MFT 枚举保持 0（扫描选择优化器校准用）。
+    pub read_ms: u64,
+    /// MFT 解析耗时（ms）；非 MFT 枚举保持 0。
+    pub parse_ms: u64,
 }
 
 /// 目录枚举契约：walkdir 是默认实现，0.8.5 的 MFT/USN 可作为新实现插入。
