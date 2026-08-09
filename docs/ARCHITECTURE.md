@@ -313,6 +313,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 
 - **MFT 全量读取**：按 `$MFT` 记录 0 的 $DATA 映射对（长度在前、LCN 增量在后，参考 ntfs-3g `runlist.c`）分 run 流式读取（8MiB 块 + 跨 run 缓冲拼接），不假设 MFT 连续；USA fixup 原地应用，不逐条复制缓冲。
 - **紧凑索引与子树定向**：解析即压缩为目录表（记录号 → (主名, 父记录号)）与文件表（记录号 / 名称 / 父 / 大小 / 修改时间），不保留全量 MFT 记录；按监控根路径段定位根记录后 BFS 子树，只产出子树内文件；定位失败回退全量父链解析 + 前缀过滤，保证不丢结果。
+- **大小兜底**：attribute-list extent 未解析到 `$DATA` 大小时（`size_known=false`），产出阶段按路径补查一次元数据，仅异常项，失败回退已解析值。
 - **skip_roots 对齐**：MFT 与 walkdir 一致应用跳过集（项目根 / 归档根整棵不索引）；真实目录 71,923 文件两侧数量全等（0 walk-only / 0 mft-only）。
 - **USN 访问级别**：卷句柄要求 `FILE_READ_DATA`（`FILE_READ_ATTRIBUTES` 导致 `FSCTL_QUERY_USN_JOURNAL` 返回 0x80070001）；`FSCTL_READ_USN_JOURNAL` 必须携带真实 `UsnJournalID`（否则 0x80070057）。修复后本机启动补账可用。
 - **DB 批量**：`ScanParams.batch_size` 默认 2000；`upsert_many` 多行 VALUES + 冲突更新（first_seen 不覆盖）；扫描日志新增 `db_ms`，MFT 阶段新增 `read_ms / parse_ms / resolve_ms`。

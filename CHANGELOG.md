@@ -7,7 +7,7 @@
 ### 0.8.6 阶段一（监控与查询性能，开发中）
 
 - 扫描优化（实验先行）：MFT 按 `$MFT` 映射对分 run 流式读取、USA 原地修复、紧凑索引与子树定向解析（小目录不再全卷重建路径）；与 walkdir 对齐 skip_roots（项目根/归档根整棵不索引）；USN 卷句柄改 `FILE_READ_DATA` 并携带真实日志 ID，本机启动补账可用；`batch_size` 默认 2000 + 多行 upsert；扫描分阶段计时（read/parse/resolve/db ms）。
-- 交叉点实验：1k/10k 时 walkdir 胜出（MFT 读全卷 2.6GB 固定成本），50k 起 MFT 胜出（6291ms vs 9284ms）；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；真实目录 71,923 文件 MFT 与 walkdir 数量全等（差异仅 5 个文件大小=0 的已知项，0.007%）；默认扫描策略仍 walkdir。
+- 交叉点实验：1k/10k 时 walkdir 胜出（MFT 读全卷 2.6GB 固定成本），50k 起 MFT 胜出（6291ms vs 9284ms）；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；真实目录 71,923 文件 MFT 与 walkdir 数量全等；attribute-list 大小兜底已落地（未知大小按路径补查元数据，修复前仅 5 个文件大小=0 的 0.007% 差异，重跑确认后归零）；默认扫描策略仍 walkdir。
 - MFT 快速基线（原始 `$MFT`，布局参考 Linux-ntfs / ntfs-3g / Sleuth Kit，不复制代码）：FILE 记录解析、USA 修复、extent/元文件/重解析点跳过、硬链接主名策略、路径重建；`ROOTUP_MFT_SCAN=1` + 管理员门控，任何失败回退 walkdir。
 - USN 启动补账：`DeltaSource` 契约 + `usn_state`（schema v5），应用关闭期间变更启动时一次性对齐，运行期 notify 为主不轮询；无基线自动记录当前 USN。
 - FTS5 文本索引（schema v6 占位，未默认启用）：contentless + trigram 实现与等价测试保留；批量同步成本高，待“扫描后批量重建”优化后再启用，见 `benchmarks/fts-evaluation.md`。
