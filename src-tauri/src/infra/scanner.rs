@@ -98,6 +98,7 @@ impl ScanService {
             shared: self.shared.clone(),
             enumerator: self.enumerator.clone(),
             matcher: self.matcher.clone(),
+            skip_roots: self.skip_roots.clone(),
         };
         let handle = std::thread::Builder::new()
             .name("rootup-scanner".into())
@@ -180,6 +181,7 @@ struct ScanLoop {
     shared: Arc<Shared>,
     enumerator: Arc<dyn FileEnumerator>,
     matcher: crate::core::ignore::IgnoreMatcher,
+    skip_roots: Arc<Mutex<Vec<String>>>,
 }
 
 impl ScanLoop {
@@ -305,7 +307,12 @@ impl ScanLoop {
             true
         };
         // 快速扫描（实验性，ROOTUP_MFT_SCAN=1 且管理员/NTFS 满足时启用）；失败一律回退 walkdir
-        let fast_entries = crate::infra::mft::try_full_scan(dir, &self.matcher);
+        let skip_roots = self
+            .skip_roots
+            .lock()
+            .map(|roots| roots.clone())
+            .unwrap_or_default();
+        let fast_entries = crate::infra::mft::try_full_scan(dir, &self.matcher, &skip_roots);
         let enumerate_result = match fast_entries {
             Ok((entries, stats)) => {
                 for entry in entries {
@@ -590,9 +597,10 @@ mod tests {
             }),
             enumerator: Arc::new(WalkDirEnumerator::new(
                 crate::core::ignore::IgnoreMatcher::new(),
-                skip_roots,
+                skip_roots.clone(),
             )),
             matcher: crate::core::ignore::IgnoreMatcher::new(),
+            skip_roots,
         };
         (loop_body, events)
     }

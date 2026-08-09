@@ -14,7 +14,7 @@
 //! - 需要管理员（SeBackupPrivilege）；未提权/非 NTFS 一律回退 walkdir。
 
 use crate::core::ignore::IgnoreMatcher;
-use crate::core::path::normalize_path;
+use crate::core::path::{normalize_path, under_any};
 use crate::core::scan::{EnumerateStats, FileEntry};
 use crate::infra::ntfs::{drive_root_of, probe_volume, MFT_REFERENCE_MASK};
 use std::collections::HashMap;
@@ -345,6 +345,7 @@ fn emit_subtree(
     root_record: u64,
     base_path: &str,
     matcher: &IgnoreMatcher,
+    skip_roots: &[String],
 ) -> (Vec<FileEntry>, EnumerateStats) {
     let mut children: HashMap<u64, Vec<(u64, String)>> = HashMap::new();
     for (&rec, (name, parent)) in index.dirs.iter() {
@@ -366,13 +367,18 @@ fn emit_subtree(
     while let Some((rec, path)) = queue.pop_front() {
         if let Some(files) = files_by_parent.get(&rec) {
             for f in files {
+                let full = join_path(&path, &f.name);
+                // 与 walkdir skip_roots 对齐：项目根/归档根下的文件不索引。
+                if under_any(&full, skip_roots) {
+                    continue;
+                }
                 if matcher.is_ignored(&f.name) {
                     stats.ignored += 1;
                     continue;
                 }
                 stats.discovered += 1;
                 entries.push(FileEntry {
-                    path: join_path(&path, &f.name),
+                    path: full,
                     size: f.size,
                     modified_ms: f.modified_ms,
                     is_dir: false,
@@ -382,12 +388,16 @@ fn emit_subtree(
         }
         if let Some(kids) = children.get(&rec) {
             for (child_rec, name) in kids {
+                let child_path = join_path(&path, name);
+                if under_any(&child_path, skip_roots) {
+                    continue;
+                }
                 // 与 walkdir filter_entry 对齐：命中忽略规则的目录整棵跳过。
                 if matcher.is_ignored(name) {
                     continue;
                 }
                 if visited.insert(*child_rec) {
-                    queue.push_back((*child_rec, join_path(&path, name)));
+                    queue.push_back((*child_rec, child_path));
                 }
             }
         }
@@ -411,6 +421,7 @@ fn emit_fallback(
     root_long: &str,
     base_path: &str,
     matcher: &IgnoreMatcher,
+    skip_roots: &[String],
 ) -> (Vec<FileEntry>, EnumerateStats) {
     let normalized_root = normalize_prefix(root_long);
     let mut cache: HashMap<u64, Option<String>> = HashMap::new();
@@ -440,6 +451,9 @@ fn emit_fallback(
             continue;
         };
         let out = join_path(base_path, relative);
+        if under_any(&out, skip_roots) {
+            continue;
+        }
         let parts: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
         let name = parts.last().copied().unwrap_or(relative);
         let ignored_dir = parts[..parts.len().saturating_sub(1)]
@@ -731,6 +745,7 @@ fn mft_data_runs(record_buf: &[u8], cluster_size: u32) -> Result<Vec<(u64, u64)>
 pub fn try_full_scan(
     root: &str,
     matcher: &IgnoreMatcher,
+    skip_roots: &[String],
 ) -> Result<(Vec<FileEntry>, EnumerateStats), String> {
     if std::env::var_os("ROOTUP_MFT_SCAN").is_none() {
         return Err("MFT 扫描未启用（ROOTUP_MFT_SCAN=1）".into());
@@ -896,8 +911,8 @@ pub fn try_full_scan(
     let located = locate_root_record(&index.dirs, &root_long);
     log::info!("scan: MFT 根定位 root={root_long} record={located:?}");
     let (entries, stats) = match located {
-        Some(root_record) => emit_subtree(&index, root_record, &base_path, matcher),
-        None => emit_fallback(&index, &drive, &root_long, &base_path, matcher),
+        Some(root_record) => emit_subtree(&index, root_record, &base_path, matcher, skip_roots),
+        None => emit_fallback(&index, &drive, &root_long, &base_path, matcher, skip_roots),
     };
     let resolve_ms = resolve_started.elapsed().as_millis();
     log::info!(
@@ -1128,7 +1143,8 @@ mod tests {
         );
         assert_eq!(locate_root_record(&index.dirs, "C:/missing"), None);
 
-        let (sub_entries, sub_stats) = emit_subtree(&index, 3, "C:/root", &matcher);
+        let no_skips: Vec<String> = Vec::new();
+        let (sub_entries, sub_stats) = emit_subtree(&index, 3, "C:/root", &matcher, &no_skips);
         let sub_paths: Vec<&str> = sub_entries.iter().map(|e| e.path.as_str()).collect();
         assert!(sub_paths.contains(&"C:/root/dir/a.txt"));
         assert!(
@@ -1147,12 +1163,27 @@ mod tests {
         assert!(!sub_paths.contains(&"C:/root/ca") && !sub_paths.contains(&"C:/root/cb"));
         assert_eq!(sub_stats.discovered, 2);
 
-        let (fb_entries, _) = emit_fallback(&index, "C:", "C:/root", "C:/root", &matcher);
+        let (fb_entries, _) =
+            emit_fallback(&index, "C:", "C:/root", "C:/root", &matcher, &no_skips);
         let fb_paths: Vec<&str> = fb_entries.iter().map(|e| e.path.as_str()).collect();
         assert!(fb_paths.contains(&"C:/root/dir/a.txt"));
         assert!(fb_paths.contains(&"C:/root/alt/a2.txt"));
         assert!(!fb_paths.contains(&"C:/root/dir/A.TXT"));
         assert!(!fb_paths.contains(&"C:/root/desktop.ini/inner.txt"));
+
+        // skip_roots 对齐：项目根整棵不索引（walkdir 语义）。
+        let skips = vec!["C:/root/dir".to_string()];
+        let (sub_skipped, _) = emit_subtree(&index, 3, "C:/root", &matcher, &skips);
+        let sub_skipped_paths: Vec<&str> = sub_skipped.iter().map(|e| e.path.as_str()).collect();
+        assert!(
+            !sub_skipped_paths.contains(&"C:/root/dir/a.txt"),
+            "skip_roots 目录应整棵跳过"
+        );
+        assert!(sub_skipped_paths.contains(&"C:/root/alt/a2.txt"));
+        let (fb_skipped, _) = emit_fallback(&index, "C:", "C:/root", "C:/root", &matcher, &skips);
+        let fb_skipped_paths: Vec<&str> = fb_skipped.iter().map(|e| e.path.as_str()).collect();
+        assert!(!fb_skipped_paths.contains(&"C:/root/dir/a.txt"));
+        assert!(fb_skipped_paths.contains(&"C:/root/alt/a2.txt"));
     }
 
     #[test]
@@ -1203,6 +1234,6 @@ mod tests {
     fn fast_scan_requires_env_flag() {
         std::env::remove_var("ROOTUP_MFT_SCAN");
         let matcher = IgnoreMatcher::new();
-        assert!(try_full_scan("C:/", &matcher).is_err());
+        assert!(try_full_scan("C:/", &matcher, &[]).is_err());
     }
 }
