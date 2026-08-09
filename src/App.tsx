@@ -11,11 +11,9 @@ import i18n from "./i18n";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { HelpCenterProvider } from "./components/HelpCenter";
 import { appReady, takeStartupIntent } from "./lib/tauri";
+import { FilePage } from "./pages/FilePage";
 
 // 0.8.6 阶段二：页面级懒加载（首包只含文件页入口链与共享组件）
-const FilePage = lazy(() =>
-  import("./pages/FilePage").then((m) => ({ default: m.FilePage })),
-);
 const ProjectsPage = lazy(() =>
   import("./pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })),
 );

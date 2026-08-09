@@ -299,7 +299,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **分类匹配**：课程分类器使用 Aho-Corasick 重叠匹配保持“包含即命中”语义（见等价测试）；忽略规则因语义（前缀/精确/包裹）不适用 AC。
 - **性能基准契约**：0.8.5 起对比目标为“0.8.5 vs 0.8.4”单轨；新增指标 `query_keyset_page` / `query_labels_multi` / `query_and_syntax` / `query_and_keyword` / `query_label_json` / `query_text_fts`；标签与文本实现评估结论见 `benchmarks/label-index-evaluation.md`。
 
-## 0.8.6 阶段一契约（开发中）
+## 0.8.6 阶段一契约（已收口）
 
 - **增量契约**：`core/delta.rs` 定义 `DeltaKind` / `DeltaRecord` / `DeltaSource`（begin / next / commit）；USN 实现 `infra/usn_delta.rs`，重命名按“旧路径删除 + 新路径创建”展开（与 0.8.4 收敛语义一致），未来 0.8.8 配对迁移可直接替换映射。
 - **USN 状态**：`IndexStore` 提供 `get_last_usn` / `set_last_usn` 默认无操作，SQLite 实现持久化到 `usn_state`（schema v5，按卷一行）；启动补账线程（`startup.rs`）无基线时记录当前 USN，有基线时执行 `(last, current]` 增量，失败只记录不阻塞。
@@ -309,7 +309,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **目录缺失对账**：`core/path.rs::is_missing_dir_error`（Windows os error 2/3）判定后才 `mark_under_roots_deleted`；扫描失败与启动探测共用；命令 `watched_dir_health` 供设置页标记缺失目录（不删除记录，重扫可恢复）。
 - **基准契约**：阶段一新增 `engine_index_build_*_with/without_type_ms`、`engine_query_type_with/without_type_ms`、`engine_reapply_labels_*` 变体；阶段一验证不落库，完整 0.8.6 官方基线在阶段二完成后统一生成。
 
-## 0.8.6 扫描优化（开发中，实验先行）
+## 0.8.6 扫描优化（已收口）
 
 - **MFT 全量读取**：按 `$MFT` 记录 0 的 $DATA 映射对（长度在前、LCN 增量在后，参考 ntfs-3g `runlist.c`）分 run 流式读取（32MiB 块 + `FILE_FLAG_SEQUENTIAL_SCAN` + 跨 run 缓冲拼接），不假设 MFT 连续；USA fixup 原地应用，不逐条复制缓冲。
 - **紧凑索引与子树定向**：解析即压缩为目录表（记录号 → (主名, 父记录号)）与文件表（记录号 / 名称 / 父 / 大小 / 修改时间），不保留全量 MFT 记录；按监控根路径段定位根记录后 BFS 子树，只产出子树内文件；定位失败回退全量父链解析 + 前缀过滤，保证不丢结果。
@@ -321,5 +321,6 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **默认枚举器转正**：原生 Win32 枚举成为扫描默认（全链路等价 PASS：合成 1k/10k/50k + 真实 Desktop 71,923，DB 集合零差异；50k 12.6x、真实 4.3x）；`ROOTUP_ENUM=walkdir` 诊断回退。
 - **MFT 读取策略（0.8.6 实验结论）**：默认 **parallel**（按记录对齐字节范围分线程读+解析再合并，`ROOTUP_MFT_PARALLEL` 控制线程数默认 4），read_ms 约 -27%（2.3–2.5s vs 3.3–3.4s），三语料严格零差异；`ROOTUP_MFT_READ=sequential` 诊断回退。mftfile（`$MFT` 文件直读）本机打开被拒已移除、nobuffer 无收益已移除；解析/紧凑索引/子树逻辑对所有读取策略完全复用，验证见 `benchmarks/mft-read-variants.md`。
 - **扫描选择优化器**：`core/scan_choice.rs` 双线性模型（MFT 固定成本 = 最近 `read_ms`，随整卷文件表大小缩放；`mft_per_file` / `native_per_file` 由最近扫描实测校准）；交叉点 `N* = fixed/(native_per - mft_per)`，`per_native <= per_mft` 时原生恒优；启用带 1.25× 迟滞。扫描器在 `ROOTUP_MFT_SCAN` 开启时按上次索引根计数决策，并把每次扫描的耗时/`read_ms` 回写校准（`scan: 快速扫描决策` 日志）；系数随 HDD/SSD 与目录结构自动适应，不预设固定阈值。
+- **诊断强制开关**：`ROOTUP_MFT_FORCE=1`（与 `ROOTUP_MFT_SCAN=1` 同时设置时）跳过优化器迟滞直接走 MFT，仅用于验证脚本的 walkdir / native / MFT / 优化器四态受控对比；失败仍回退原生枚举，默认发布路径不受影响。
 - **交叉点实验**：1k/10k 时 walkdir 胜出（MFT 需读全卷 2.6GB 固定成本）；50k 起 MFT 稳定胜出；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；MFT 默认策略仍不启用，切换动作留待后续里程碑。
 - **jwalk 复评**：deep/wide 语料实测未达“收益 ≥30%”门槛（相对 walkdir 仅 wide +13%、deep -16%，相对原生慢 8.8–11.9 倍），不引入；原型已移除，见 `benchmarks/jwalk-evaluation.md`。

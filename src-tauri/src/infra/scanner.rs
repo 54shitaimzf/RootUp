@@ -338,6 +338,9 @@ impl ScanLoop {
             .map(|roots| roots.clone())
             .unwrap_or_default();
         let mft_enabled = std::env::var_os("ROOTUP_MFT_SCAN").is_some();
+        let force_mft = std::env::var("ROOTUP_MFT_FORCE")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let root_count = if mft_enabled {
             self.store
                 .lock()
@@ -350,10 +353,10 @@ impl ScanLoop {
         };
         let use_mft = {
             let cal = self.calibration.lock().unwrap();
-            let decided = cal.should_use_mft(root_count, mft_enabled);
+            let decided = cal.decide(root_count, mft_enabled, force_mft);
             log::info!(
-                "scan: 快速扫描决策 dir={dir} root_count={root_count} crossover={:?} use_mft={decided}",
-                cal.crossover()
+                "scan: 快速扫描决策 dir={dir} root_count={root_count} crossover={:?} use_mft={decided} force_mft={force_mft}",
+                cal.crossover(),
             );
             decided
         };

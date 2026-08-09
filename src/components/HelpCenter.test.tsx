@@ -9,6 +9,7 @@ import {
   isOnboardingDone,
 } from "./OnboardingDialog";
 import { HELP_FEEDBACK_STORAGE_KEY } from "../lib/helpFeedback";
+import { APP_VERSION } from "../lib/constants";
 
 vi.mock("../lib/tauri", () => ({
   listDetectedTools: vi.fn(),
@@ -174,8 +175,8 @@ describe("HelpCenter", () => {
   it("更新亮点区块显示当前版本", () => {
     renderCenter();
     fireEvent.click(screen.getByRole("button", { name: "open-help" }));
-    expect(screen.getByText("更新亮点（0.8.5）")).toBeInTheDocument();
-    expect(screen.getByText(/搜索与筛选提速/)).toBeInTheDocument();
+    expect(screen.getByText(`更新亮点（${APP_VERSION}）`)).toBeInTheDocument();
+    expect(screen.getByText(/文件列表更流畅/)).toBeInTheDocument();
   });
 
   it("相关帮助跳转到另一篇文章", () => {

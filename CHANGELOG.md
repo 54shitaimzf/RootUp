@@ -2,9 +2,9 @@
 
 本项目的版本变更记录。首个公开发布为 v0.6.0；此前版本为开发期里程碑，按迭代整理。
 
-## [Unreleased]
+## [0.8.6] - 2026-08-10
 
-### 0.8.6 阶段一（监控与查询性能，开发中）
+### 0.8.6 阶段一（监控与查询性能）
 
 - 扫描优化（实验先行）：MFT 按 `$MFT` 映射对分 run 流式读取、USA 原地修复、紧凑索引与子树定向解析（小目录不再全卷重建路径）；与 walkdir 对齐 skip_roots（项目根/归档根整棵不索引）；USN 卷句柄改 `FILE_READ_DATA` 并携带真实日志 ID，本机启动补账可用；`batch_size` 默认 2000 + 多行 upsert；扫描分阶段计时（read/parse/resolve/db ms）。
 - 原生枚举器边界审查：对照 walkdir 源码补齐长路径（`\\?\`）、单条目错误续枚举、junction / Unicode / 空目录语义，见 `benchmarks/enumerator-safety-review.md`。
@@ -18,6 +18,14 @@
 - 索引维护复核：移除 `idx_files_type`（schema v7）——同轮有/无对比显示其无查询收益且增加写放大，见 `benchmarks/index-set-evaluation.md`。
 - 监控目录缺失对账：系统报“路径不存在”时索引标记 deleted（重扫可恢复）+ 设置页缺失标记（`watched_dir_health`）。
 - 冒烟与审计扩展：USN 降级日志断言、`files_fts` / `usn_state` 审计项。
+
+### 0.8.6 阶段二（规模与体积）
+
+- 虚拟滚动（自研轻量）：文件列表固定行高虚拟渲染（overscan=5），数万至十万文件滚动与加载更多保持流畅，列表行结构与交互不变。
+- release profile：lto / codegen-units=1 / strip / panic=abort / opt-level=s，官方基线以最终构建形态测量。
+- 前端页面级分包：React.lazy + vendor 拆分，首包 gzip 远低于 200KB 目标；语言包整体保留。
+- 扫描对比与诊断：`ROOTUP_MFT_FORCE=1` 诊断开关（仅验证脚本使用），支持 walkdir / native / MFT / 优化器四态受控对比；默认行为仍由优化器按模型决策。
+- 性能基准单轨化：移除 0.8.3/0.8.4 旧基线；0.8.5 在 25H2 本机全量复测（`0.8.5-rerun`）作为发布对比基准，0.8.6-dev 保留为阶段内锚点；官方基线与四态扫描对比图入 README。
 
 ## [0.8.5] - 2026-08-08
 

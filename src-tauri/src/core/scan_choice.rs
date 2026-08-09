@@ -52,6 +52,14 @@ impl ScanCostModel {
         n >= crossover * 1.25
     }
 
+    /// 决策入口：诊断强制开关（仅验证脚本使用）优先，其次按模型 + 迟滞决策。
+    pub fn decide(&self, root_count: u64, enabled: bool, force: bool) -> bool {
+        if force && enabled {
+            return true;
+        }
+        self.should_use_mft(root_count, enabled)
+    }
+
     /// 原生扫描校准：记录每文件成本（样本太少/耗时异常时忽略）。
     pub fn record_native(&mut self, count: usize, elapsed_ms: f64) {
         if count >= 100 && elapsed_ms > 0.0 {
@@ -110,5 +118,17 @@ mod tests {
         let mut model = ScanCostModel::default();
         model.record_native(10, 100.0);
         assert!((model.native_per_file_ms - 0.030).abs() < 1e-9);
+    }
+
+    #[test]
+    fn force_flag_bypasses_model_but_respects_enable_gate() {
+        let model = ScanCostModel::default();
+        // 强制开启且 MFT 已启用：无条件走 MFT。
+        assert!(model.decide(0, true, true));
+        // 强制但 MFT 未启用：仍拒绝。
+        assert!(!model.decide(0, false, true));
+        // 未强制：回到模型 + 迟滞。
+        assert!(!model.decide(0, true, false));
+        assert!(!model.decide(u64::MAX, false, true));
     }
 }

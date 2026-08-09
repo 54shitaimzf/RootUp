@@ -770,6 +770,10 @@ export default {
     v085Item2: "Pagination uses stable cursors, so load-more never skips or duplicates files",
     v085Item3: "New explicit AND label syntax: +label: or label:a AND label:b",
     v085Item4: "Course classification uses multi-pattern matching for faster reclassification at scale",
+    v086Item1: "File lists stay smooth with tens of thousands of files: scrolling and loading more no longer stutter",
+    v086Item2: "Scanning is much faster: about 4x on a real 70k-file desktop and up to 12x on large synthetic folders",
+    v086Item3: "Lighter app: pages load on demand, so first load and the installer are smaller",
+    v086Item4: "The scanner picks the fastest path by folder size and falls back automatically if anything fails",
   },
   helpSearch: {
     placeholder: "Search help: archive, schedule, IDE…",

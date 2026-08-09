@@ -202,6 +202,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     ],
     keywords: ["更新", "新功能", "0.8.5", "查询", "搜索", "分页", "AND", "标签", "扫描", "what's", "new"],
   },
+  {
+    version: "0.8.6",
+    items: [
+      "helpWhatsNew.v086Item1",
+      "helpWhatsNew.v086Item2",
+      "helpWhatsNew.v086Item3",
+      "helpWhatsNew.v086Item4",
+    ],
+    keywords: ["更新", "新功能", "0.8.6", "虚拟滚动", "扫描", "提速", "体积", "快速扫描", "what's", "new"],
+  },
 ];
 
 /** 帮助内搜索的全部条目：文章 + 设置说明 + 语法 + 更新亮点。 */
