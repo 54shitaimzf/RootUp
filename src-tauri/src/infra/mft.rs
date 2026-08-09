@@ -33,6 +33,8 @@ const ATTR_FILE_NAME: u32 = 0x30;
 const ATTR_DATA: u32 = 0x80;
 const FILE_ATTR_REPARSE_POINT: u32 = 0x400;
 const MFT_FIXUP_SECTOR: usize = 512;
+const MFT_READ_TARGET: usize = 8 * 1024 * 1024;
+const MFT_PROGRESS_INTERVAL: u64 = 256 * 1024 * 1024;
 const GENERIC_READ: u32 = 0x8000_0000;
 const FSCTL_ALLOW_EXTENDED_DASD_IO: u32 = 0x0009_0083;
 const LONG_PATH_BUF: usize = 32 * 1024;
@@ -456,37 +458,51 @@ pub fn try_full_scan(
     }
 
     let mut records: Vec<MftRecord> = Vec::new();
-    let mut buffer = vec![0u8; record_size];
+    let chunk_size = (MFT_READ_TARGET / record_size).max(1) * record_size;
+    let mut chunk = vec![0u8; chunk_size];
     let mut position = mft_offset;
     let mut total_read = 0u64;
-    loop {
+    let mut progress_logged = 0u64;
+    while total_read < mft_valid_len {
+        let want = ((mft_valid_len - total_read) as usize).min(chunk_size);
         let mut read = 0u32;
         unsafe { SetFilePointerEx(handle, position as i64, None, FILE_BEGIN) }
             .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
-        let io = unsafe {
-            ReadFile(
-                handle,
-                Some(&mut buffer[..record_size]),
-                Some(&mut read),
-                None,
-            )
-        };
+        let io = unsafe { ReadFile(handle, Some(&mut chunk[..want]), Some(&mut read), None) };
         if io.is_err() {
             return Err("读取 $MFT 失败".into());
         }
         if read == 0 {
             break;
         }
-        if buffer[0..4] == FILE_RECORD_SIGNATURE {
-            if let Ok(record) = parse_file_record(&buffer) {
-                records.push(record);
+        let mut off = 0usize;
+        while off + record_size <= read as usize {
+            let record_buf = &chunk[off..off + record_size];
+            if record_buf[0..4] == FILE_RECORD_SIGNATURE {
+                if let Ok(record) = parse_file_record(record_buf) {
+                    records.push(record);
+                }
             }
+            off += record_size;
         }
         position += read as u64;
         total_read += read as u64;
-        if total_read >= mft_valid_len {
-            break;
+        if total_read.saturating_sub(progress_logged) >= MFT_PROGRESS_INTERVAL {
+            progress_logged = total_read;
+            log::info!(
+                "scan: MFT 读取进度 {} MiB / {} MiB",
+                total_read / (1024 * 1024),
+                mft_valid_len / (1024 * 1024)
+            );
         }
+    }
+    log::info!(
+        "scan: MFT 读取完成 records={} read_mb={}",
+        records.len(),
+        total_read / (1024 * 1024)
+    );
+    if records.is_empty() {
+        return Err("MFT 未解析出任何记录".into());
     }
 
     let mut stats = EnumerateStats::default();
