@@ -196,7 +196,7 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - `core/index.rs`：`FileEntry` / `FileEnumerator`（遍历契约：path/size/modified/is_dir/is_symlink）与 `ScanDiffStore`（begin/mark_seen/finish 差集契约）接口，`FileRecord` 模型；扫描器与存储层只依赖契约，不依赖具体遍历实现。
 - `core/watched.rs`：`check_add`（相等/被覆盖/将覆盖三态）与 `dedupe_watched`（启动自愈）纯函数。
 - `infra/scanner.rs`：`ScanService` 串行队列后台扫描，仅依赖 `FileEnumerator` + `ScanDiffStore` 契约；批量事务、进度节流、取消、删除风暴保护、候选二次确认。
-- `infra/enumerator.rs`：walkdir 默认实现 `WalkDirEnumerator`（不跟随符号链接、应用忽略规则与跳过集）；0.8.5 MFT/USN 以新实现替换，扫描器零改动。
+- `infra/enumerator.rs`：默认实现为原生 Win32 枚举 `Win32Enumerator`（`FindFirstFileW/FindNextFileW` 直取元数据、不跟随符号链接、应用忽略规则与跳过集、`\\?\` 长路径）；`WalkDirEnumerator` 保留，`ROOTUP_ENUM=walkdir` 可诊断回退；0.8.5 MFT/USN 以独立实现替换，扫描器零改动。
 - `infra/startup.rs`：`StartupGate` 延迟非关键服务（watcher/scanner/archive/tray）到前端 `app_ready`（10s 兜底），setup 阶段耗时统一 `startup: <stage> ms=` 埋点。
 
 **依赖注入约定**：`ScanService::new(store, classifier, matcher, params, sink)` 全注入；Tauri 侧仅提供 `TauriScanSink`（emit 前端事件）与分类链组装，业务层零 Tauri 依赖；AI/课程分类 = 新增 `Classifier` 追加进链。
@@ -318,4 +318,6 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **USN 访问级别**：卷句柄要求 `FILE_READ_DATA`（`FILE_READ_ATTRIBUTES` 导致 `FSCTL_QUERY_USN_JOURNAL` 返回 0x80070001）；`FSCTL_READ_USN_JOURNAL` 必须携带真实 `UsnJournalID`（否则 0x80070057）。修复后本机启动补账可用。
 - **DB 批量**：`ScanParams.batch_size` 默认 2000；`upsert_many` 多行 VALUES（子批 1000）+ 冲突更新（first_seen 不覆盖）；FTS 未启用时表存在性只检查一次；扫描日志新增 `db_ms`，MFT 阶段新增 `read_ms / parse_ms / resolve_ms`。
 - **walkdir 微优化**：跳过集与时间戳在枚举开始时快照一次（不再逐目录加锁/取时钟），忽略规则与符号链接语义不变。
-- **交叉点实验**：1k/10k 时 walkdir 胜出（MFT 需读全卷 2.6GB 固定成本）；50k 起 MFT 稳定胜出；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；默认扫描策略仍 walkdir，切换动作留待后续里程碑。
+- **默认枚举器转正**：原生 Win32 枚举成为扫描默认（全链路等价 PASS：合成 1k/10k/50k + 真实 Desktop 71,923，DB 集合零差异；50k 12.6x、真实 4.3x）；`ROOTUP_ENUM=walkdir` 诊断回退。
+- **交叉点实验**：1k/10k 时 walkdir 胜出（MFT 需读全卷 2.6GB 固定成本）；50k 起 MFT 稳定胜出；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；MFT 默认策略仍不启用，切换动作留待后续里程碑。
+- **jwalk 复评**：deep/wide 语料实测未达“收益 ≥30%”门槛（相对 walkdir 仅 wide +13%、deep -16%，相对原生慢 8.8–11.9 倍），不引入；原型已移除，见 `benchmarks/jwalk-evaluation.md`。

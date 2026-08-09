@@ -26,3 +26,10 @@
 
 - `FileEnumerator` 保持为唯一枚举入口，任何新实现不得改变忽略规则、跳过集与符号链接语义；
 - 等价测试与扫描差集测试全绿后才能评估性能。
+
+## 0.8.6 复评结论（2026-08-09）
+
+- 以 feature 门控实现 `JwalkEnumerator` 原型（忽略规则 / skip_roots 整棵剪枝、重解析点跳过），deep/wide 语料与 walkdir、原生枚举对照，三侧计数 / 忽略 / 错误全等。
+- 实测（release，p50，3 轮）：deep（30 层 / 300 文件）walkdir 80ms / jwalk 93ms / 原生 8ms；wide（2000 目录 / 20k 文件）walkdir 5182ms / jwalk 4489ms / 原生 511ms。
+- jwalk 相对 walkdir 仅 wide +13%、deep -16%，未达“收益 ≥30%”门槛；相对已落地默认的原生枚举慢 8.8–11.9 倍。
+- **决策：不引入 jwalk**；原型、feature 与示例已移除，`FileEnumerator` 仍为唯一枚举入口，默认实现为原生 Win32 枚举（`ROOTUP_ENUM=walkdir` 可回退）。
