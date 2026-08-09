@@ -308,3 +308,12 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **索引集（v7 复核）**：`files` 索引收敛为 `idx_files_state(state, deleted_at)` + `idx_files_modified(modified)`；`idx_files_type` 因同轮对比无收益且增加写放大，经 schema v7 幂等移除。
 - **目录缺失对账**：`core/path.rs::is_missing_dir_error`（Windows os error 2/3）判定后才 `mark_under_roots_deleted`；扫描失败与启动探测共用；命令 `watched_dir_health` 供设置页标记缺失目录（不删除记录，重扫可恢复）。
 - **基准契约**：阶段一新增 `engine_index_build_*_with/without_type_ms`、`engine_query_type_with/without_type_ms`、`engine_reapply_labels_*` 变体；阶段一验证不落库，完整 0.8.6 官方基线在阶段二完成后统一生成。
+
+## 0.8.6 扫描优化（开发中，实验先行）
+
+- **MFT 全量读取**：按 `$MFT` 记录 0 的 $DATA 映射对（长度在前、LCN 增量在后，参考 ntfs-3g `runlist.c`）分 run 流式读取（8MiB 块 + 跨 run 缓冲拼接），不假设 MFT 连续；USA fixup 原地应用，不逐条复制缓冲。
+- **紧凑索引与子树定向**：解析即压缩为目录表（记录号 → (主名, 父记录号)）与文件表（记录号 / 名称 / 父 / 大小 / 修改时间），不保留全量 MFT 记录；按监控根路径段定位根记录后 BFS 子树，只产出子树内文件；定位失败回退全量父链解析 + 前缀过滤，保证不丢结果。
+- **skip_roots 对齐**：MFT 与 walkdir 一致应用跳过集（项目根 / 归档根整棵不索引）；真实目录 71,923 文件两侧数量全等（0 walk-only / 0 mft-only）。
+- **USN 访问级别**：卷句柄要求 `FILE_READ_DATA`（`FILE_READ_ATTRIBUTES` 导致 `FSCTL_QUERY_USN_JOURNAL` 返回 0x80070001）；`FSCTL_READ_USN_JOURNAL` 必须携带真实 `UsnJournalID`（否则 0x80070057）。修复后本机启动补账可用。
+- **DB 批量**：`ScanParams.batch_size` 默认 2000；`upsert_many` 多行 VALUES + 冲突更新（first_seen 不覆盖）；扫描日志新增 `db_ms`，MFT 阶段新增 `read_ms / parse_ms / resolve_ms`。
+- **交叉点实验**：1k/10k 时 walkdir 胜出（MFT 需读全卷 2.6GB 固定成本）；50k 起 MFT 稳定胜出；20k/30k 边界受语料冷缓存影响有噪声，阈值待 25k 确认；默认扫描策略仍 walkdir，切换动作留待后续里程碑。
