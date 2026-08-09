@@ -2,6 +2,7 @@ param(
     [string]$Root = "",
     [switch]$Huge,
     [int]$Rounds = 3,
+    [string]$Sizes = "",
     [string]$OutFile = "benchmarks\mft-crossover.md"
 )
 
@@ -33,8 +34,13 @@ if (-not (Test-Path $Exe)) {
     Write-Error "Build release first: npm run tauri build -- --no-bundle"
 }
 
-$sizes = @(1000, 10000, 50000)
-if ($Huge) { $sizes += @(100000, 300000) }
+$sizeList = @(1000, 10000, 50000)
+if ($Sizes -ne "") {
+    # 参数名与局部变量区分大小写不敏感，故局部统一用 $sizeList。
+    $sizeList = @($Sizes.Split(',') | ForEach-Object { [int]($_.Trim()) })
+} elseif ($Huge) {
+    $sizeList += @(100000, 300000)
+}
 
 function New-Corpus([string]$dir, [int]$count) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -141,8 +147,8 @@ try {
     $report.Add("| size | walkdir p50 (ms) | MFT p50 (ms) | count match | errors | winner |")
     $report.Add("| --- | --- | --- | --- | --- | --- |")
 
-    if ($Root) { $sizes = @(-1) }
-    foreach ($size in $sizes) {
+    if ($Root) { $sizeList = @(-1) }
+    foreach ($size in $sizeList) {
         $rawDir = if ($Root) { $Root } else { Join-Path $env:TEMP ("rootup_mft_corpus_" + $size) }
         # 每档使用干净数据库，避免上一档语料拖慢启动与扫描
         Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
