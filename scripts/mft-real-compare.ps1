@@ -66,7 +66,13 @@ function Invoke-OneScan([string]$dir, [bool]$mft) {
     } | ConvertTo-Json -Depth 8
     [System.IO.File]::WriteAllText($SettingsPath, $settings, (New-Object System.Text.UTF8Encoding($false)))
     Remove-Item $LogFile -Force -ErrorAction SilentlyContinue
-    if ($mft) { $env:ROOTUP_MFT_SCAN = "1" } else { Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue }
+    if ($mft) {
+        $env:ROOTUP_MFT_SCAN = "1"
+        Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue
+    } else {
+        Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
+        $env:ROOTUP_ENUM = "walkdir"
+    }
     Start-Process -FilePath $Exe | Out-Null
     $deadline = (Get-Date).AddSeconds(300)
     $line = ""
@@ -154,6 +160,7 @@ try {
 } finally {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
+    Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue
     if (Test-Path $Backup) { Move-Item $Backup $SettingsPath -Force } else { Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue }
     if (Test-Path $DbBackup) {
         foreach ($suffix in @("", "-wal", "-shm")) {

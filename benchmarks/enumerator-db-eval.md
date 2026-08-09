@@ -4,7 +4,7 @@
 - 探针：`cargo run --release --example scan_probe --features bench`（bench 门控，不进入默认构建）。
 - 等价性：Win32 枚举器与 walkdir 在单元语料、合成 20k、真实 Desktop 137,971 文件上路径集合 / 计数 / 忽略 / 错误完全一致。
 
-## B：原生 FindFirstFileW 枚举器（达标，保留实验实现，0.8.7 转正候选）
+## B：原生 FindFirstFileW 枚举器（达标，已落地为默认枚举器）
 
 | 语料 | walkdir p50 | Win32 p50 | 加速 |
 | --- | --- | --- | --- |
@@ -13,7 +13,18 @@
 | 合成 20k（F 对照轮） | 4588ms | 41.6ms | 110.3x |
 | 真实 Desktop 137,971 | 19729ms | 3355ms | 5.9x |
 
-结论：省掉每文件一次 `std::fs::metadata` 系统调用（`WIN32_FIND_DATA` 直取大小 / 时间 / 属性）。合成语料差距极大（新文件 + 实时防护放大了 metadata 成本），真实目录稳定约 5.9x。等价全绿、无新运行时依赖（复用 `windows` crate 已有 feature）。按决策门（等价 + 收益 ≥30%）达标；实现以 `cfg(any(test, feature = "bench"))` 保留，默认路径仍 walkdir，0.8.7 转正时补扫描器选择策略与全量回归。
+结论：省掉每文件一次 `std::fs::metadata` 系统调用（`WIN32_FIND_DATA` 直取大小 / 时间 / 属性）。等价全绿、无新运行时依赖（复用 `windows` crate 已有 feature）。按决策门（等价 + 收益 ≥30%）达标，**已落地为 0.8.6 默认扫描枚举器**；`ROOTUP_ENUM=walkdir` 保留为诊断回退。
+
+### 全链路对比（应用级扫描 + DB 落库，`scripts/enum-compare.ps1`）
+
+| 语料 | walkdir | 原生 | 加速 | 一致性 |
+| --- | --- | --- | --- | --- |
+| 合成 1k | 159ms | 24ms | 6.6x | PASS（1000/1000，0 差异） |
+| 合成 10k | 833ms | 116ms | 7.2x | PASS（10000/10000，0 差异） |
+| 合成 50k | 8676ms | 687ms | 12.6x | PASS（50000/50000，0 差异） |
+| 真实 Desktop 71,923 | 10655ms | 2457ms | 4.3x | PASS（71923/71923，0 差异） |
+
+全链路下原生在 50k 已明显快于 MFT（687ms vs 5977ms），真实目录也快于 MFT（2457ms vs 5160ms）。
 
 ## F：DB 写入微优化（未达门槛，已回退）
 

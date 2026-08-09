@@ -7,6 +7,8 @@ use crate::core::scan::{
     ScanProgress, ScanSummary,
 };
 use crate::infra::enumerator::WalkDirEnumerator;
+#[cfg(windows)]
+use crate::infra::enumerator::Win32Enumerator;
 use crate::infra::time::now_millis;
 use serde::Serialize;
 use std::collections::VecDeque;
@@ -59,7 +61,23 @@ impl ScanService {
         sink: Arc<dyn ScanEventSink>,
     ) -> Self {
         let skip_roots = Arc::new(Mutex::new(Vec::new()));
-        let enumerator = Arc::new(WalkDirEnumerator::new(matcher.clone(), skip_roots.clone()));
+        // 默认使用 Windows 原生枚举（FindFirstFileW，省掉每文件一次 metadata 系统调用）；
+        // 设置 ROOTUP_ENUM=walkdir 可回退旧实现（诊断/对照用）。
+        let use_walkdir = std::env::var("ROOTUP_ENUM")
+            .map(|v| v == "walkdir")
+            .unwrap_or(false);
+        let enumerator: Arc<dyn FileEnumerator> = if use_walkdir {
+            Arc::new(WalkDirEnumerator::new(matcher.clone(), skip_roots.clone()))
+        } else {
+            #[cfg(windows)]
+            {
+                Arc::new(Win32Enumerator::new(matcher.clone(), skip_roots.clone()))
+            }
+            #[cfg(not(windows))]
+            {
+                Arc::new(WalkDirEnumerator::new(matcher.clone(), skip_roots.clone()))
+            }
+        };
         Self {
             store,
             classifier,

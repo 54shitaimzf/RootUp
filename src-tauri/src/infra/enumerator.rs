@@ -7,11 +7,11 @@ use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 use windows::core::PCWSTR;
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_NO_MORE_FILES, FILETIME, HANDLE};
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 use windows::Win32::Storage::FileSystem::{
     FindClose, FindFirstFileW, FindNextFileW, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, WIN32_FIND_DATAW,
@@ -118,13 +118,13 @@ impl FileEnumerator for WalkDirEnumerator {
 /// 直取 `WIN32_FIND_DATA` 的大小 / 时间 / 属性，省掉 walkdir 每文件一次
 /// `std::fs::metadata` 系统调用。语义与 `WalkDirEnumerator` 对齐：
 /// 目录忽略整棵跳过、skip_roots 整棵跳过、重解析点不跟随不产出、忽略规则一致。
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 pub struct Win32Enumerator {
     matcher: IgnoreMatcher,
     skip_roots: Arc<Mutex<Vec<String>>>,
 }
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 impl Win32Enumerator {
     pub fn new(matcher: IgnoreMatcher, skip_roots: Arc<Mutex<Vec<String>>>) -> Self {
         Self {
@@ -134,7 +134,7 @@ impl Win32Enumerator {
     }
 }
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 impl FileEnumerator for Win32Enumerator {
     fn enumerate(
         &self,
@@ -161,7 +161,7 @@ impl FileEnumerator for Win32Enumerator {
 }
 
 /// 迭代式 DFS（显式栈，避免深目录递归爆栈）；`Ok(true)` 表示调用方要求提前停止。
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 fn enumerate_win32(
     root: &str,
     matcher: &IgnoreMatcher,
@@ -247,7 +247,7 @@ fn enumerate_win32(
 
 /// 生成 `FindFirstFileW` 搜索模式：绝对路径加 `\\?\` 前缀以支持超过 MAX_PATH 的路径
 /// （walkdir/std 在 Windows 上同样支持长路径）；UNC 转换为 `\\?\UNC\` 形式。
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 fn win32_search_pattern(path: &str) -> String {
     let back = path.replace('/', "\\");
     if path.starts_with("//") || path.starts_with("\\\\") {
@@ -260,13 +260,13 @@ fn win32_search_pattern(path: &str) -> String {
     }
 }
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 fn utf16_until_nul(buf: &[u16]) -> String {
     let end = buf.iter().position(|&u| u == 0).unwrap_or(buf.len());
     String::from_utf16_lossy(&buf[..end])
 }
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 fn filetime_to_ms(ft: FILETIME) -> Option<i64> {
     let raw = ((ft.dwHighDateTime as u64) << 32) | ft.dwLowDateTime as u64;
     if raw == 0 {
@@ -277,10 +277,10 @@ fn filetime_to_ms(ft: FILETIME) -> Option<i64> {
     Some((unix_100ns / 10_000) as i64)
 }
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 struct Win32FindHandle(HANDLE);
 
-#[cfg(all(windows, any(test, feature = "bench")))]
+#[cfg(windows)]
 impl Drop for Win32FindHandle {
     fn drop(&mut self) {
         unsafe {
