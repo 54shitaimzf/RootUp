@@ -17,28 +17,25 @@ use crate::core::scan::{EnumerateStats, FileEntry};
 use crate::infra::ntfs::{drive_root_of, probe_volume};
 use std::collections::HashMap;
 
-use windows::core::{w, PCWSTR};
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
-use windows::Win32::Security::{
-    AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED,
-    TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
-};
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, ReadFile, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_SEQUENTIAL_SCAN,
-    FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    CreateFileW, GetLongPathNameW, ReadFile, SetFilePointerEx, FILE_BEGIN,
+    FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
 };
 use windows::Win32::System::Ioctl::FSCTL_GET_NTFS_VOLUME_DATA;
-use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::Win32::System::IO::DeviceIoControl;
 
 const FILE_RECORD_SIGNATURE: [u8; 4] = *b"FILE";
 const ATTR_END: u32 = 0xFFFF_FFFF;
 const ATTR_STANDARD_INFORMATION: u32 = 0x10;
 const ATTR_FILE_NAME: u32 = 0x30;
+const ATTR_DATA: u32 = 0x80;
 const FILE_ATTR_REPARSE_POINT: u32 = 0x400;
 const MFT_FIXUP_SECTOR: usize = 512;
 const GENERIC_READ: u32 = 0x8000_0000;
-const SYNCHRONIZE: u32 = 0x0010_0000;
+const FSCTL_ALLOW_EXTENDED_DASD_IO: u32 = 0x0009_0083;
+const LONG_PATH_BUF: usize = 32 * 1024;
 
 /// 解析后的 FILE_NAME 属性（0x30）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,6 +60,9 @@ pub struct MftRecord {
     pub base_record: u64,
     pub file_names: Vec<FileNameAttr>,
     pub si_attributes: Option<u32>,
+    pub si_modified_ms: Option<i64>,
+    /// 未命名 `$DATA` 的真实大小（resident 为值长度，non-resident 为 RealSize）。
+    pub data_size: Option<u64>,
 }
 
 fn read_u16(buf: &[u8], off: usize) -> u16 {
@@ -151,6 +151,8 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
 
     let mut file_names = Vec::new();
     let mut si_attributes = None;
+    let mut si_modified_ms = None;
+    let mut data_size = None;
     let mut offset = attrs_offset;
     let mut guard = 0usize;
     while offset + 8 <= used_size && guard < 64 {
@@ -164,6 +166,7 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
             return Err("属性头越界".into());
         }
         let non_resident = buf[offset + 8] != 0;
+        let unnamed = buf[offset + 9] == 0;
         if !non_resident {
             let value_len = read_u32(&buf, offset + 0x10) as usize;
             let value_off = read_u16(&buf, offset + 0x14) as usize;
@@ -174,8 +177,16 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
                 ATTR_FILE_NAME => file_names.push(parse_file_name_value(value)?),
                 ATTR_STANDARD_INFORMATION if value.len() >= 0x24 => {
                     si_attributes = Some(read_u32(value, 0x20));
+                    si_modified_ms = Some(filetime_to_ms(read_u64(value, 0x08)));
                 }
+                ATTR_DATA if unnamed => data_size = Some(value_len as u64),
                 _ => {}
+            }
+        } else if ATTR_DATA == attr_type && unnamed {
+            // Non-resident $DATA 头：RealSize 位于属性起点 + 0x30。
+            let real = buf.get(offset + 0x30..offset + 0x38);
+            if let Some(bytes) = real {
+                data_size = Some(u64::from_le_bytes(bytes.try_into().unwrap()));
             }
         }
         offset += attr_len;
@@ -189,6 +200,8 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
         base_record: read_u64(&buf, 0x20),
         file_names,
         si_attributes,
+        si_modified_ms,
+        data_size,
     })
 }
 
@@ -316,41 +329,19 @@ fn normalize_prefix(root: &str) -> String {
     s
 }
 
-fn enable_backup_privilege() -> Result<(), String> {
-    let mut token = HANDLE::default();
-    unsafe {
-        OpenProcessToken(
-            GetCurrentProcess(),
-            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
-            &mut token,
-        )
+/// 将路径展开为长路径（8.3 短路径 → 完整路径）；不存在或失败时原样返回。
+fn long_path_of(path: &str) -> String {
+    let short_wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut buf = vec![0u16; LONG_PATH_BUF];
+    let len = unsafe { GetLongPathNameW(PCWSTR(short_wide.as_ptr()), Some(&mut buf)) };
+    if len == 0 || len as usize >= buf.len() {
+        return path.to_string();
     }
-    .map_err(|e| format!("OpenProcessToken 失败: {e}"))?;
-    let _guard = RawHandle(token);
-    let mut luid = windows::Win32::Foundation::LUID::default();
-    unsafe { LookupPrivilegeValueW(None, w!("SeBackupPrivilege"), &mut luid) }
-        .map_err(|e| format!("LookupPrivilegeValueW 失败: {e}"))?;
-    let privileges = TOKEN_PRIVILEGES {
-        PrivilegeCount: 1,
-        Privileges: [LUID_AND_ATTRIBUTES {
-            Luid: luid,
-            Attributes: SE_PRIVILEGE_ENABLED,
-        }],
-    };
-    unsafe {
-        AdjustTokenPrivileges(
-            token,
-            false,
-            Some(&privileges as *const TOKEN_PRIVILEGES),
-            0,
-            None,
-            None,
-        )
-    }
-    .map_err(|e| format!("AdjustTokenPrivileges 失败: {e}"))
+    String::from_utf16_lossy(&buf[..len as usize])
 }
 
-fn bytes_per_file_record(volume: HANDLE) -> Result<u32, String> {
+/// 读取卷布局：记录大小、MFT 起始字节偏移、MFT 有效数据长度。
+fn ntfs_volume_mft_layout(volume: HANDLE) -> Result<(u32, u64, u64), String> {
     let mut out = [0u8; 96];
     let mut returned = 0u32;
     unsafe {
@@ -370,14 +361,25 @@ fn bytes_per_file_record(volume: HANDLE) -> Result<u32, String> {
         return Err("NTFS 卷数据不完整".into());
     }
     let bytes_per_file_record = u32::from_le_bytes(out[48..52].try_into().unwrap());
-    if bytes_per_file_record != 0 {
-        return Ok(bytes_per_file_record);
-    }
     let bytes_per_cluster = u32::from_le_bytes(out[44..48].try_into().unwrap());
-    if bytes_per_cluster == 0 {
-        return Err("簇大小异常".into());
+    let clusters_per_file_record = u32::from_le_bytes(out[52..56].try_into().unwrap());
+    let mft_start_lcn = u64::from_le_bytes(out[64..72].try_into().unwrap());
+    let mft_valid_len = u64::from_le_bytes(out[56..64].try_into().unwrap());
+    let record_size = if bytes_per_file_record != 0 {
+        bytes_per_file_record
+    } else if clusters_per_file_record != 0 {
+        clusters_per_file_record * bytes_per_cluster
+    } else {
+        return Err("NTFS 记录大小不可确定".into());
+    };
+    if record_size < 512 || bytes_per_cluster == 0 {
+        return Err("NTFS 布局异常".into());
     }
-    Ok(bytes_per_cluster)
+    Ok((
+        record_size,
+        mft_start_lcn * bytes_per_cluster as u64,
+        mft_valid_len,
+    ))
 }
 
 /// MFT 快速全量扫描（实验性，`ROOTUP_MFT_SCAN=1` + 管理员 + NTFS 才启用）。
@@ -402,50 +404,56 @@ pub fn try_full_scan(
     let Some(drive) = drive_root_of(root) else {
         return Err("无法推导卷根".into());
     };
-    enable_backup_privilege()?;
-
-    let mft_path = format!("\\\\.\\{drive}\\$MFT");
-    let wide: Vec<u16> = mft_path.encode_utf16().chain(std::iter::once(0)).collect();
-    // 打开 $MFT 的访问组合：优先 GENERIC_READ + SYNCHRONIZE（成熟工具常用），
-    // 失败再退回 FILE_READ_DATA 组合，避免个别系统上单一访问掩码被拒。
-    let access_masks = [
-        GENERIC_READ | FILE_READ_ATTRIBUTES.0 | SYNCHRONIZE,
-        FILE_READ_DATA.0 | FILE_READ_ATTRIBUTES.0 | SYNCHRONIZE,
-    ];
-    let mut handle = None;
-    let mut last_err = String::new();
-    for access in access_masks {
-        match unsafe {
-            CreateFileW(
-                PCWSTR(wide.as_ptr()),
-                access,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                None,
-                OPEN_EXISTING,
-                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_SEQUENTIAL_SCAN,
-                None,
-            )
-        } {
-            Ok(h) => {
-                handle = Some(h);
-                break;
-            }
-            Err(e) => last_err = format!("打开 $MFT 失败（可能需要管理员）: {e}"),
-        }
+    // 参考 ntfs-3g win32_io.c：打开卷句柄（GENERIC_READ）并允许扩展 DASD 读取，
+    // 按 FSCTL_GET_NTFS_VOLUME_DATA 给出的 MFT 偏移直接 ReadFile，不打开 $MFT。
+    let volume_path = format!("\\\\.\\{drive}");
+    let wide: Vec<u16> = volume_path
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES(0),
+            None,
+        )
     }
-    let handle = handle.ok_or(last_err)?;
+    .map_err(|e| format!("打开卷 {volume_path} 失败（需要管理员）: {e}"))?;
     let _guard = RawHandle(handle);
 
-    // 读取卷信息需要卷句柄；$MFT 句柄也可用于 DeviceIoControl
-    let record_size = bytes_per_file_record(handle)? as usize;
-    if record_size < 512 {
-        return Err(format!("MFT 记录大小异常: {record_size}"));
+    let mut dasd_returned = 0u32;
+    unsafe {
+        DeviceIoControl(
+            handle,
+            FSCTL_ALLOW_EXTENDED_DASD_IO,
+            None,
+            0,
+            None,
+            0,
+            Some(&mut dasd_returned),
+            None,
+        )
+    }
+    .map_err(|e| format!("FSCTL_ALLOW_EXTENDED_DASD_IO 失败: {e}"))?;
+
+    let (record_size, mft_offset, mft_valid_len) = ntfs_volume_mft_layout(handle)?;
+    let record_size = record_size as usize;
+    if mft_valid_len == 0 {
+        return Err("MFT 有效数据长度为 0".into());
     }
 
     let mut records: Vec<MftRecord> = Vec::new();
     let mut buffer = vec![0u8; record_size];
+    let mut position = mft_offset;
+    let mut total_read = 0u64;
     loop {
         let mut read = 0u32;
+        unsafe { SetFilePointerEx(handle, position as i64, None, FILE_BEGIN) }
+            .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
         let io = unsafe {
             ReadFile(
                 handle,
@@ -460,37 +468,46 @@ pub fn try_full_scan(
         if read == 0 {
             break;
         }
-        if read as usize != record_size {
-            // 尾部不足一条记录：按实际长度解析（可能被截断）
-        }
         if buffer[0..4] == FILE_RECORD_SIGNATURE {
             if let Ok(record) = parse_file_record(&buffer) {
                 records.push(record);
             }
         }
-        if read as usize != record_size {
+        position += read as u64;
+        total_read += read as u64;
+        if total_read >= mft_valid_len {
             break;
         }
     }
 
     let mut stats = EnumerateStats::default();
     let paths = resolve_record_paths(&records, &drive);
-    let normalized_root = normalize_prefix(root);
+    let root_long = long_path_of(root);
+    let normalized_root = normalize_prefix(&root_long);
+    let root_prefix = normalize_prefix(root);
+    let records_by_num: HashMap<u64, &MftRecord> =
+        records.iter().map(|r| (r.record_number, r)).collect();
     let mut entries = Vec::new();
-    for (path, attr) in paths.values() {
-        if !path.starts_with(&normalized_root) {
+    for (record_number, (path, attr)) in paths.iter() {
+        let Some(relative) = path.strip_prefix(&normalized_root) else {
             continue;
-        }
-        let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        };
+        let full = normalize_path(&format!("{root_prefix}{relative}"));
+        let name = full.rsplit('/').next().unwrap_or(&full).to_string();
         if matcher.is_ignored(&name) {
             stats.ignored += 1;
             continue;
         }
+        let record = records_by_num.get(record_number).copied();
+        let size = record.and_then(|r| r.data_size).unwrap_or(attr.data_size) as i64;
+        let modified_ms = record
+            .and_then(|r| r.si_modified_ms)
+            .unwrap_or(attr.modified_ms);
         stats.discovered += 1;
         entries.push(FileEntry {
-            path: normalize_path(path),
-            size: attr.data_size as i64,
-            modified_ms: attr.modified_ms,
+            path: full,
+            size,
+            modified_ms,
             is_dir: false,
             is_symlink: false,
         });
