@@ -298,3 +298,13 @@ pages → components → hooks → lib(API) → Tauri commands → core 业务�
 - **NTFS 快速扫描**：`infra/ntfs.rs` 提供卷能力探测、USN 记录解析与路径重建；快速全量路径由 `ROOTUP_FAST_SCAN=1` 显式开启且 probe（NTFS + USN 完整 + 权限）全部通过才生效，任何失败回退 `WalkDirEnumerator` 并记录 `scan: 快速扫描不可用 ...`；USN 无文件大小，快速路径逐文件补元数据；MFT 基线顺延 0.8.6（决策见 `benchmarks/mft-usn-evaluation.md`）。
 - **分类匹配**：课程分类器使用 Aho-Corasick 重叠匹配保持“包含即命中”语义（见等价测试）；忽略规则因语义（前缀/精确/包裹）不适用 AC。
 - **性能基准契约**：0.8.5 起对比目标为“0.8.5 vs 0.8.4”单轨；新增指标 `query_keyset_page` / `query_labels_multi` / `query_and_syntax` / `query_and_keyword` / `query_label_json` / `query_text_fts`；标签与文本实现评估结论见 `benchmarks/label-index-evaluation.md`。
+
+## 0.8.6 阶段一契约（开发中）
+
+- **增量契约**：`core/delta.rs` 定义 `DeltaKind` / `DeltaRecord` / `DeltaSource`（begin / next / commit）；USN 实现 `infra/usn_delta.rs`，重命名按“旧路径删除 + 新路径创建”展开（与 0.8.4 收敛语义一致），未来 0.8.8 配对迁移可直接替换映射。
+- **USN 状态**：`IndexStore` 提供 `get_last_usn` / `set_last_usn` 默认无操作，SQLite 实现持久化到 `usn_state`（schema v5，按卷一行）；启动补账线程（`startup.rs`）无基线时记录当前 USN，有基线时执行 `(last, current]` 增量，失败只记录不阻塞。
+- **MFT 枚举器**：`infra/mft.rs` 实现 `FileEnumerator` 语义的全量扫描（FILE 记录解析 + 主名策略 + 路径重建），`ROOTUP_MFT_SCAN=1` 且管理员/NTFS 才启用，失败回退 walkdir；扫描器日志统一 `scan: 快速扫描不可用 ... 回退 walkdir`。
+- **FTS5**：`files_fts` 为 contentless + trigram（schema v6 版本占位，**默认不建表**）；实现与测试保留，同步点同事务（upsert / delete / move / purge，标签不索引），表缺失时自动跳过；查询仅当索引就绪且所有词 ≥3 字符时走 FTS，其余回退 LIKE。启用条件见 `benchmarks/fts-evaluation.md`。
+- **索引集（v7 复核）**：`files` 索引收敛为 `idx_files_state(state, deleted_at)` + `idx_files_modified(modified)`；`idx_files_type` 因同轮对比无收益且增加写放大，经 schema v7 幂等移除。
+- **目录缺失对账**：`core/path.rs::is_missing_dir_error`（Windows os error 2/3）判定后才 `mark_under_roots_deleted`；扫描失败与启动探测共用；命令 `watched_dir_health` 供设置页标记缺失目录（不删除记录，重扫可恢复）。
+- **基准契约**：阶段一新增 `engine_index_build_*_with/without_type_ms`、`engine_query_type_with/without_type_ms`、`engine_reapply_labels_*` 变体；阶段一验证不落库，完整 0.8.6 官方基线在阶段二完成后统一生成。

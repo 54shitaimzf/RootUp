@@ -2,6 +2,17 @@
 
 本项目的版本变更记录。首个公开发布为 v0.6.0；此前版本为开发期里程碑，按迭代整理。
 
+## [Unreleased]
+
+### 0.8.6 阶段一（监控与查询性能，开发中）
+
+- MFT 快速基线（原始 `$MFT`，布局参考 Linux-ntfs / ntfs-3g / Sleuth Kit，不复制代码）：FILE 记录解析、USA 修复、extent/元文件/重解析点跳过、硬链接主名策略、路径重建；`ROOTUP_MFT_SCAN=1` + 管理员门控，任何失败回退 walkdir。
+- USN 启动补账：`DeltaSource` 契约 + `usn_state`（schema v5），应用关闭期间变更启动时一次性对齐，运行期 notify 为主不轮询；无基线自动记录当前 USN。
+- FTS5 文本索引（schema v6 占位，未默认启用）：contentless + trigram 实现与等价测试保留；批量同步成本高，待“扫描后批量重建”优化后再启用，见 `benchmarks/fts-evaluation.md`。
+- 索引维护复核：移除 `idx_files_type`（schema v7）——同轮有/无对比显示其无查询收益且增加写放大，见 `benchmarks/index-set-evaluation.md`。
+- 监控目录缺失对账：系统报“路径不存在”时索引标记 deleted（重扫可恢复）+ 设置页缺失标记（`watched_dir_health`）。
+- 冒烟与审计扩展：USN 降级日志断言、`files_fts` / `usn_state` 审计项。
+
 ## [0.8.5] - 2026-08-08
 
 ### 性能与查询（0.8.5）

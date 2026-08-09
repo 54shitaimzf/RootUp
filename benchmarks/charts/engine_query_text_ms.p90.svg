@@ -11,14 +11,17 @@
 <text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>51.32</text>
 <line x1='70' y1='30' x2='540' y2='30' stroke='#e2e8f0' stroke-width='1'/>
 <text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>66.57</text>
-<polyline points='70,45.1 305,86.8 540,198.9' fill='none' stroke='#10b981' stroke-width='2'/>
+<polyline points='70,45.1 226.7,86.8 383.3,198.9 540,172.5' fill='none' stroke='#10b981' stroke-width='2'/>
 <circle cx='70' cy='45.1' r='3.5' fill='#10b981'/>
 <text x='70' y='37.1' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>61.57</text>
 <text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.3</text>
-<circle cx='305' cy='86.8' r='3.5' fill='#10b981'/>
-<text x='305' y='78.8' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>47.73</text>
-<text x='305' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.4</text>
-<circle cx='540' cy='198.9' r='3.5' fill='#10b981'/>
-<text x='540' y='190.9' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>10.57</text>
-<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5</text>
+<circle cx='226.7' cy='86.8' r='3.5' fill='#10b981'/>
+<text x='226.7' y='78.8' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>47.73</text>
+<text x='226.7' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.4</text>
+<circle cx='383.3' cy='198.9' r='3.5' fill='#10b981'/>
+<text x='383.3' y='190.9' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>10.57</text>
+<text x='383.3' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5</text>
+<circle cx='540' cy='172.5' r='3.5' fill='#10b981'/>
+<text x='540' y='164.5' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>19.33</text>
+<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6-dev</text>
 </svg>
