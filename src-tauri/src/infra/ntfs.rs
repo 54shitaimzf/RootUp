@@ -13,7 +13,7 @@ use std::path::Path;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, ERROR_HANDLE_EOF, HANDLE};
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, GetVolumeInformationW, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES,
+    CreateFileW, GetVolumeInformationW, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_DATA,
     FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
 };
 use windows::Win32::System::Ioctl::{
@@ -68,7 +68,9 @@ pub fn probe_volume(root: &str) -> VolumeCapabilities {
     let handle = unsafe {
         CreateFileW(
             PCWSTR(wide.as_ptr()),
-            FILE_READ_ATTRIBUTES.0,
+            // USN 查询要求卷句柄具备 FILE_READ_DATA（实测 FILE_READ_ATTRIBUTES 返回
+            // ERROR_INVALID_FUNCTION，0x80070001）。
+            FILE_READ_DATA.0,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             None,
             OPEN_EXISTING,
@@ -414,7 +416,7 @@ fn open_volume(drive: &str) -> Result<HANDLE, String> {
     unsafe {
         CreateFileW(
             PCWSTR(wide.as_ptr()),
-            FILE_READ_ATTRIBUTES.0,
+            FILE_READ_DATA.0,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             None,
             OPEN_EXISTING,
