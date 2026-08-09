@@ -911,37 +911,82 @@ fn main() {
 
     let mut metrics = Value::Object(Default::default());
 
+    // Corpus reuse (iteration speed + identical fixtures across runs):
+    //   ROOTUP_BENCH_PREPARE_ONLY=<dir>  generate scan10k (+scan100k when FULL) and exit
+    //   ROOTUP_BENCH_USE_CORPUS=<dir>    reuse prepared dirs, never regenerate/delete them
+    let prepare_only = env::var("ROOTUP_BENCH_PREPARE_ONLY")
+        .ok()
+        .map(PathBuf::from);
+    if let Some(prep) = &prepare_only {
+        let prep_root = prep.join("scan10k");
+        let created = generate_disk(&prep_root, "mixed", disk_count, &spec);
+        if full {
+            generate_disk(&prep.join("scan100k"), "mixed", 100_000, &spec);
+        }
+        println!(
+            "engine_bench: prepared corpus {created} files (full={full}) under {}",
+            prep.display()
+        );
+        return;
+    }
+    let use_corpus = env::var("ROOTUP_BENCH_USE_CORPUS").ok().map(PathBuf::from);
+
     // 磁盘扫描（形状矩阵）
-    let scan_root = env::temp_dir().join(format!("rootup_bench_scan_{}", std::process::id()));
-    let _ = fs::remove_dir_all(&scan_root);
-    let start = Instant::now();
-    let created = generate_disk(&scan_root, "mixed", disk_count, &spec);
-    println!(
-        "engine_bench: fixture {created} files in {:.1}s",
-        start.elapsed().as_secs_f64()
-    );
+    let scan_root = match &use_corpus {
+        Some(base) => base.join("scan10k"),
+        None => env::temp_dir().join(format!("rootup_bench_scan_{}", std::process::id())),
+    };
+    let scan_prepared = use_corpus.is_some() && scan_root.is_dir();
+    if !scan_prepared {
+        let _ = fs::remove_dir_all(&scan_root);
+        let start = Instant::now();
+        let created = generate_disk(&scan_root, "mixed", disk_count, &spec);
+        println!(
+            "engine_bench: fixture {created} files in {:.1}s",
+            start.elapsed().as_secs_f64()
+        );
+    } else {
+        println!(
+            "engine_bench: reuse prepared corpus {}",
+            scan_root.display()
+        );
+    }
     merge(
         &mut metrics,
         bench_scan_shapes(&scan_root, &shapes, disk_count, samples.min(3)),
     );
     merge(&mut metrics, bench_warm_rescan(&scan_root, samples.min(3)));
-    let _ = fs::remove_dir_all(&scan_root);
+    if !scan_prepared {
+        let _ = fs::remove_dir_all(&scan_root);
+    }
 
     if full {
-        let full_root =
-            env::temp_dir().join(format!("rootup_bench_scan_full_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&full_root);
-        let start = Instant::now();
-        generate_disk(&full_root, "mixed", 100_000, &spec);
-        println!(
-            "engine_bench: fixture 100k in {:.1}s",
-            start.elapsed().as_secs_f64()
-        );
+        let full_root = match &use_corpus {
+            Some(base) => base.join("scan100k"),
+            None => env::temp_dir().join(format!("rootup_bench_scan_full_{}", std::process::id())),
+        };
+        let full_prepared = use_corpus.is_some() && full_root.is_dir();
+        if !full_prepared {
+            let _ = fs::remove_dir_all(&full_root);
+            let start = Instant::now();
+            generate_disk(&full_root, "mixed", 100_000, &spec);
+            println!(
+                "engine_bench: fixture 100k in {:.1}s",
+                start.elapsed().as_secs_f64()
+            );
+        } else {
+            println!(
+                "engine_bench: reuse prepared corpus {}",
+                full_root.display()
+            );
+        }
         merge(
             &mut metrics,
             bench_scan_shapes(&full_root, &["mixed"], 100_000, 3),
         );
-        let _ = fs::remove_dir_all(&full_root);
+        if !full_prepared {
+            let _ = fs::remove_dir_all(&full_root);
+        }
     }
     if huge {
         let huge_root =
