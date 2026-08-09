@@ -19,7 +19,7 @@ RootUp 是一款面向学生和日常桌面整理的 Windows 工具。下载、�
 ### 文件整理与搜索
 
 - **自动分类**：新文件进入监控目录后自动按类型归类——文档、图片、视频、音频、压缩包、代码、安装包、数据；也支持自定义标签（显示名、图标、颜色）。
-- **实时索引**：监控目录全量扫描 + 实时更新，文件一出现就能搜到；课程名称会自动成为标签，学业资料随课程归位。
+- **实时索引**：监控目录全量扫描 + 实时更新，文件一出现就能搜到；0.8.6 起扫描路径全面提速（原生枚举 + 并行 MFT 读取 + 智能扫描选择）；课程名称会自动成为标签，学业资料随课程归位。
 - **强搜索**：支持文件名/路径搜索和条件语法（见下文），输入时自动补全，常用筛选条件以 chips 一键点选。
 - **快速查询**：0.8.5 起查询提速 70%+，翻页改用稳定的游标分页；支持显式 AND 标签语法（`+label:` 或 `label:a AND label:b`）。
 - **规则与方案**：忽略规则和分类映射可自由编辑，内置默认/编程开发/素材创作三套模板，也可以保存为自己的方案随时套用。
@@ -119,16 +119,17 @@ RootUp 使用本地索引，扫描、搜索与归档都很快。0.8.6 是性能�
 
 ## 安装
 
-- 从 [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases) 下载 `RootUp_0.8.5_x64-setup.exe`。
+- 从 [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases) 下载 `RootUp_0.8.6_x64-setup.exe`。
 - per-user 安装，无需管理员权限，安装时可选中文或 English。
 - 安装包未做数字签名，Windows SmartScreen 首次运行会提示“未知发布者”，选择“仍要运行”即可，功能不受影响。
 - 需要 WebView2 运行时（Windows 10/11 一般已内置，缺失时安装器会引导下载）。
 
 ## 路线图
 
-- **v0.8.5（已发布）**：快速扫描与查询——查询提速 70%+、游标分页、显式 AND 语法、NTFS 快速扫描能力。
-- **v0.8.6（下一步）**：更大文件量的流畅体验（虚拟滚动）、更小的安装包、MFT 快速基线。
-- **v0.8.7 及以后**：文件/项目/软件统一管理。
+- **v0.8.5（已发布）**：快速扫描与查询——查询提速 70%+、游标分页、显式 AND 语法。
+- **v0.8.6（已发布）**：规模与体积——虚拟滚动、体积压缩、扫描大幅提速（首次扫描 10k 快 84%、引擎 100k 快 90%）。
+- **v0.8.7（下一步）**：单元同构（文件/项目/软件统一索引）、快速扫描提权链路、启动体验优化。
+- **v0.8.8 及以后**：整理与回收、项目治理、观测与日志等，见完整路线图。
 
 完整路线与设计文档见 [docs/ROADMAP.md](docs/ROADMAP.md)、[docs/VISION.md](docs/VISION.md)。
 
@@ -175,7 +176,7 @@ RootUp is a Windows desktop app that keeps your files organized without the effo
 
 ### Features
 
-- **File organization & search** — watch folders, auto-classify into Documents / Images / Videos / Audio / Archives / Code / Installers / Data, custom labels, full-text search with syntax (`type:` / `label:` / `state:` / `size:` / `before:` / `after:`), editable ignore rules and classification presets. Since 0.8.5, queries are 70%+ faster with stable cursor pagination, and explicit AND syntax (`+label:` or `label:a AND label:b`) is supported.
+- **File organization & search** — watch folders, auto-classify into Documents / Images / Videos / Audio / Archives / Code / Installers / Data, custom labels, full-text search with syntax (`type:` / `label:` / `state:` / `size:` / `before:` / `after:`), editable ignore rules and classification presets. Since 0.8.5, queries are 70%+ faster with stable cursor pagination, and explicit AND syntax (`+label:` or `label:a AND label:b`) is supported; since 0.8.6, full scans are up to ~90% faster on large corpora.
 - **Safe archiving** — archive files, filtered results or whole projects (desktop shortcuts update automatically); optional auto-archive for clearly classified files; everything can be undone.
 - **Study tools** — weekly course schedule (odd/even/custom weeks), homework tracking with deadlines and reminders, tray badge and one-click jump to unfinished homework.
 - **Projects & IDEs** — auto-detects 15 common project types and tools like VS Code, Cursor, JetBrains, MATLAB, Typora and Obsidian; open / reveal / open in IDE from any file row.
@@ -194,30 +195,29 @@ RootUp is a Windows desktop app that keeps your files organized without the effo
 
 Conditions can be combined, e.g. `type:pdf notes`. Multiple labels of the same dimension match with OR semantics by default; use `+label:` or `AND` to require all of them.
 
-### Performance (v0.8.5 baseline, p50, vs 0.8.4)
+### Performance (v0.8.6 baseline, p50, vs v0.8.5 rerun on Windows 11 25H2)
 
-| Metric | 0.8.5 | vs 0.8.4 |
-| --- | --- | --- |
-| Cold startup | 509.8 ms | -1.9% |
-| Time to interactive (cold) | 1808.9 ms | flat |
-| Engine scan 10k (mixed) | 302.4 ms | flat |
-| Engine scan 100k (mixed) | 4281.4 ms | +41.5% (index maintenance; to re-verify) |
-| Text query (100k index) | 10.2 ms | -78.7% |
-| Label query (100k index) | 10.9 ms | -74.3% |
-| Paged query (OFFSET / keyset) | 10.5 / 0.1 ms | cursor pagination |
-| Idle memory | 36.3 MB | +3.2% |
-| Index DB size (10k files) | 9.5 MB | +24.4% (new indexes) |
-| JS bundle gzip | 151.8 KB | +5.4% |
+| Metric | 0.8.5 (25H2 rerun) | 0.8.6 | vs 0.8.5 |
+| --- | --- | --- | --- |
+| Cold startup | 628.2 ms | 581.7 ms | -7.4% |
+| Time to interactive (cold) | 4061.5 ms | 4012.6 ms | -1.2% |
+| First scan 10k | 714.0 ms | 115.0 ms | -83.9% |
+| Engine scan 100k | 8610.2 ms | 859.2 ms | -90.0% |
+| Text query (100k index) | 13.2 ms | 11.6 ms | -12.3% |
+| Label query (100k index) | 10.5 ms | 13.7 ms | +30.0% (see notes) |
+| Cursor page | 0.112 ms | 0.074 ms | -33.4% |
+| Idle memory | 41.2 MB | 39.9 MB | -3.3% |
+| Index DB size (10k files) | 8.2 MB | 8.3 MB | +1.2% |
 
-All 50 metrics, per-version comparisons and trend charts: [benchmarks/README.md](benchmarks/README.md).
+Chart: [0.8.6 performance summary](benchmarks/charts/0.8.6-performance-summary.svg). All 63 metrics, per-version comparisons and trend charts: [benchmarks/README.md](benchmarks/README.md).
 
 ### Install
 
-Download `RootUp_0.8.5_x64-setup.exe` from [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases). Per-user NSIS installer, no admin required, Chinese/English installer languages. WebView2 runtime is required (usually preinstalled on Windows 10/11). The installer is unsigned — SmartScreen may show "Unknown publisher"; choose "Run anyway".
+Download `RootUp_0.8.6_x64-setup.exe` from [GitHub Releases](https://github.com/54shitaimzf/RootUp/releases). Per-user NSIS installer, no admin required, Chinese/English installer languages. WebView2 runtime is required (usually preinstalled on Windows 10/11). The installer is unsigned — SmartScreen may show "Unknown publisher"; choose "Run anyway".
 
 ### Roadmap
 
-v0.8.5 released (fast scanning & query: 70%+ faster queries, cursor pagination, explicit AND syntax, NTFS/USN fast-scan capability). Next: v0.8.6 (virtual scrolling, smaller bundles, MFT fast baseline). See [docs/ROADMAP.md](docs/ROADMAP.md).
+v0.8.6 released: virtual scrolling, smaller bundles, and a major scan speed-up (first scan 10k -84%, engine 100k -90%). Next: v0.8.7 (unified units index, fast-scan privilege path, startup experience). See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Build from source
 
