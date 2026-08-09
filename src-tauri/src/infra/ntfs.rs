@@ -57,6 +57,10 @@ pub fn probe_volume(root: &str) -> VolumeCapabilities {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
+    let root_wide: Vec<u16> = format!("{drive}\\")
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
     let handle = unsafe {
         CreateFileW(
             PCWSTR(wide.as_ptr()),
@@ -84,7 +88,7 @@ pub fn probe_volume(root: &str) -> VolumeCapabilities {
     let mut fs_flags = 0u32;
     let ok = unsafe {
         GetVolumeInformationW(
-            PCWSTR(wide.as_ptr()),
+            PCWSTR(root_wide.as_ptr()),
             None,
             None,
             None,

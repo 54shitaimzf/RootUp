@@ -22,6 +22,8 @@ $AppData = Join-Path $env:APPDATA "com.rootup.desktop"
 $SettingsPath = Join-Path $AppData "settings.json"
 $Backup = "$SettingsPath.mftverify.bak"
 $LogFile = Join-Path $env:LOCALAPPDATA "com.rootup.desktop\logs\rootup.log"
+$DbPath = Join-Path $AppData "rootup.db"
+$LogDir = Join-Path $env:TEMP "rootup_mft_logs"
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -59,13 +61,24 @@ function Invoke-OneScan([string]$dir, [bool]$mft) {
     Remove-Item $LogFile -Force -ErrorAction SilentlyContinue
     if ($mft) { $env:ROOTUP_MFT_SCAN = "1" } else { Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue }
     Start-Process -FilePath $Exe | Out-Null
-    $deadline = (Get-Date).AddSeconds(180)
+    $timeoutSec = if ($mft -and $dir -match "300000") { 480 } else { 240 }
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
     $line = ""
+    $mftUsed = $false
+    $leaf = Split-Path -Leaf $dir
+    $pattern = "scan: .*" + [regex]::Escape($leaf) + ".*discovered="
     while ((Get-Date) -lt $deadline -and -not $line) {
         Start-Sleep -Milliseconds 300
         if (Test-Path $LogFile) {
-            $line = (Get-Content $LogFile -Raw | Select-String -Pattern "scan: .*dir=$($dir.Replace('\','/'))" | Select-Object -Last 1).Line
+            $m = Get-Content $LogFile | Select-String -Pattern $pattern | Select-Object -Last 1
+            if ($m) { $line = $m.Line }
         }
+    }
+    if ($mft -and (Test-Path $LogFile)) {
+        $raw = Get-Content $LogFile -Raw
+        $mftUsed = $raw -match "MFT enumerator used"
+    } elseif (-not $mft) {
+        $mftUsed = $true
     }
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (-not $line) { return $null }
@@ -73,6 +86,7 @@ function Invoke-OneScan([string]$dir, [bool]$mft) {
         discovered = [int]($line -replace '.*discovered=(\d+).*', '$1')
         errors = [int]($line -replace '.*errors=(\d+).*', '$1')
         elapsed = [double]($line -replace '.*elapsed_ms=(\d+).*', '$1')
+        mftUsed = $mftUsed
     }
 }
 
@@ -81,7 +95,18 @@ function P50($values) {
     $sorted[[int]($sorted.Count / 2)]
 }
 
-if (Test-Path $SettingsPath) { Copy-Item $SettingsPath $Backup -Force }
+    if (Test-Path $SettingsPath) { Copy-Item $SettingsPath $Backup -Force }
+    $DbBackup = Join-Path $env:TEMP "rootup_mftverify_db_backup"
+    Remove-Item $DbBackup -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $DbPath) {
+        New-Item -ItemType Directory -Path $DbBackup | Out-Null
+        foreach ($suffix in @("", "-wal", "-shm")) {
+            $src = Join-Path $AppData ("rootup.db" + $suffix)
+            if (Test-Path $src) { Copy-Item $src (Join-Path $DbBackup ("rootup.db" + $suffix)) -Force }
+        }
+    }
+    Remove-Item $LogDir -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $LogDir | Out-Null
 try {
     $report = [System.Collections.Generic.List[string]]::new()
     $report.Add("# MFT/walkdir crossover experiment")
@@ -98,22 +123,34 @@ try {
     if ($Root) { $sizes = @(-1) }
     foreach ($size in $sizes) {
         $dir = if ($Root) { $Root } else { Join-Path $env:TEMP ("rootup_mft_corpus_" + $size) }
+        # 每档使用干净数据库，避免上一档语料拖慢启动与扫描
+        Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+        foreach ($suffix in @("", "-wal", "-shm")) {
+            Remove-Item (Join-Path $AppData ("rootup.db" + $suffix)) -Force -ErrorAction SilentlyContinue
+        }
         if (-not $Root) {
             Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
             New-Corpus $dir $size
         }
+        $label = if ($Root) { "real" } else { $size }
         $walk = @(); $mft = @(); $countOk = $true
         for ($r = 0; $r -lt $Rounds; $r++) {
+            Write-Host ("[mft-verify] {0} walkdir round {1}/{2}..." -f $label, ($r + 1), $Rounds)
             $w = Invoke-OneScan $dir $false
+            Copy-Item $LogFile (Join-Path $LogDir ("{0}_walk_{1}.log" -f $label, $r)) -Force -ErrorAction SilentlyContinue
+            Write-Host ("[mft-verify] {0} MFT round {1}/{2}..." -f $label, ($r + 1), $Rounds)
             $m = Invoke-OneScan $dir $true
+            Copy-Item $LogFile (Join-Path $LogDir ("{0}_mft_{1}.log" -f $label, $r)) -Force -ErrorAction SilentlyContinue
+            if ($m) { Write-Host ("[mft-verify] {0} MFT round {1}/{2} mftUsed={3} discovered={4}" -f $label, ($r + 1), $Rounds, $m.mftUsed, $m.discovered) }
             if (-not $w -or -not $m) { $countOk = $false; break }
-            if ($w.discovered -ne $m.discovered -or $w.errors -ne 0 -or $m.errors -ne 0) { $countOk = $false }
+            if ($w.discovered -ne $m.discovered -or $w.errors -ne 0 -or $m.errors -ne 0 -or -not $m.mftUsed) { $countOk = $false }
             $walk += $w.elapsed; $mft += $m.elapsed
         }
         $wp = P50 $walk; $mp = P50 $mft
-        $label = if ($Root) { "real" } else { $size }
         $better = if ($countOk) { if ($mp -lt $wp) { "MFT" } elseif ($mp -gt $wp) { "walkdir" } else { "tie" } } else { "consistency failed" }
         $report.Add("| $label | $wp | $mp | $countOk | 0/0 | $better |")
+        Write-Host ("[mft-verify] {0} done: walk={1}ms mft={2}ms ok={3} winner={4}" -f $label, $wp, $mp, $countOk, $better)
         if (-not $Root) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
     }
     $threshold = if ($Root) { "inferred from the real-dir results" } else { "first size in the table where MFT wins; if even 50k does not win, mark MFT not recommended for this corpus" }
@@ -128,4 +165,11 @@ try {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
     if (Test-Path $Backup) { Move-Item $Backup $SettingsPath -Force } else { Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $DbBackup) {
+        foreach ($suffix in @("", "-wal", "-shm")) {
+            $src = Join-Path $DbBackup ("rootup.db" + $suffix)
+            if (Test-Path $src) { Copy-Item $src (Join-Path $AppData ("rootup.db" + $suffix)) -Force }
+        }
+        Remove-Item $DbBackup -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
