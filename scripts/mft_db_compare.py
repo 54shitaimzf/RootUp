@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Compare two RootUp index DB snapshots (walkdir scan vs MFT scan) under a root.
 
-Usage: mft_db_compare.py <walk_db> <mft_db> <root> <out_md> <label>
+Usage: mft_db_compare.py <walk_db> <mft_db> <root> <out_md> <label> [strict]
 Writes one markdown row to out_md and exits 0 when the two result sets match
 within the tolerance (0.1% size/time mismatches, no path-set difference).
+Pass "strict" as the 6th argument to require zero size/time mismatches.
 """
 
 import sqlite3
@@ -27,6 +28,7 @@ def load(db_path, root):
 
 def main():
     walk_db, mft_db, root, out_md, label = sys.argv[1:6]
+    strict = len(sys.argv) > 6 and sys.argv[6] == "strict"
     walk = load(walk_db, root)
     mft = load(mft_db, root)
     walk_only = sorted(set(walk) - set(mft))
@@ -42,7 +44,7 @@ def main():
     total = max(len(walk), len(mft), 1)
     ratio = (len(size_mismatch) + len(time_mismatch)) / total
     set_ok = not walk_only and not mft_only
-    ok = set_ok and ratio <= 0.001
+    ok = set_ok and (ratio <= 0.001 if not strict else len(size_mismatch) == 0 and len(time_mismatch) == 0)
     with open(out_md, "a", encoding="utf-8") as f:
         f.write(
             f"| {label} | {len(walk)} | {len(mft)} | {len(walk_only)} | "

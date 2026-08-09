@@ -17,6 +17,7 @@ use crate::core::ignore::IgnoreMatcher;
 use crate::core::path::{normalize_path, under_any};
 use crate::core::scan::{EnumerateStats, FileEntry};
 use crate::infra::ntfs::{drive_root_of, probe_volume, MFT_REFERENCE_MASK};
+use std::alloc::{alloc, dealloc, Layout};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -24,7 +25,8 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, GetLongPathNameW, ReadFile, SetFilePointerEx, FILE_BEGIN,
-    FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_DATA, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, OPEN_EXISTING,
 };
 use windows::Win32::System::Ioctl::FSCTL_GET_NTFS_VOLUME_DATA;
 use windows::Win32::System::IO::DeviceIoControl;
@@ -37,10 +39,10 @@ const ATTR_DATA: u32 = 0x80;
 const FILE_ATTR_REPARSE_POINT: u32 = 0x400;
 const MFT_FIXUP_SECTOR: usize = 512;
 const MFT_READ_TARGET: usize = 32 * 1024 * 1024;
-const MFT_PROGRESS_INTERVAL: u64 = 256 * 1024 * 1024;
 const MFT_RECORD_ROOT: u64 = 5;
 const GENERIC_READ: u32 = 0x8000_0000;
 const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
+const FILE_FLAG_NO_BUFFERING: u32 = 0x2000_0000;
 const FSCTL_ALLOW_EXTENDED_DASD_IO: u32 = 0x0009_0083;
 const LONG_PATH_BUF: usize = 32 * 1024;
 
@@ -783,135 +785,91 @@ pub fn try_full_scan(
     let Some(drive) = drive_root_of(root) else {
         return Err("无法推导卷根".into());
     };
-    // 参考 ntfs-3g win32_io.c：打开卷句柄（GENERIC_READ）并允许扩展 DASD 读取，
-    // 按 FSCTL_GET_NTFS_VOLUME_DATA 给出的 MFT 偏移直接 ReadFile，不打开 $MFT。
-    let volume_path = format!("\\\\.\\{drive}");
-    let wide: Vec<u16> = volume_path
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect();
-    let handle = unsafe {
-        CreateFileW(
-            PCWSTR(wide.as_ptr()),
-            GENERIC_READ,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_SEQUENTIAL_SCAN),
-            None,
-        )
-    }
-    .map_err(|e| format!("打开卷 {volume_path} 失败（需要管理员）: {e}"))?;
-    let _guard = RawHandle(handle);
-
-    let mut dasd_returned = 0u32;
-    unsafe {
-        DeviceIoControl(
-            handle,
-            FSCTL_ALLOW_EXTENDED_DASD_IO,
-            None,
-            0,
-            None,
-            0,
-            Some(&mut dasd_returned),
-            None,
-        )
-    }
-    .map_err(|e| format!("FSCTL_ALLOW_EXTENDED_DASD_IO 失败: {e}"))?;
-
+    // 读取策略（实验，ROOTUP_MFT_READ=parallel|mftfile|nobuffer，默认 sequential DASD）。
+    let read_mode = std::env::var("ROOTUP_MFT_READ").unwrap_or_default();
+    let mode = match read_mode.as_str() {
+        "parallel" => "parallel",
+        "mftfile" => "mftfile",
+        "nobuffer" => "nobuffer",
+        _ => "sequential",
+    };
+    let layout_guard = RawHandle(open_volume_handle(&drive, FILE_FLAG_SEQUENTIAL_SCAN)?);
     let (record_size, mft_offset, mft_valid_len, bytes_per_cluster) =
-        ntfs_volume_mft_layout(handle)?;
+        ntfs_volume_mft_layout(layout_guard.0)?;
     let record_size = record_size as usize;
     let cluster_size = bytes_per_cluster as u64;
     if mft_valid_len == 0 {
         return Err("MFT 有效数据长度为 0".into());
     }
-
-    // $MFT 可能跨多个 data run：先读记录 0 的映射对，再按 run 流式读取。
-    let mut zero_buf = vec![0u8; record_size];
-    let mut read0 = 0u32;
-    unsafe { SetFilePointerEx(handle, mft_offset as i64, None, FILE_BEGIN) }
-        .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
-    let io0 = unsafe { ReadFile(handle, Some(&mut zero_buf[..]), Some(&mut read0), None) };
-    if io0.is_err() || read0 < record_size as u32 {
-        return Err("读取 $MFT 记录 0 失败".into());
-    }
-    let runs = mft_data_runs(&zero_buf, bytes_per_cluster)?;
-    log::info!("scan: MFT data runs={runs:?}");
+    let chunk_size = (MFT_READ_TARGET / record_size).max(1) * record_size;
 
     let mut index = CompactIndex::default();
     let mut parse_ms: u128 = 0;
     let mut parse_fail_samples: Vec<String> = Vec::new();
     let started_read = Instant::now();
-    let chunk_size = (MFT_READ_TARGET / record_size).max(1) * record_size;
-    let mut chunk = vec![0u8; chunk_size];
-    let mut pending: Vec<u8> = Vec::with_capacity(record_size * 2);
-    let mut total_read = 0u64;
-    let mut progress_logged = 0u64;
-    let mut bytes_remaining = mft_valid_len;
-    'outer: for (lcn, run_len) in runs {
-        if bytes_remaining == 0 {
-            break;
+    let threads = std::env::var("ROOTUP_MFT_PARALLEL")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    log::info!("scan: MFT read mode={mode} threads={threads}");
+
+    let total_read = match mode {
+        "mftfile" => {
+            // 直接读 `\\.\C:\$MFT` 文件（BACKUP_SEMANTICS），不再按 data run 定位。
+            let file_guard = RawHandle(open_mft_file_handle(&drive, FILE_FLAG_SEQUENTIAL_SCAN)?);
+            let runs = vec![(0u64, mft_valid_len)];
+            read_runs(
+                file_guard.0,
+                &runs,
+                mft_valid_len,
+                record_size,
+                chunk_size,
+                &mut ParseCtx {
+                    index: &mut index,
+                    parse_ms: &mut parse_ms,
+                    parse_fail_samples: &mut parse_fail_samples,
+                },
+            )?
         }
-        if lcn == 0 {
-            return Err("$MFT 含稀疏运行，无法读取".into());
+        "parallel" => {
+            let runs = read_mft_runs(layout_guard.0, mft_offset, record_size, cluster_size)?;
+            read_parallel(
+                &drive,
+                &runs,
+                mft_valid_len,
+                record_size,
+                chunk_size,
+                threads,
+                &mut ParseCtx {
+                    index: &mut index,
+                    parse_ms: &mut parse_ms,
+                    parse_fail_samples: &mut parse_fail_samples,
+                },
+            )?
         }
-        let run_bytes = run_len.saturating_mul(cluster_size);
-        let run_to_read = run_bytes.min(bytes_remaining);
-        let run_start = lcn.saturating_mul(cluster_size);
-        let mut run_done = 0u64;
-        while run_done < run_to_read {
-            let want = ((run_to_read - run_done) as usize).min(chunk_size);
-            let pos = run_start + run_done;
-            let mut read = 0u32;
-            unsafe { SetFilePointerEx(handle, pos as i64, None, FILE_BEGIN) }
-                .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
-            let io = unsafe { ReadFile(handle, Some(&mut chunk[..want]), Some(&mut read), None) };
-            if io.is_err() {
-                return Err("读取 $MFT 失败".into());
-            }
-            if read == 0 {
-                break 'outer;
-            }
-            pending.extend_from_slice(&chunk[..read as usize]);
-            let mut start = 0usize;
-            while pending.len() - start >= record_size {
-                let record_buf = &mut pending[start..start + record_size];
-                if record_buf[0..4] == FILE_RECORD_SIGNATURE {
-                    let parse_started = Instant::now();
-                    match parse_file_record(record_buf) {
-                        Ok(record) => push_record(&mut index, record),
-                        Err(e) => {
-                            if parse_fail_samples.len() < 20 {
-                                let rn = if record_buf.len() >= 0x30 {
-                                    read_u32(record_buf, 0x2C)
-                                } else {
-                                    0
-                                };
-                                parse_fail_samples.push(format!("record={rn} err={e}"));
-                            }
-                        }
-                    }
-                    parse_ms += parse_started.elapsed().as_millis();
-                }
-                start += record_size;
-            }
-            if start > 0 {
-                pending.drain(..start);
-            }
-            run_done += read as u64;
-            total_read += read as u64;
-            bytes_remaining = bytes_remaining.saturating_sub(read as u64);
-            if total_read.saturating_sub(progress_logged) >= MFT_PROGRESS_INTERVAL {
-                progress_logged = total_read;
-                log::info!(
-                    "scan: MFT 读取进度 {} MiB / {} MiB",
-                    total_read / (1024 * 1024),
-                    mft_valid_len / (1024 * 1024)
-                );
-            }
+        _ => {
+            let flags = if mode == "nobuffer" {
+                FILE_FLAG_NO_BUFFERING
+            } else {
+                FILE_FLAG_SEQUENTIAL_SCAN
+            };
+            let handle = RawHandle(open_volume_handle(&drive, flags)?);
+            let runs = read_mft_runs(handle.0, mft_offset, record_size, cluster_size)?;
+            read_runs(
+                handle.0,
+                &runs,
+                mft_valid_len,
+                record_size,
+                chunk_size,
+                &mut ParseCtx {
+                    index: &mut index,
+                    parse_ms: &mut parse_ms,
+                    parse_fail_samples: &mut parse_fail_samples,
+                },
+            )?
         }
-    }
+    };
     let read_ms = started_read.elapsed().as_millis();
     log::info!(
         "scan: MFT 读取完成 parsed={} read_mb={}",
@@ -959,6 +917,329 @@ impl Drop for RawHandle {
             let _ = CloseHandle(self.0);
         }
     }
+}
+
+/// 4096 对齐读缓冲（`FILE_FLAG_NO_BUFFERING` 要求扇区对齐）。
+struct AlignedReadBuf {
+    ptr: *mut u8,
+    len: usize,
+}
+
+impl AlignedReadBuf {
+    fn new(len: usize) -> Result<Self, String> {
+        if len == 0 {
+            return Err("读缓冲长度为 0".into());
+        }
+        let layout = Layout::from_size_align(len, 4096).map_err(|e| e.to_string())?;
+        let ptr = unsafe { alloc(layout) };
+        if ptr.is_null() {
+            return Err("分配对齐读缓冲失败".into());
+        }
+        Ok(Self { ptr, len })
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
+    }
+}
+
+impl Drop for AlignedReadBuf {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = Layout::from_size_align(self.len, 4096).unwrap();
+            dealloc(self.ptr, layout);
+        }
+    }
+}
+
+/// 打开卷句柄（GENERIC_READ + 扩展 DASD 读取）。
+fn open_volume_handle(drive: &str, flags: u32) -> Result<HANDLE, String> {
+    let volume_path = format!("\\\\.\\{drive}");
+    let wide: Vec<u16> = volume_path
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES(flags),
+            None,
+        )
+    }
+    .map_err(|e| format!("打开卷 {volume_path} 失败（需要管理员）: {e}"))?;
+    let mut dasd_returned = 0u32;
+    unsafe {
+        DeviceIoControl(
+            handle,
+            FSCTL_ALLOW_EXTENDED_DASD_IO,
+            None,
+            0,
+            None,
+            0,
+            Some(&mut dasd_returned),
+            None,
+        )
+    }
+    .map_err(|e| format!("FSCTL_ALLOW_EXTENDED_DASD_IO 失败: {e}"))?;
+    Ok(handle)
+}
+
+/// 直接打开 `\\.\C:\$MFT` 文件（实验 C）；需要管理员/备份语义，失败由扫描器回退。
+fn open_mft_file_handle(drive: &str, flags: u32) -> Result<HANDLE, String> {
+    let path = format!("\\\\.\\{drive}\\$MFT");
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            FILE_READ_DATA.0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_BACKUP_SEMANTICS.0 | flags),
+            None,
+        )
+    }
+    .map_err(|e| format!("打开 $MFT 文件 {path} 失败（需要管理员/备份权限）: {e}"))
+}
+
+/// 读记录 0 的映射对，返回（绝对 LCN 字节偏移, 字节数）列表。
+fn read_mft_runs(
+    handle: HANDLE,
+    mft_offset: u64,
+    record_size: usize,
+    cluster_size: u64,
+) -> Result<Vec<(u64, u64)>, String> {
+    let mut zero = AlignedReadBuf::new(record_size)?;
+    let mut read0 = 0u32;
+    unsafe { SetFilePointerEx(handle, mft_offset as i64, None, FILE_BEGIN) }
+        .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
+    let io = unsafe {
+        ReadFile(
+            handle,
+            Some(&mut zero.as_mut_slice()[..record_size]),
+            Some(&mut read0),
+            None,
+        )
+    };
+    if io.is_err() || read0 < record_size as u32 {
+        return Err("读取 $MFT 记录 0 失败".into());
+    }
+    let runs = mft_data_runs(zero.as_mut_slice(), cluster_size as u32)?;
+    let mut out = Vec::with_capacity(runs.len());
+    for (lcn, run_len) in runs {
+        if lcn == 0 {
+            return Err("$MFT 含稀疏运行，无法读取".into());
+        }
+        out.push((lcn * cluster_size, run_len * cluster_size));
+    }
+    Ok(out)
+}
+
+/// 解析上下文（跨读取函数共享，避免长参数列表）。
+struct ParseCtx<'a> {
+    index: &'a mut CompactIndex,
+    parse_ms: &'a mut u128,
+    parse_fail_samples: &'a mut Vec<String>,
+}
+
+/// 从绝对偏移顺序读一段字节并解析为紧凑索引（块内解析，pending 保持跨块记录）。
+fn read_and_parse_range(
+    handle: HANDLE,
+    abs_start: u64,
+    len: u64,
+    record_size: usize,
+    chunk: &mut AlignedReadBuf,
+    pending: &mut Vec<u8>,
+    ctx: &mut ParseCtx<'_>,
+) -> Result<u64, String> {
+    let mut done = 0u64;
+    while done < len {
+        let want = ((len - done) as usize).min(chunk.len);
+        let pos = abs_start + done;
+        let mut read = 0u32;
+        unsafe { SetFilePointerEx(handle, pos as i64, None, FILE_BEGIN) }
+            .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
+        let io = unsafe {
+            ReadFile(
+                handle,
+                Some(&mut chunk.as_mut_slice()[..want]),
+                Some(&mut read),
+                None,
+            )
+        };
+        if io.is_err() {
+            return Err("读取 $MFT 失败".into());
+        }
+        if read == 0 {
+            break;
+        }
+        pending.extend_from_slice(&chunk.as_mut_slice()[..read as usize]);
+        let mut start = 0usize;
+        while pending.len() - start >= record_size {
+            let record_buf = &mut pending[start..start + record_size];
+            if record_buf[0..4] == FILE_RECORD_SIGNATURE {
+                let parse_started = Instant::now();
+                match parse_file_record(record_buf) {
+                    Ok(record) => push_record(ctx.index, record),
+                    Err(e) => {
+                        if ctx.parse_fail_samples.len() < 20 {
+                            let rn = if record_buf.len() >= 0x30 {
+                                read_u32(record_buf, 0x2C)
+                            } else {
+                                0
+                            };
+                            ctx.parse_fail_samples.push(format!("record={rn} err={e}"));
+                        }
+                    }
+                }
+                *ctx.parse_ms += parse_started.elapsed().as_millis();
+            }
+            start += record_size;
+        }
+        if start > 0 {
+            pending.drain(..start);
+        }
+        done += read as u64;
+    }
+    Ok(done)
+}
+
+/// 顺序读取一组 run（绝对偏移 + 字节数），总字节数受 limit 限制。
+fn read_runs(
+    handle: HANDLE,
+    runs: &[(u64, u64)],
+    limit: u64,
+    record_size: usize,
+    chunk_size: usize,
+    ctx: &mut ParseCtx<'_>,
+) -> Result<u64, String> {
+    let mut chunk = AlignedReadBuf::new(chunk_size)?;
+    let mut pending: Vec<u8> = Vec::with_capacity(record_size * 2);
+    let mut total = 0u64;
+    let mut remaining = limit;
+    for &(abs, bytes) in runs {
+        if remaining == 0 {
+            break;
+        }
+        let to_read = bytes.min(remaining);
+        total += read_and_parse_range(
+            handle,
+            abs,
+            to_read,
+            record_size,
+            &mut chunk,
+            &mut pending,
+            ctx,
+        )?;
+        remaining = remaining.saturating_sub(to_read);
+    }
+    Ok(total)
+}
+
+/// 按记录边界把 [0, total) 切成 n 段（记录不会跨线程）。
+fn partition_ranges(total: u64, record_size: usize, threads: usize) -> Vec<(u64, u64)> {
+    let threads = threads.max(1);
+    if total == 0 {
+        return vec![(0, 0)];
+    }
+    let rec = record_size as u64;
+    let step = ((total / threads as u64) / rec).max(1) * rec;
+    let mut out = Vec::new();
+    let mut start = 0u64;
+    while start < total {
+        let end = (start + step).min(total);
+        out.push((start, end));
+        start = end;
+    }
+    out
+}
+
+/// 实验 A：按字节范围并行读+解析（每线程独立卷句柄与紧凑索引，最后合并）。
+fn read_parallel(
+    drive: &str,
+    runs: &[(u64, u64)],
+    valid_len: u64,
+    record_size: usize,
+    chunk_size: usize,
+    threads: usize,
+    ctx: &mut ParseCtx<'_>,
+) -> Result<u64, String> {
+    let mut cumulative: Vec<(u64, u64, u64)> = Vec::with_capacity(runs.len());
+    let mut log = 0u64;
+    for &(abs, bytes) in runs {
+        cumulative.push((log, abs, bytes));
+        log += bytes;
+    }
+    let ranges = partition_ranges(valid_len, record_size, threads);
+    let mut total = 0u64;
+    std::thread::scope(|s| -> Result<(), String> {
+        let mut handles = Vec::new();
+        for (ls, le) in ranges {
+            let drive_owned = drive.to_string();
+            let runs_owned = cumulative.clone();
+            handles.push(s.spawn(
+                move || -> Result<(CompactIndex, u128, Vec<String>, u64), String> {
+                    let handle =
+                        RawHandle(open_volume_handle(&drive_owned, FILE_FLAG_SEQUENTIAL_SCAN)?);
+                    let mut local = CompactIndex::default();
+                    let mut lparse = 0u128;
+                    let mut lsamples = Vec::new();
+                    let mut chunk = AlignedReadBuf::new(chunk_size)?;
+                    let mut pending: Vec<u8> = Vec::with_capacity(record_size * 2);
+                    let mut read = 0u64;
+                    for (log_start, abs, bytes) in runs_owned {
+                        let log_end = log_start + bytes;
+                        if log_end <= ls {
+                            continue;
+                        }
+                        if log_start >= le {
+                            break;
+                        }
+                        let from = ls.max(log_start);
+                        let to = le.min(log_end);
+                        read += read_and_parse_range(
+                            handle.0,
+                            abs + (from - log_start),
+                            to - from,
+                            record_size,
+                            &mut chunk,
+                            &mut pending,
+                            &mut ParseCtx {
+                                index: &mut local,
+                                parse_ms: &mut lparse,
+                                parse_fail_samples: &mut lsamples,
+                            },
+                        )?;
+                    }
+                    Ok((local, lparse, lsamples, read))
+                },
+            ));
+        }
+        for h in handles {
+            let (local, lparse, lsamples, read) =
+                h.join().map_err(|_| "MFT 并行读取线程异常".to_string())??;
+            ctx.index.dirs.extend(local.dirs);
+            ctx.index.files.extend(local.files);
+            ctx.index.parsed += local.parsed;
+            ctx.index.dir_records += local.dir_records;
+            ctx.index.extents += local.extents;
+            ctx.index.with_names += local.with_names;
+            ctx.index.skipped_reparse_dirs += local.skipped_reparse_dirs;
+            *ctx.parse_ms += lparse;
+            for sample in lsamples {
+                if ctx.parse_fail_samples.len() < 20 {
+                    ctx.parse_fail_samples.push(sample);
+                }
+            }
+            total += read;
+        }
+        Ok(())
+    })?;
+    Ok(total)
 }
 
 #[cfg(test)]
@@ -1279,6 +1560,25 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].size, 1234, "attribute-list 缺失大小应补查元数据");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn partition_ranges_splits_by_records() {
+        let rec = 1024usize;
+        let total = 10_000 * rec as u64;
+        let ranges = partition_ranges(total, rec, 4);
+        assert_eq!(ranges.len(), 4);
+        assert_eq!(ranges[0].0, 0);
+        assert_eq!(ranges.last().unwrap().1, total);
+        for (s, e) in &ranges {
+            assert_eq!(s % rec as u64, 0, "起点应按记录对齐");
+            assert_eq!(e % rec as u64, 0, "终点应按记录对齐");
+            assert!(e > s, "范围应非空");
+        }
+        // 段数超过可切分单位时退化为单段。
+        let degenerate = partition_ranges(1000, rec, 4);
+        assert_eq!(degenerate.len(), 1);
+        assert_eq!(degenerate[0], (0, 1000));
     }
 
     #[test]

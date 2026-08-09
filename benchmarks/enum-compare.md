@@ -1,12 +1,13 @@
 # Enumerator full-pipeline consistency
 
-- Time: 2026-08-09 23:27:03
+- Time: 2026-08-09 23:39:49
 - Host: Microsoft Windows NT 10.0.26200.0
-- Modes: walkdir + native + mft
+- Modes: walkdir + native
+- MftRead: <sequential>
 - Rounds: 1
 
 | label | A files | B files | A-only | B-only | size diff | time diff | ratio | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| real-walkdir-vs-native | 71923 | 71923 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
-| real-walkdir-vs-mft | 71923 | 71923 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
-| real-native-vs-mft | 71923 | 71923 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
+- elapsed_ms: edge walkdir = 9
+- elapsed_ms: edge native = 4
+| edge-walkdir-vs-native | 8 | 8 | 0 | 0 | 0 | 0 | 0.0000% | PASS |

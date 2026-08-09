@@ -4,13 +4,15 @@ param(
     [int]$Rounds = 1,
     [string]$OutFile = "benchmarks\enum-compare.md",
     [switch]$Mft,
-    [switch]$Edge
+    [switch]$Edge,
+    [string]$MftRead = ""
 )
 
 <#
   0.8.6 枚举器全链路一致性对比。
   walkdir 模式：ROOTUP_ENUM=walkdir；原生模式：默认（ROOTUP_ENUM 未设置）；
   -Mft 时增加 MFT 臂（ROOTUP_MFT_SCAN=1，需管理员；未真正启用 MFT 会判 FAIL）。
+  -MftRead sequential|parallel|mftfile|nobuffer 选择 MFT 读取变体（实验 A/C/D）。
   -Edge 时使用边界语料（Unicode / 隐藏 / 点文件 / 空目录 / junction / 超长路径 / 深链）。
   每臂各跑一次完整应用扫描并快照 DB，两两用 mft_db_compare.py 比较路径/大小/时间集合。
   Usage:
@@ -110,8 +112,12 @@ function Invoke-OneScan([string]$dir, [string]$mode) {
     Remove-Item $LogFile -Force -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
+    Remove-Item Env:ROOTUP_MFT_READ -ErrorAction SilentlyContinue
     if ($mode -eq "walkdir") { $env:ROOTUP_ENUM = "walkdir" }
-    elseif ($mode -eq "mft") { $env:ROOTUP_MFT_SCAN = "1" }
+    elseif ($mode -eq "mft") {
+        $env:ROOTUP_MFT_SCAN = "1"
+        if ($MftRead -ne "") { $env:ROOTUP_MFT_READ = $MftRead }
+    }
     Start-Process -FilePath $Exe | Out-Null
     $deadline = (Get-Date).AddSeconds(300)
     $line = ""
@@ -132,12 +138,18 @@ function Invoke-OneScan([string]$dir, [string]$mode) {
     }
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (-not $line) { return $null }
+    $readMs = $null
+    if ($mode -eq "mft" -and (Test-Path $LogFile)) {
+        $rm = Select-String -Path $LogFile -Pattern 'read_ms=(\d+)' | Select-Object -Last 1
+        if ($rm -and $rm.Matches.Count -gt 0) { $readMs = [double]$rm.Matches[0].Groups[1].Value }
+    }
     return [pscustomobject]@{
         discovered = [int]($line -replace '.*discovered=(\d+).*', '$1')
         errors = [int]($line -replace '.*errors=(\d+).*', '$1')
         elapsed = [double]($line -replace '.*elapsed_ms=(\d+).*', '$1')
         dbMs = [double]($line -replace '.*db_ms=(\d+).*', '$1')
         mftUsed = $mftUsed
+        readMs = $readMs
     }
 }
 
@@ -173,6 +185,7 @@ try {
     $reportLines.Add("- Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
     $reportLines.Add("- Host: $([Environment]::OSVersion.VersionString)")
     $reportLines.Add("- Modes: $($modeList -join ' + ')")
+    $reportLines.Add("- MftRead: <$MftRead>")
     $reportLines.Add("- Rounds: $Rounds")
     $reportLines.Add("")
     $reportLines.Add("| label | A files | B files | A-only | B-only | size diff | time diff | ratio | verdict |")
@@ -213,6 +226,10 @@ try {
                 }
                 Copy-DbSnapshot (Join-Path $SnapDir ("$mode" + "_" + $label + "_" + $r))
                 $results[$mode] = $res
+                Add-Content $Report ("- elapsed_ms: $label $mode = " + $res.elapsed)
+                if ($mode -eq "mft" -and $null -ne $res.readMs) {
+                    Add-Content $Report ("- read_ms: $label $mode = " + $res.readMs)
+                }
             }
             $pairs = @(, @("walkdir", "native"))
             if ($Mft) {
@@ -223,10 +240,13 @@ try {
                 $a = $pair[0]; $b = $pair[1]
                 if (-not $results.ContainsKey($a) -or -not $results.ContainsKey($b)) { continue }
                 $pairLabel = "$label-$a-vs-$b"
-                & python $Compare (Join-Path $SnapDir ("$a" + "_" + $label + "_" + $r + "\rootup.db")) (Join-Path $SnapDir ("$b" + "_" + $label + "_" + $r + "\rootup.db")) $dir $Report $pairLabel
+                & python $Compare (Join-Path $SnapDir ("$a" + "_" + $label + "_" + $r + "\rootup.db")) (Join-Path $SnapDir ("$b" + "_" + $label + "_" + $r + "\rootup.db")) $dir $Report $pairLabel "strict"
                 if ($LASTEXITCODE -ne 0) { $allOk = $false }
-                Write-Host ("[enum-compare] {0} {1}={2}ms db={3}ms {4}={5}ms db={6}ms discovered {7}/{8} errors {9}/{10}" -f `
-                    $pairLabel, $a, $results[$a].elapsed, $results[$a].dbMs, $b, $results[$b].elapsed, $results[$b].dbMs, $results[$a].discovered, $results[$b].discovered, $results[$a].errors, $results[$b].errors)
+                $readPart = ""
+                if ($a -eq "mft" -and $null -ne $results[$a].readMs) { $readPart += " readA_ms=" + $results[$a].readMs }
+                if ($b -eq "mft" -and $null -ne $results[$b].readMs) { $readPart += " readB_ms=" + $results[$b].readMs }
+                Write-Host ("[enum-compare] {0} {1}={2}ms db={3}ms {4}={5}ms db={6}ms discovered {7}/{8} errors {9}/{10}{11}" -f `
+                    $pairLabel, $a, $results[$a].elapsed, $results[$a].dbMs, $b, $results[$b].elapsed, $results[$b].dbMs, $results[$a].discovered, $results[$b].discovered, $results[$a].errors, $results[$b].errors, $readPart)
             }
         }
         if (-not $Root) { Remove-Item $rawDir -Recurse -Force -ErrorAction SilentlyContinue }
@@ -237,6 +257,7 @@ try {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
+    Remove-Item Env:ROOTUP_MFT_READ -ErrorAction SilentlyContinue
     if (Test-Path $Backup) { Move-Item $Backup $SettingsPath -Force } else { Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue }
     if (Test-Path $DbBackup) {
         foreach ($suffix in @("", "-wal", "-shm")) {
