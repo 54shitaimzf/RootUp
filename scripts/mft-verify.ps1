@@ -47,13 +47,30 @@ if (-not (Test-Path $Exe)) {
     Write-Error "Build release first: npm run tauri build -- --no-bundle"
 }
 
+$script:CorpusGenLoaded = $false
 function New-Corpus([string]$dir, [int]$count) {
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    for ($i = 0; $i -lt $count; $i++) {
-        $sub = Join-Path $dir ("d" + ($i % 100).ToString("000"))
-        New-Item -ItemType Directory -Force -Path $sub | Out-Null
-        Set-Content -Path (Join-Path $sub ("f" + $i.ToString("000000") + ".txt")) -Value "x" -Encoding UTF8
+    if (-not $script:CorpusGenLoaded) {
+        Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Threading.Tasks;
+public static class RootUpCorpusGen {
+    public static void Create(string dir, int count, int parallelism) {
+        for (int d = 0; d < 100; d++) Directory.CreateDirectory(Path.Combine(dir, "d" + d.ToString("000")));
+        var opts = new ParallelOptions { MaxDegreeOfParallelism = parallelism };
+        Parallel.For(0, count, opts, i => {
+            string sub = Path.Combine(dir, "d" + (i % 100).ToString("000"));
+            File.WriteAllText(Path.Combine(sub, "f" + i.ToString("000000") + ".txt"), "x");
+        });
     }
+}
+"@ -ErrorAction Stop
+        $script:CorpusGenLoaded = $true
+    }
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    [System.IO.Directory]::CreateDirectory($dir) | Out-Null
+    [RootUpCorpusGen]::Create($dir, $count, [Math]::Min(8, [Environment]::ProcessorCount))
+    Write-Host ("[mft-verify] corpus {0} files ready in {1:N1}s" -f $count, $sw.Elapsed.TotalSeconds)
 }
 
 function Get-LongPath([string]$path) {
@@ -79,7 +96,7 @@ function Get-LongPath([string]$path) {
 
 function Invoke-OneScan([string]$dir, [bool]$mft) {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 300
     $settings = @{
         settings = @{
             theme = "system"
@@ -100,9 +117,9 @@ function Invoke-OneScan([string]$dir, [bool]$mft) {
     $leaf = Split-Path -Leaf $dir
     $pattern = "scan: .*" + [regex]::Escape($leaf) + ".*discovered="
     while ((Get-Date) -lt $deadline -and -not $line) {
-        Start-Sleep -Milliseconds 300
+        Start-Sleep -Milliseconds 200
         if (Test-Path $LogFile) {
-            $m = Get-Content $LogFile | Select-String -Pattern $pattern | Select-Object -Last 1
+            $m = Get-Content $LogFile -Tail 200 -ErrorAction SilentlyContinue | Select-String -Pattern $pattern | Select-Object -Last 1
             if ($m) { $line = $m.Line }
         }
     }
@@ -159,7 +176,7 @@ try {
         $rawDir = if ($Root) { $Root } else { Join-Path $env:TEMP ("rootup_mft_corpus_" + $size) }
         # 每档使用干净数据库，避免上一档语料拖慢启动与扫描
         Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 300
         foreach ($suffix in @("", "-wal", "-shm")) {
             Remove-Item (Join-Path $AppData ("rootup.db" + $suffix)) -Force -ErrorAction SilentlyContinue
         }

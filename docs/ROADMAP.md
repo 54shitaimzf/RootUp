@@ -62,10 +62,10 @@
 - 监控目录缺失对账：目录被删 / 盘符卸载 → 相关索引记录标记 deleted 或挂起并提示（修复幽灵文件与“目录不可访问后残留”），与 0.8.8 统一错误码体系预留对接。
 - 扫描优化实验（0.8.6 内验证，默认不引入，决策门：等价全绿 + 收益显著才采纳）：
   - 并行 MFT 读/解析：按 data run 分 2–4 线程读+解析再合并紧凑索引（FILE 记录相互独立，仅用 `std::thread`，默认顺序执行；参考 WizTree 多线程直读）。
-  - 原生 Win32 枚举器：`FindFirstFileW/FindNextFileW` 直取 `WIN32_FIND_DATA`（大小 / 时间 / 属性），省掉 walkdir 每文件一次 `std::fs::metadata` 系统调用；作为新 `FileEnumerator` 与 walkdir 等价测试（参考 WinDirStat / Everything）。
+  - 原生 Win32 枚举器：`FindFirstFileW/FindNextFileW` 直取 `WIN32_FIND_DATA`（大小 / 时间 / 属性），省掉 walkdir 每文件一次 `std::fs::metadata` 系统调用；作为新 `FileEnumerator` 与 walkdir 等价测试（参考 WinDirStat / Everything）。已验证：等价全绿，真实 Desktop 137,971 文件约 5.9x，保留实验实现待 0.8.7 转正，见 `benchmarks/enumerator-db-eval.md`。
   - MFT 读取路径实验：直接读 `\\.\C:\$MFT`（`FILE_FLAG_BACKUP_SEMANTICS`）对比裸卷 DASD；`FILE_FLAG_NO_BUFFERING` + 对齐读（避免 2.6GB 系统缓存污染，吞吐未必提升）。
   - jwalk 并行遍历复评（0.8.4 决策门到期）：deep/wide 语料 + feature 开关；行为等价且收益 ≥30% 才引入，否则维持 walkdir。
-  - DB 写入微优化（两条路径共用）：`upsert_many` 子批 1000→2000/3000；`mark_scan_seen` 改多行 VALUES；用引擎基准验证收益。
+  - DB 写入微优化（两条路径共用）：`upsert_many` 子批 1000→2000/3000；`mark_scan_seen` 改多行 VALUES；用引擎基准验证收益。已验证：仅插入约 -10%，更新 / seen 无变化，未达 ≥30% 门槛，已回退，见 `benchmarks/enumerator-db-eval.md`。
 - 验收：MFT/USN 与 walkdir 等价；降级矩阵全绿；写入代价回落或有明确去向；对账用例全绿。
 
 **阶段二「规模与体积」**

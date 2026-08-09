@@ -28,6 +28,10 @@ name = "engine_bench"
 harness = false
 required-features = ["bench"]
 
+[[example]]
+name = "scan_probe"
+required-features = ["bench"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

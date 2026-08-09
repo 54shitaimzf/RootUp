@@ -54,7 +54,7 @@ function Get-LongPath([string]$path) {
 
 function Invoke-OneScan([string]$dir, [bool]$mft) {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 300
     $settings = @{
         settings = @{
             theme = "system"
@@ -73,9 +73,9 @@ function Invoke-OneScan([string]$dir, [bool]$mft) {
     $leaf = Split-Path -Leaf $dir
     $pattern = "scan: .*" + [regex]::Escape($leaf) + ".*discovered="
     while ((Get-Date) -lt $deadline -and -not $line) {
-        Start-Sleep -Milliseconds 300
+        Start-Sleep -Milliseconds 200
         if (Test-Path $LogFile) {
-            $m = Get-Content $LogFile | Select-String -Pattern $pattern | Select-Object -Last 1
+            $m = Get-Content $LogFile -Tail 200 -ErrorAction SilentlyContinue | Select-String -Pattern $pattern | Select-Object -Last 1
             if ($m) { $line = $m.Line }
         }
     }
