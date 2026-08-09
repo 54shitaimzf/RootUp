@@ -378,4 +378,28 @@ describe("FilePage 行操作", () => {
       screen.getByRole("button", { name: "搜索语法" }),
     ).toBeInTheDocument();
   });
+
+  it("超过阈值时使用虚拟列表只渲染可见子集", async () => {
+    const items = Array.from({ length: 300 }, (_, i) => ({
+      id: i + 1,
+      path: `C:/docs/file-${i}.txt`,
+      name: `file-${i}.txt`,
+      size: 100,
+      file_type: "txt",
+      labels: "",
+      first_seen: 1,
+      modified: 2,
+      state: "indexed" as const,
+    }));
+    vi.mocked(queryFiles).mockResolvedValue({
+      items,
+      total: 300,
+      nextCursor: "[\"file-299.txt\",300]",
+    });
+    renderPage();
+    expect(await screen.findByText("file-0.txt")).toBeInTheDocument();
+    // 虚拟列表：只渲染可见子集，远端的行不渲染
+    expect(screen.queryByText("file-299.txt")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("listitem").length).toBeLessThan(300);
+  });
 });

@@ -19,6 +19,7 @@ import { EmptyState } from "../components/EmptyState";
 import { IconButton } from "../components/IconButton";
 import { PageHeader } from "../components/PageHeader";
 import { PageHelpButton } from "../components/PageHelpButton";
+import { VirtualRows } from "../components/VirtualRows";
 import { useSettings } from "../hooks/useSettings";
 import type { PageKey } from "../lib/nav";
 import { useFiles } from "../hooks/useFiles";
@@ -112,6 +113,11 @@ const KEYWORD_DISPLAY_KEY: Record<string, string> = {
   "before:": "files.acKeywordBefore",
   "after:": "files.acKeywordAfter",
 };
+
+/** 虚拟列表固定行高（与现有行 py-3 单行形态一致） */
+const FILE_ROW_HEIGHT = 56;
+/** 超过该数量启用虚拟滚动，小列表保持原渲染（布局不变） */
+const VIRTUAL_ROW_THRESHOLD = 200;
 
 export function FilePage({
   onNavigate,
@@ -715,8 +721,8 @@ export function FilePage({
                 },
               )}
             </div>
-            <ul className="@container divide-y divide-slate-100 dark:divide-slate-800">
-              {items.map((file) => {
+            {(() => {
+              const rowContent = (file: (typeof items)[number]) => {
                 const meta = fileStateMeta(file.state);
                 const fileLabels = parseLabels(file.labels);
                 const dedupedLabels = (() => {
@@ -883,8 +889,19 @@ export function FilePage({
                     </span>
                   </li>
                 );
-              })}
-            </ul>
+              };
+              return items.length > VIRTUAL_ROW_THRESHOLD ? (
+                <VirtualRows
+                  total={items.length}
+                  rowHeight={FILE_ROW_HEIGHT}
+                  renderRow={(index) => rowContent(items[index])}
+                />
+              ) : (
+                <ul className="@container divide-y divide-slate-100 dark:divide-slate-800">
+                  {items.map(rowContent)}
+                </ul>
+              );
+            })()}
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
               <div className="flex items-center gap-3">
                 <span>
