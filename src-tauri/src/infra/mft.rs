@@ -25,8 +25,7 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, GetLongPathNameW, ReadFile, SetFilePointerEx, FILE_BEGIN,
-    FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_DATA, FILE_SHARE_READ,
-    FILE_SHARE_WRITE, OPEN_EXISTING,
+    FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
 };
 use windows::Win32::System::Ioctl::FSCTL_GET_NTFS_VOLUME_DATA;
 use windows::Win32::System::IO::DeviceIoControl;
@@ -42,7 +41,6 @@ const MFT_READ_TARGET: usize = 32 * 1024 * 1024;
 const MFT_RECORD_ROOT: u64 = 5;
 const GENERIC_READ: u32 = 0x8000_0000;
 const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
-const FILE_FLAG_NO_BUFFERING: u32 = 0x2000_0000;
 const FSCTL_ALLOW_EXTENDED_DASD_IO: u32 = 0x0009_0083;
 const LONG_PATH_BUF: usize = 32 * 1024;
 
@@ -785,13 +783,12 @@ pub fn try_full_scan(
     let Some(drive) = drive_root_of(root) else {
         return Err("无法推导卷根".into());
     };
-    // 读取策略（实验，ROOTUP_MFT_READ=parallel|mftfile|nobuffer，默认 sequential DASD）。
+    // 读取策略：0.8.6 实验结论 parallel 为默认（read_ms 约 -27%）；ROOTUP_MFT_READ=sequential 诊断回退。
     let read_mode = std::env::var("ROOTUP_MFT_READ").unwrap_or_default();
-    let mode = match read_mode.as_str() {
-        "parallel" => "parallel",
-        "mftfile" => "mftfile",
-        "nobuffer" => "nobuffer",
-        _ => "sequential",
+    let mode = if read_mode == "sequential" {
+        "sequential"
+    } else {
+        "parallel"
     };
     let layout_guard = RawHandle(open_volume_handle(&drive, FILE_FLAG_SEQUENTIAL_SCAN)?);
     let (record_size, mft_offset, mft_valid_len, bytes_per_cluster) =
@@ -815,32 +812,15 @@ pub fn try_full_scan(
     log::info!("scan: MFT read mode={mode} threads={threads}");
 
     let total_read = match mode {
-        "mftfile" => {
-            // 直接读 `\\.\C:\$MFT` 文件（BACKUP_SEMANTICS），不再按 data run 定位。
-            let file_guard = RawHandle(open_mft_file_handle(&drive, FILE_FLAG_SEQUENTIAL_SCAN)?);
-            let runs = vec![(0u64, mft_valid_len)];
+        "sequential" => {
+            let handle = RawHandle(open_volume_handle(&drive, FILE_FLAG_SEQUENTIAL_SCAN)?);
+            let runs = read_mft_runs(handle.0, mft_offset, record_size, cluster_size)?;
             read_runs(
-                file_guard.0,
+                handle.0,
                 &runs,
                 mft_valid_len,
                 record_size,
                 chunk_size,
-                &mut ParseCtx {
-                    index: &mut index,
-                    parse_ms: &mut parse_ms,
-                    parse_fail_samples: &mut parse_fail_samples,
-                },
-            )?
-        }
-        "parallel" => {
-            let runs = read_mft_runs(layout_guard.0, mft_offset, record_size, cluster_size)?;
-            read_parallel(
-                &drive,
-                &runs,
-                mft_valid_len,
-                record_size,
-                chunk_size,
-                threads,
                 &mut ParseCtx {
                     index: &mut index,
                     parse_ms: &mut parse_ms,
@@ -849,19 +829,14 @@ pub fn try_full_scan(
             )?
         }
         _ => {
-            let flags = if mode == "nobuffer" {
-                FILE_FLAG_NO_BUFFERING
-            } else {
-                FILE_FLAG_SEQUENTIAL_SCAN
-            };
-            let handle = RawHandle(open_volume_handle(&drive, flags)?);
-            let runs = read_mft_runs(handle.0, mft_offset, record_size, cluster_size)?;
-            read_runs(
-                handle.0,
+            let runs = read_mft_runs(layout_guard.0, mft_offset, record_size, cluster_size)?;
+            read_parallel(
+                &drive,
                 &runs,
                 mft_valid_len,
                 record_size,
                 chunk_size,
+                threads,
                 &mut ParseCtx {
                     index: &mut index,
                     parse_ms: &mut parse_ms,
@@ -986,24 +961,6 @@ fn open_volume_handle(drive: &str, flags: u32) -> Result<HANDLE, String> {
     }
     .map_err(|e| format!("FSCTL_ALLOW_EXTENDED_DASD_IO 失败: {e}"))?;
     Ok(handle)
-}
-
-/// 直接打开 `\\.\C:\$MFT` 文件（实验 C）；需要管理员/备份语义，失败由扫描器回退。
-fn open_mft_file_handle(drive: &str, flags: u32) -> Result<HANDLE, String> {
-    let path = format!("\\\\.\\{drive}\\$MFT");
-    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-    unsafe {
-        CreateFileW(
-            PCWSTR(wide.as_ptr()),
-            FILE_READ_DATA.0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_BACKUP_SEMANTICS.0 | flags),
-            None,
-        )
-    }
-    .map_err(|e| format!("打开 $MFT 文件 {path} 失败（需要管理员/备份权限）: {e}"))
 }
 
 /// 读记录 0 的映射对，返回（绝对 LCN 字节偏移, 字节数）列表。

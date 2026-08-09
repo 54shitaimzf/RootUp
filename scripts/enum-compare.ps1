@@ -163,6 +163,9 @@ function Copy-DbSnapshot([string]$destDir) {
 
 $modeList = @("walkdir", "native")
 if ($Mft) { $modeList += "mft" }
+if ($MftRead -ne "" -and $MftRead -notin @("sequential", "parallel")) {
+    Write-Error "MftRead 仅支持 sequential|parallel（mftfile/nobuffer 已按实验结论移除）"
+}
 $sizeList = if ($Root) { @(-1) } elseif ($Edge) { @(-2) } else { @($Sizes -split '[, ]+' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ }) }
 Write-Host "[enum-compare] modes=$($modeList -join ',') sizes=<$($sizeList -join ',')> rounds=$Rounds root=<$Root> edge=$Edge"
 
@@ -227,6 +230,9 @@ try {
                 Copy-DbSnapshot (Join-Path $SnapDir ("$mode" + "_" + $label + "_" + $r))
                 $results[$mode] = $res
                 Add-Content $Report ("- elapsed_ms: $label $mode = " + $res.elapsed)
+                if ($mode -eq "mft") {
+                    Add-Content $Report ("- mft_used: $label = " + $res.mftUsed)
+                }
                 if ($mode -eq "mft" -and $null -ne $res.readMs) {
                     Add-Content $Report ("- read_ms: $label $mode = " + $res.readMs)
                 }
@@ -252,7 +258,7 @@ try {
         if (-not $Root) { Remove-Item $rawDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
     Write-Host "Report: $Report"
-    if ($allOk) { Write-Host "RESULT: PASS" } else { Write-Host "RESULT: FAIL" }
+    if ($allOk) { Write-Host "RESULT: PASS"; exit 0 } else { Write-Host "RESULT: FAIL"; exit 1 }
 } finally {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue

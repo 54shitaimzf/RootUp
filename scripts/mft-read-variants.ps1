@@ -6,7 +6,8 @@ param(
 
 <#
   0.8.6 实验 A/C/D 一键验证（需管理员）：
-  对 sequential / parallel / mftfile / nobuffer 四种 MFT 读取策略，
+  对 sequential / parallel 两种 MFT 读取策略（0.8.6 已落地 parallel；mftfile/nobuffer 结论见
+  benchmarks\mft-read-variants.md），
   各跑合成 50k、边界语料、真实目录的三臂全链路对比（walkdir/native/MFT），
   汇总 read_ms、总耗时与严格零差异判定到 benchmarks\mft-read-variants.md。
   Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mft-read-variants.ps1
@@ -16,7 +17,7 @@ $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 $Enum = Join-Path $PSScriptRoot "enum-compare.ps1"
 $SummaryFile = Join-Path $Repo "benchmarks\mft-read-variants.md"
-$variants = @("sequential", "parallel", "mftfile", "nobuffer")
+$variants = @("sequential", "parallel")
 
 $rows = [System.Collections.Generic.List[string]]::new()
 $rows.Add("# MFT read variants comparison (0.8.6 A/C/D)")
@@ -42,6 +43,7 @@ foreach ($v in $variants) {
         $report = Join-Path $Repo $c.Args[$c.Args.IndexOf("-OutFile") + 1]
         $elapsed = @{}
         $readMs = $null
+        $mftUsed = $null
         $verdicts = @{}
         if (Test-Path $report) {
             foreach ($line in Get-Content $report) {
@@ -49,6 +51,8 @@ foreach ($v in $variants) {
                     $elapsed[$matches[2]] = [double]$matches[3]
                 } elseif ($line -match '^- read_ms: (.+?) mft = ([\d.]+)') {
                     $readMs = [double]$matches[2]
+                } elseif ($line -match '^- mft_used: (.+?) = (True|False)') {
+                    $mftUsed = $matches[2]
                 } elseif ($line -match '^\| ([\w-]+)-(walkdir|native|mft)-vs-(walkdir|native|mft) \|') {
                     $parts = $line.Trim('|').Split('|') | ForEach-Object { $_.Trim() }
                     $verdicts[($matches[2] + "-vs-" + $matches[3])] = $parts[$parts.Count - 1]
@@ -58,6 +62,10 @@ foreach ($v in $variants) {
         $wn = if ($verdicts.ContainsKey("walkdir-vs-native")) { $verdicts["walkdir-vs-native"] } else { "MISSING" }
         $wm = if ($verdicts.ContainsKey("walkdir-vs-mft")) { $verdicts["walkdir-vs-mft"] } else { "MISSING" }
         $nm = if ($verdicts.ContainsKey("native-vs-mft")) { $verdicts["native-vs-mft"] } else { "MISSING" }
+        if ($mftUsed -eq "False") {
+            $wm = "FALLBACK"
+            $nm = "FALLBACK"
+        }
         $walkMs = if ($elapsed.ContainsKey("walkdir")) { "{0:N0}" -f $elapsed["walkdir"] } else { "-" }
         $nativeMs = if ($elapsed.ContainsKey("native")) { "{0:N0}" -f $elapsed["native"] } else { "-" }
         $mftMs = if ($elapsed.ContainsKey("mft")) { "{0:N0}" -f $elapsed["mft"] } else { "-" }

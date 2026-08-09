@@ -61,9 +61,9 @@
 - 索引维护复核：安静环境复核 0.8.5 三个索引对 100k 扫描 / 重分类的写入代价，验证 `idx_files_type` 去留，必要时再收窄。
 - 监控目录缺失对账：目录被删 / 盘符卸载 → 相关索引记录标记 deleted 或挂起并提示（修复幽灵文件与“目录不可访问后残留”），与 0.8.8 统一错误码体系预留对接。
 - 扫描优化实验（0.8.6 内验证，默认不引入，决策门：等价全绿 + 收益显著才采纳）：
-  - 并行 MFT 读/解析：按字节范围分线程读+解析再合并紧凑索引（FILE 记录相互独立，仅用 `std::thread`，默认顺序执行；参考 WizTree 多线程直读）。已实现为 `ROOTUP_MFT_READ=parallel` 变体。
+  - 并行 MFT 读/解析：按字节范围分线程读+解析再合并紧凑索引（FILE 记录相互独立，仅用 `std::thread`；参考 WizTree 多线程直读）。**已采纳为 MFT 默认读取策略**：read_ms 约 -27%（2.3–2.5s vs 3.3–3.4s），合成 50k / 边界 / 真实 71,923 三语料严格零差异；`ROOTUP_MFT_READ=sequential` 诊断回退、`ROOTUP_MFT_PARALLEL` 控制线程数，见 `benchmarks/mft-read-variants.md`。
   - 原生 Win32 枚举器：`FindFirstFileW/FindNextFileW` 直取 `WIN32_FIND_DATA`（大小 / 时间 / 属性），省掉 walkdir 每文件一次 `std::fs::metadata` 系统调用；作为新 `FileEnumerator` 与 walkdir 等价测试（参考 WinDirStat / Everything）。**已落地为默认枚举器**：等价全绿（Unicode / junction / 超长路径 / 单条目错误续枚举），全链路 DB 零差异，合成 50k 12.6x / 真实 Desktop 71,923 4.3x；`ROOTUP_ENUM=walkdir` 诊断回退，见 `benchmarks/enumerator-*.md` 与 `benchmarks/enum-compare.md`。
-  - MFT 读取路径实验：直接读 `\\.\C:\$MFT`（`FILE_FLAG_BACKUP_SEMANTICS`）对比裸卷 DASD；`FILE_FLAG_NO_BUFFERING` + 对齐读（避免 2.6GB 系统缓存污染，吞吐未必提升）。已实现为 `ROOTUP_MFT_READ=mftfile|nobuffer` 变体；一键验证 `scripts/mft-read-variants.ps1`（合成 50k / 边界语料 / 真实目录 × 四变体，严格零差异 + read_ms 汇总），待管理员运行。
+  - MFT 读取路径实验：直接读 `\\.\C:\$MFT`（`FILE_FLAG_BACKUP_SEMANTICS`）对比裸卷 DASD；`FILE_FLAG_NO_BUFFERING` + 对齐读。**结论：mftfile 本机打开被拒（自动回退，未采纳）；nobuffer 无收益（与 sequential 相当或更慢，未采纳）**，代码已移除，见 `benchmarks/mft-read-variants.md`。
   - jwalk 并行遍历复评（0.8.4 决策门到期）：deep/wide 语料 + feature 开关；行为等价且收益 ≥30% 才引入。**已复评：未达门槛（wide +13%、deep -16%，相对原生慢 8.8–11.9 倍），不引入**，原型已移除，见 `benchmarks/jwalk-evaluation.md`。
   - DB 写入微优化（两条路径共用）：`upsert_many` 子批 1000→2000/3000；`mark_scan_seen` 改多行 VALUES；用引擎基准验证收益。已验证：仅插入约 -10%，更新 / seen 无变化，未达 ≥30% 门槛，已回退，见 `benchmarks/enumerator-db-eval.md`。
 - 验收：MFT/USN 与 walkdir 等价；降级矩阵全绿；写入代价回落或有明确去向；对账用例全绿。
