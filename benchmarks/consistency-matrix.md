@@ -1,6 +1,6 @@
 # 枚举器一致性校验矩阵（native / walkdir / MFT）
 
-- 更新：2026-08-09；范围：0.8.6 原生枚举器落地的一致性证据与缺口。
+- 更新：2026-08-09（闭环）；范围：0.8.6 原生枚举器落地的一致性证据。
 
 ## 校验矩阵
 
@@ -15,7 +15,7 @@
 | 全链路 | walkdir vs native | 边界语料（Unicode / 隐藏 / 点文件 / 空目录 / junction / 超长路径 / 深链，8 文件） | DB 集合零差异 | PASS | 无 |
 | 全链路 | walkdir vs MFT | 合成 1k / 10k / 50k | 计数 / 错误（`mft-verify.ps1`） | PASS | 管理员 |
 | 全链路 | walkdir vs MFT | 真实 Desktop 71,923 | DB 集合零差异（`mft-real-compare.ps1`） | PASS | 管理员 |
-| 全链路 | native vs MFT | 合成三档 + 真实目录 | DB 集合零差异（`enum-compare.ps1 -Mft`） | **待补（需管理员）** | 管理员 |
+| 全链路 | native vs MFT | 真实 Desktop 71,923（三臂：walkdir/native/MFT，日志确认 MFT 启用） | DB 集合零差异（`enum-compare.ps1 -Mft`） | PASS | 管理员 |
 
 ## 安全性兜底（与枚举器无关的独立防线）
 
@@ -26,4 +26,4 @@
 
 ## 结论
 
-常规语料与边界语料下 native↔walkdir 的一致性已充分验证（单元 + 全链路 DB 零差异）；walkdir↔MFT 一致性已由既有管理员验证覆盖。唯一未直接验证的是 native↔MFT 的 DB 集合对比（当前仅靠传递性推断）。运行 `scripts\enum-compare.ps1 -Mft -Sizes "1000,10000,50000" -Rounds 1` 与 `-Root "C:\Users\Administrator\Desktop" -Mft`（管理员）后即可闭环；脚本在 MFT 未真正启用时会判 FAIL，不会静默假通过。
+常规语料与边界语料下 native↔walkdir 一致性已充分验证（单元 + 全链路 DB 零差异）；walkdir↔MFT 与 native↔MFT 均已直接验证（真实 Desktop 71,923 三臂两两对比零差异，日志确认 MFT 臂真实启用）。合成档的 native↔MFT 直接对比可选补跑（`-Mft -Sizes "1000,10000,50000"`），现有证据链（native=walkdir、walkdir=MFT、真实目录 native=MFT）已足够。
