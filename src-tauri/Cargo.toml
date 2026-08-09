@@ -14,6 +14,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 default = []
 bench = []
 
+# 0.8.6 阶段二体积优化：lto/codegen=1/strip/panic=abort/opt-level=s
+# （UPX 仅对照实验，不作为默认；性能影响由官方基线统一体现）
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+opt-level = "s"
+
 [[bench]]
 name = "engine_bench"
 harness = false

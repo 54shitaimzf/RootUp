@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { CloseConfirmDialog } from "./components/CloseConfirmDialog";
 import { PagePlaceholder } from "./components/PagePlaceholder";
@@ -8,13 +8,31 @@ import { useScan, type ScanController } from "./hooks/useScan";
 import { useImeGuard } from "./hooks/useImeGuard";
 import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";
-import { SettingsPage } from "./pages/SettingsPage";
-import { FilePage } from "./pages/FilePage";
-import { ProjectsPage } from "./pages/ProjectsPage";
-import { StudyPage } from "./pages/StudyPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { HelpCenterProvider } from "./components/HelpCenter";
 import { appReady, takeStartupIntent } from "./lib/tauri";
+
+// 0.8.6 阶段二：页面级懒加载（首包只含文件页入口链与共享组件）
+const FilePage = lazy(() =>
+  import("./pages/FilePage").then((m) => ({ default: m.FilePage })),
+);
+const ProjectsPage = lazy(() =>
+  import("./pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })),
+);
+const StudyPage = lazy(() =>
+  import("./pages/StudyPage").then((m) => ({ default: m.StudyPage })),
+);
+const SettingsPage = lazy(() =>
+  import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+
+function PageLoadingFallback() {
+  return (
+    <div className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+      {i18n.t("files.loading")}
+    </div>
+  );
+}
 
 function renderPage(
   page: PageKey,
@@ -138,14 +156,16 @@ function Shell() {
         <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
           <Sidebar current={page} onNavigate={setPage} />
           <main className="flex-1 overflow-auto p-8 [scrollbar-gutter:stable]">
-            {renderPage(page, {
-              onNavigate: setPage,
-              scan,
-              studyFocus,
-              setStudyFocus,
-              reminderEnabled: settings?.reminder_enabled ?? false,
-              leadDays: settings?.reminder_lead_days ?? 3,
-            })}
+            <Suspense fallback={<PageLoadingFallback />}>
+              {renderPage(page, {
+                onNavigate: setPage,
+                scan,
+                studyFocus,
+                setStudyFocus,
+                reminderEnabled: settings?.reminder_enabled ?? false,
+                leadDays: settings?.reminder_lead_days ?? 3,
+              })}
+            </Suspense>
           </main>
         </div>
         <CloseConfirmDialog
