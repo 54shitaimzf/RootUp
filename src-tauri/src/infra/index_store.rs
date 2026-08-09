@@ -41,6 +41,28 @@ DROP INDEX IF EXISTS idx_files_size;
 DROP INDEX IF EXISTS idx_files_labels;
 "#;
 
+/// 0.8.6 阶段一（schema v5）：USN 增量对账的卷状态持久化。
+const USN_STATE_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS usn_state (
+    volume TEXT PRIMARY KEY,
+    last_usn INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+);
+"#;
+
+/// FTS5 contentless + trigram 索引定义（schema v6 预留；默认不建表——
+/// 决策门显示批量同步成本高，待“扫描后批量重建”优化后再启用）。
+/// 未采纳默认启用；测试与未来启用时使用（待批量重建优化）。
+#[cfg_attr(not(test), allow(dead_code))]
+const FTS_SCHEMA: &str = r#"
+CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
+    name, path,
+    tokenize = 'trigram',
+    content='',
+    contentless_delete=1
+);
+"#;
+
 const ARCHIVE_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS archive_ops (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +133,30 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
+    if version < 5 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch(USN_STATE_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 5)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    if version < 6 {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        // FTS 表默认不创建（未采纳），保留版本号占位；启用时在此建表并重建索引。
+        tx.pragma_update(None, "user_version", 6)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    if version < 7 {
+        // 索引维护复核决策：idx_files_type 在类型查询与建库上均无收益（同轮对比两轮一致），移除。
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch("DROP INDEX IF EXISTS idx_files_type")
+            .map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 7)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -131,6 +177,8 @@ fn row_to_record(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
 /// SQLite 索引库：内部互斥连接 + WAL，单写多读安全。
 pub struct SqliteIndexStore {
     conn: Mutex<Connection>,
+    /// FTS5 索引是否就绪（表存在且有数据或已写入）；为 false 时文本查询回退 LIKE
+    fts_ready: bool,
 }
 
 impl SqliteIndexStore {
@@ -160,6 +208,7 @@ impl SqliteIndexStore {
         conn.busy_timeout(std::time::Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
         let before = now_millis() - 30 * 86_400_000;
+        fts_delete_tombstones(&conn, before)?;
         let purged = conn
             .execute(
                 "DELETE FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
@@ -169,15 +218,36 @@ impl SqliteIndexStore {
         if purged > 0 {
             log::info!("storage: 清理墓碑 count={purged}");
         }
+        let fts_ready = conn
+            .query_row("SELECT EXISTS(SELECT 1 FROM files_fts)", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .map(|n| n > 0)
+            .unwrap_or(false);
         Ok(Self {
             conn: Mutex::new(conn),
+            fts_ready,
         })
+    }
+
+    /// 基准专用：打开后移除 idx_files_type，用于“type 索引去留”决策门对比。
+    #[cfg(feature = "bench")]
+    pub fn open_without_type_index(path: impl AsRef<Path>) -> Result<Self, String> {
+        let store = Self::open(path)?;
+        store
+            .conn
+            .lock()
+            .map_err(|e| e.to_string())?
+            .execute_batch("DROP INDEX IF EXISTS idx_files_type")
+            .map_err(|e| e.to_string())?;
+        Ok(store)
     }
 
     /// 物理删除指定时间之前标记为 deleted 的墓碑记录，返回删除条数。
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn purge_tombstones(&self, before_ms: i64) -> Result<i64, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        fts_delete_tombstones(&conn, before_ms)?;
         let n = conn
             .execute(
                 "DELETE FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
@@ -225,6 +295,8 @@ impl IndexStore for SqliteIndexStore {
             ],
         )
         .map_err(|e| e.to_string())?;
+        sync_fts_for_path(&conn, &record.path)?;
+        self.fts_ready = fts_table_exists(&conn);
         Ok(())
     }
 
@@ -324,15 +396,33 @@ impl IndexStore for SqliteIndexStore {
         let mut params: Vec<Value> = Vec::new();
         params.push(Value::Text(FileState::Deleted.as_str().into()));
 
-        for word in &query.words {
-            let pattern = format!("%{}%", escape_like(word));
-            conditions.push(format!(
-                "(name LIKE ?{} ESCAPE '\\' OR path LIKE ?{} ESCAPE '\\')",
-                params.len() + 1,
-                params.len() + 2
-            ));
-            params.push(Value::Text(pattern.clone()));
-            params.push(Value::Text(pattern));
+        if !query.words.is_empty() {
+            // FTS5（trigram）：仅当索引就绪且每个词 ≥3 字符时启用，否则回退 LIKE（含 CJK 单/双字）
+            let fts_ok = self.fts_ready && query.words.iter().all(|w| w.chars().count() >= 3);
+            if fts_ok {
+                let match_str = query
+                    .words
+                    .iter()
+                    .map(|w| format!("\"{}\"", w.replace('"', "\"\"")))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                conditions.push(format!(
+                    "id IN (SELECT rowid FROM files_fts WHERE files_fts MATCH ?{})",
+                    params.len() + 1
+                ));
+                params.push(Value::Text(match_str));
+            } else {
+                for word in &query.words {
+                    let pattern = format!("%{}%", escape_like(word));
+                    conditions.push(format!(
+                        "(name LIKE ?{} ESCAPE '\\' OR path LIKE ?{} ESCAPE '\\')",
+                        params.len() + 1,
+                        params.len() + 2
+                    ));
+                    params.push(Value::Text(pattern.clone()));
+                    params.push(Value::Text(pattern));
+                }
+            }
         }
         if !query.types.is_empty() {
             let placeholders: Vec<String> = (0..query.types.len())
@@ -504,8 +594,12 @@ impl IndexStore for SqliteIndexStore {
                 ])
                 .map_err(|e| e.to_string())?;
             }
+            for record in records {
+                sync_fts_for_path(&tx, &record.path)?;
+            }
         }
         tx.commit().map_err(|e| e.to_string())?;
+        self.fts_ready = fts_table_exists(&conn);
         Ok(())
     }
 
@@ -562,6 +656,9 @@ impl IndexStore for SqliteIndexStore {
             changed += tx
                 .execute(&sql, params_from_iter(values.iter()))
                 .map_err(|e| e.to_string())? as i64;
+            for path in chunk {
+                fts_delete_by_path(&tx, path)?;
+            }
         }
         tx.commit().map_err(|e| e.to_string())?;
         Ok(changed)
@@ -594,6 +691,7 @@ impl IndexStore for SqliteIndexStore {
             params![FileState::Deleted.as_str(), now_millis(), path],
         )
         .map_err(|e| e.to_string())?;
+        fts_delete_by_path(&conn, path)?;
         Ok(())
     }
 
@@ -609,6 +707,29 @@ impl IndexStore for SqliteIndexStore {
 
     fn maintenance(&mut self) -> Result<(), String> {
         self.checkpoint_and_optimize()
+    }
+
+    fn get_last_usn(&self, volume: &str) -> Result<Option<i64>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row(
+            "SELECT last_usn FROM usn_state WHERE volume = ?1",
+            params![volume],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+    }
+
+    fn set_last_usn(&mut self, volume: &str, last_usn: i64) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO usn_state (volume, last_usn, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(volume) DO UPDATE SET last_usn = excluded.last_usn,
+                                                updated_at = excluded.updated_at",
+            params![volume, last_usn, now_millis()],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     fn move_record(&mut self, from: &str, to: &str, state: &str) -> Result<(), String> {
@@ -633,6 +754,9 @@ impl IndexStore for SqliteIndexStore {
             params![to, name, state, from],
         )
         .map_err(|e| e.to_string())?;
+        fts_delete_by_path(&tx, from)?;
+        sync_fts_for_path(&tx, to)?;
+        self.fts_ready = fts_table_exists(&tx);
         tx.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -659,6 +783,8 @@ impl IndexStore for SqliteIndexStore {
             params![to, name, FileState::Archived.as_str(), from],
         )
         .map_err(|e| e.to_string())?;
+        fts_delete_by_path(&tx, from)?;
+        sync_fts_for_path(&tx, to)?;
         tx.execute(
             "INSERT INTO archive_ops (batch_id, kind, source, dest, created_at, undone_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -672,6 +798,7 @@ impl IndexStore for SqliteIndexStore {
             ],
         )
         .map_err(|e| e.to_string())?;
+        self.fts_ready = fts_table_exists(&tx);
         tx.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -710,6 +837,8 @@ impl IndexStore for SqliteIndexStore {
             params![to, name, FileState::Indexed.as_str(), from],
         )
         .map_err(|e| e.to_string())?;
+        fts_delete_by_path(&tx, from)?;
+        sync_fts_for_path(&tx, to)?;
         tx.execute(
             "UPDATE archive_ops SET undone_at = ?1 WHERE id = ?2 AND undone_at IS NULL",
             params![now_millis(), op_id],
@@ -736,6 +865,7 @@ impl IndexStore for SqliteIndexStore {
                     ],
                 )
                 .map_err(|e| e.to_string())? as i64;
+            fts_delete_under_root(&tx, root)?;
         }
         tx.commit().map_err(|e| e.to_string())?;
         Ok(changed)
@@ -993,6 +1123,86 @@ fn escape_like(input: &str) -> String {
         .replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")
+}
+
+/// 把单条文件记录同步进 FTS5（同事务内调用；contentless 表需手动增删）。
+fn sync_fts_for_path(conn: &Connection, path: &str) -> Result<(), String> {
+    if !fts_table_exists(conn) {
+        return Ok(());
+    }
+    let id: i64 = conn
+        .query_row(
+            "SELECT id FROM files WHERE path = ?1",
+            params![path],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let name: String = conn
+        .query_row("SELECT name FROM files WHERE id = ?1", params![id], |row| {
+            row.get(0)
+        })
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM files_fts WHERE rowid = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO files_fts(rowid, name, path) VALUES (?1, ?2, ?3)",
+        params![id, name, path],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// FTS 表是否存在（未采纳/未启用时所有 FTS 操作自动跳过）。
+fn fts_table_exists(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE name = 'files_fts'",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|n| n > 0)
+    .unwrap_or(false)
+}
+
+fn fts_delete_by_path(conn: &Connection, path: &str) -> Result<(), String> {
+    if !fts_table_exists(conn) {
+        return Ok(());
+    }
+    conn.execute(
+        "DELETE FROM files_fts WHERE rowid = (SELECT id FROM files WHERE path = ?1)",
+        params![path],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn fts_delete_under_root(conn: &Connection, root: &str) -> Result<(), String> {
+    if !fts_table_exists(conn) {
+        return Ok(());
+    }
+    let pattern = format!("{}/%", escape_like(root));
+    conn.execute(
+        "DELETE FROM files_fts WHERE rowid IN (
+            SELECT id FROM files
+            WHERE LOWER(path) = LOWER(?1) OR path LIKE ?2 ESCAPE '\\'
+         )",
+        params![root, pattern],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn fts_delete_tombstones(conn: &Connection, before_ms: i64) -> Result<(), String> {
+    if !fts_table_exists(conn) {
+        return Ok(());
+    }
+    conn.execute(
+        "DELETE FROM files_fts WHERE rowid IN (
+            SELECT id FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2
+         )",
+        params![FileState::Deleted.as_str(), before_ms],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 排序白名单映射：字段固定为列表达式，杜绝注入；tie-breaker 恒为 id DESC。
@@ -1399,7 +1609,7 @@ mod tests {
     }
 
     #[test]
-    fn migrate_v3_to_v4_creates_query_indexes_and_drops_legacy() {
+    fn migrate_v3_to_v7_creates_query_indexes_and_drops_legacy() {
         let dir = temp_db_dir("migrate_v3_v4");
         let db = dir.join("rootup.db");
         {
@@ -1436,13 +1646,100 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 7);
         assert!(indexes.contains(&"idx_files_state".to_string()));
         assert!(indexes.contains(&"idx_files_modified".to_string()));
-        assert!(indexes.contains(&"idx_files_type".to_string()));
+        assert!(!indexes.contains(&"idx_files_type".to_string()));
         assert!(!indexes.contains(&"idx_files_name".to_string()));
         assert!(!indexes.contains(&"idx_files_state_modified".to_string()));
+        let usn_tables: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'usn_state'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(usn_tables, 1);
+        // FTS 表默认不创建（决策门未采纳），版本号占位保留
+        let fts_tables: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'files_fts'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(fts_tables, 0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fts_syncs_and_falls_back_for_short_words() {
+        let mut s = store();
+        // 显式启用 FTS（决策门通过后由迁移创建；此处验证同步与查询路径）
+        s.conn.lock().unwrap().execute_batch(FTS_SCHEMA).unwrap();
+        let mut r = record("C:/x/高等数学笔记.pdf", 100, 1);
+        r.name = "高等数学笔记.pdf".to_string();
+        s.upsert(&r).unwrap();
+
+        // ≥3 字词走 FTS
+        let page = s
+            .query(&FileQuery {
+                words: vec!["高等数学".to_string()],
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1);
+
+        // 单字回退 LIKE
+        let page = s
+            .query(&FileQuery {
+                words: vec!["高".to_string()],
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1);
+
+        // 删除后 FTS 同步清除
+        s.mark_deleted("C:/x/高等数学笔记.pdf").unwrap();
+        let page = s
+            .query(&FileQuery {
+                words: vec!["高等数学".to_string()],
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 0);
+
+        // 移动后 FTS 同步到新路径
+        s.upsert(&r).unwrap();
+        s.move_record(
+            "C:/x/高等数学笔记.pdf",
+            "C:/arch/高等数学笔记.pdf",
+            "archived",
+        )
+        .unwrap();
+        let page = s
+            .query(&FileQuery {
+                words: vec!["高等数学".to_string()],
+                need_total: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.items[0].path, "C:/arch/高等数学笔记.pdf");
+    }
+
+    #[test]
+    fn usn_state_crud_and_update() {
+        let mut s = store();
+        assert_eq!(s.get_last_usn("C:").unwrap(), None);
+        s.set_last_usn("C:", 100).unwrap();
+        assert_eq!(s.get_last_usn("C:").unwrap(), Some(100));
+        s.set_last_usn("C:", 200).unwrap();
+        assert_eq!(s.get_last_usn("C:").unwrap(), Some(200));
+        assert_eq!(s.get_last_usn("D:").unwrap(), None);
     }
 
     #[test]
@@ -1804,7 +2101,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 4);
+            assert_eq!(version, 7);
         }
         // 重复打开幂等，不报错
         {
@@ -1813,7 +2110,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 4);
+            assert_eq!(version, 7);
         }
         fs::remove_dir_all(&dir).unwrap();
     }

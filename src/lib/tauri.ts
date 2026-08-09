@@ -317,6 +317,15 @@ export function listWatchedDirs(): Promise<string[]> {
   return invoke<string[]>("list_watched_dirs");
 }
 
+export interface WatchedDirHealth {
+  dir: string;
+  exists: boolean;
+}
+
+export function watchedDirHealth(): Promise<WatchedDirHealth[]> {
+  return invoke<WatchedDirHealth[]>("watched_dir_health");
+}
+
 /** 结构化查询（搜索语法 + 分页 + 总数） */
 export function queryFiles(
   query: string,

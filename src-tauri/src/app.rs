@@ -176,6 +176,7 @@ pub fn run() {
             files_commands::resolve_dir_target,
             files_commands::list_common_dirs,
             files_commands::list_watched_dirs,
+            files_commands::watched_dir_health,
             files_commands::query_files,
             files_commands::list_labels,
             files_commands::list_categories,

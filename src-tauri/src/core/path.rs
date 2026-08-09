@@ -17,6 +17,12 @@ pub fn normalize_path(path: &str) -> String {
     s
 }
 
+/// 目录缺失判定（Windows ERROR_FILE_NOT_FOUND=2 / ERROR_PATH_NOT_FOUND=3）。
+/// 其余错误（权限、网络、占用）一律不动索引，只记录。
+pub fn is_missing_dir_error(error: &std::io::Error) -> bool {
+    matches!(error.raw_os_error(), Some(2) | Some(3))
+}
+
 /// 用于比较的规范化键：Windows 不区分大小写，其余平台保持原样。
 pub fn path_key(path: &str) -> String {
     let normalized = normalize_path(path);

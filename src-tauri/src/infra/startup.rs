@@ -1,7 +1,10 @@
 //! 启动门控：非关键服务（监听/扫描/自动归档/托盘）延迟到前端就绪后再启动。
+use crate::core::index::IndexStore;
 use crate::infra::archive_service::ArchiveService;
 use crate::infra::scanner::ScanService;
+use crate::infra::storage;
 use crate::infra::tray;
+use crate::infra::usn_delta;
 use crate::infra::watcher::WatchService;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -38,6 +41,22 @@ pub fn start_deferred_services(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .start();
     tray::init(app).map_err(|e| e.to_string())?;
+    // USN 启动补账：后台线程执行，失败只记录不阻塞
+    let catchup_app = app.clone();
+    std::thread::Builder::new()
+        .name("rootup-usn-catchup".into())
+        .spawn(move || {
+            let store = catchup_app.state::<Arc<Mutex<dyn IndexStore>>>();
+            let store = store.inner().clone();
+            let watched = storage::load_settings(&catchup_app).watched_dirs;
+            match usn_delta::run_usn_catchup(store, &watched) {
+                Ok((applied, deleted)) => {
+                    log::info!("usn: 补账完成 applied={applied} deleted={deleted}");
+                }
+                Err(e) => log::warn!("usn: 补账失败 {e}"),
+            }
+        })
+        .ok();
     log::info!(
         "startup: 延迟服务已启动 ms={}",
         started.elapsed().as_millis()

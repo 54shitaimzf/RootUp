@@ -38,4 +38,4 @@ tauri-plugin-opener = "2"
 mslnk = "0.1.8"
 winreg = "0.56.0"
 aho-corasick = "1"
-windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl"] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_Threading"] }

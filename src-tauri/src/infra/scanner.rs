@@ -3,8 +3,8 @@ use crate::core::classify::Classifier;
 use crate::core::index::{FileRecord, ScanDiffStore};
 use crate::core::path::{normalize_path, path_key};
 use crate::core::scan::{
-    record_from_scan, EnumerateStats, FileEntry, FileEnumerator, ScanEvent, ScanEventSink,
-    ScanParams, ScanProgress, ScanSummary,
+    record_from_scan, FileEntry, FileEnumerator, ScanEvent, ScanEventSink, ScanParams,
+    ScanProgress, ScanSummary,
 };
 use crate::infra::enumerator::WalkDirEnumerator;
 use crate::infra::time::now_millis;
@@ -47,6 +47,7 @@ pub struct ScanService {
     thread: Mutex<Option<JoinHandle<()>>>,
     skip_roots: Arc<Mutex<Vec<String>>>,
     enumerator: Arc<dyn FileEnumerator>,
+    matcher: crate::core::ignore::IgnoreMatcher,
 }
 
 impl ScanService {
@@ -58,7 +59,7 @@ impl ScanService {
         sink: Arc<dyn ScanEventSink>,
     ) -> Self {
         let skip_roots = Arc::new(Mutex::new(Vec::new()));
-        let enumerator = Arc::new(WalkDirEnumerator::new(matcher, skip_roots.clone()));
+        let enumerator = Arc::new(WalkDirEnumerator::new(matcher.clone(), skip_roots.clone()));
         Self {
             store,
             classifier,
@@ -73,6 +74,7 @@ impl ScanService {
             thread: Mutex::new(None),
             skip_roots,
             enumerator,
+            matcher,
         }
     }
 
@@ -95,6 +97,7 @@ impl ScanService {
             sink: self.sink.clone(),
             shared: self.shared.clone(),
             enumerator: self.enumerator.clone(),
+            matcher: self.matcher.clone(),
         };
         let handle = std::thread::Builder::new()
             .name("rootup-scanner".into())
@@ -176,6 +179,7 @@ struct ScanLoop {
     sink: Arc<dyn ScanEventSink>,
     shared: Arc<Shared>,
     enumerator: Arc<dyn FileEnumerator>,
+    matcher: crate::core::ignore::IgnoreMatcher,
 }
 
 impl ScanLoop {
@@ -227,6 +231,16 @@ impl ScanLoop {
                 return;
             }
             Err(e) => {
+                if crate::core::path::is_missing_dir_error(&e) {
+                    let dir_owned = dir.to_string();
+                    if let Ok(removed) = self
+                        .store
+                        .lock()
+                        .map(|mut s| s.mark_under_roots_deleted(std::slice::from_ref(&dir_owned)))
+                    {
+                        log::info!("scan: 目录缺失对账 dir={dir} removed={removed:?}");
+                    }
+                }
                 self.fail(dir, format!("目录不可访问: {e}"));
                 return;
             }
@@ -285,15 +299,10 @@ impl ScanLoop {
             }
             true
         };
-        // 快速扫描（实验性，ROOTUP_FAST_SCAN=1 且卷能力/权限满足时启用）；失败一律回退 walkdir
-        let fast_entries = crate::infra::ntfs::try_full_scan(dir);
+        // 快速扫描（实验性，ROOTUP_MFT_SCAN=1 且管理员/NTFS 满足时启用）；失败一律回退 walkdir
+        let fast_entries = crate::infra::mft::try_full_scan(dir, &self.matcher);
         let enumerate_result = match fast_entries {
-            Ok(entries) => {
-                let stats = EnumerateStats {
-                    discovered: entries.len(),
-                    ignored: 0,
-                    errors: 0,
-                };
+            Ok((entries, stats)) => {
                 for entry in entries {
                     if !handle_entry(entry) {
                         break;
@@ -565,6 +574,7 @@ mod tests {
                 crate::core::ignore::IgnoreMatcher::new(),
                 skip_roots,
             )),
+            matcher: crate::core::ignore::IgnoreMatcher::new(),
         };
         (loop_body, events)
     }

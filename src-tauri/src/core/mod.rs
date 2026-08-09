@@ -1,5 +1,6 @@
 pub mod archive;
 pub mod classify;
+pub mod delta;
 pub mod events;
 pub mod habits;
 pub mod ignore;

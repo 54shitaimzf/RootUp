@@ -26,6 +26,8 @@ import {
   listLabelDefs,
   listSchemes,
   listWatchedDirs,
+  watchedDirHealth,
+  type WatchedDirHealth,
   listCommonDirs,
   removeWatchedDir,
   resetSettings,
@@ -163,6 +165,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const { settings, update, replace } = useSettings();
   const language = settings?.language ?? "zh-CN";
   const [watchedDirs, setWatchedDirs] = useState<string[]>([]);
+  const [missingDirs, setMissingDirs] = useState<Set<string>>(new Set());
   const [dirError, setDirError] = useState<string | null>(null);
   const [ruleError, setRuleError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -193,6 +196,13 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     listWatchedDirs()
       .then(setWatchedDirs)
       .catch(() => setWatchedDirs([]));
+    watchedDirHealth()
+      .then((health: WatchedDirHealth[]) =>
+        setMissingDirs(
+          new Set(health.filter((item) => !item.exists).map((item) => item.dir)),
+        ),
+      )
+      .catch(() => {});
     getLogDir()
       .then(setLogDir)
       .catch(() => setLogDir(null));
@@ -521,7 +531,18 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                       key={dir}
                       className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800"
                     >
-                      <span className="min-w-0 flex-1 truncate">{dir}</span>
+                      <span
+                        className="flex min-w-0 flex-1 items-center gap-1.5 truncate"
+                        title={missingDirs.has(dir) ? t("settings.dirMissing") : dir}
+                      >
+                        {missingDirs.has(dir) && (
+                          <span
+                            aria-hidden="true"
+                            className="size-1.5 shrink-0 rounded-full bg-amber-500"
+                          />
+                        )}
+                        <span className="truncate">{dir}</span>
+                      </span>
                       <button
                         type="button"
                         onClick={() => void handleRemoveClick(dir)}

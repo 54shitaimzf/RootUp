@@ -208,6 +208,26 @@ pub fn list_watched_dirs(app: AppHandle) -> Vec<String> {
     storage::load_settings(&app).watched_dirs
 }
 
+/// 监控目录健康状态（设置页缺失标记用）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchedDirHealth {
+    pub dir: String,
+    pub exists: bool,
+}
+
+#[tauri::command]
+pub fn watched_dir_health(app: AppHandle) -> Vec<WatchedDirHealth> {
+    storage::load_settings(&app)
+        .watched_dirs
+        .iter()
+        .map(|dir| WatchedDirHealth {
+            dir: dir.clone(),
+            exists: Path::new(dir).is_dir(),
+        })
+        .collect()
+}
+
 // 参数即命令线契约（query/limit/offset/sort/cursor/need_total），保留平铺签名。
 #[allow(clippy::too_many_arguments)]
 fn run_query(

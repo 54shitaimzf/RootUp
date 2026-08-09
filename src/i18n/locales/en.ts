@@ -305,6 +305,7 @@ export default {
     removeCleanupConfirm:
       "Removing “{{dir}}” will hide about {{count}} indexed file(s) from the Files page (disk files are untouched; re-adding and rescanning restores them). Remove?",
     dirEmpty: "No watched folders yet",
+    dirMissing: "Folder is missing or inaccessible; rescan after it returns to recover files",
     rescanAll: "Rescan all",
     scanStarted: "Scanning all watched folders started",
     scanningNow: "Scanning: {{dir}}",

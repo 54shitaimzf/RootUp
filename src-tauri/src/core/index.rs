@@ -130,6 +130,18 @@ pub trait IndexStore: Send + Sync {
     fn maintenance(&mut self) -> Result<(), String> {
         Ok(())
     }
+    /// 读取某卷最近消费的 USN 序号（默认无操作；SQLite 实现持久化到 usn_state）。
+    #[cfg_attr(not(test), allow(dead_code))] // 0.8.6 阶段一 M3（USN 补账）启用
+    fn get_last_usn(&self, volume: &str) -> Result<Option<i64>, String> {
+        let _ = volume;
+        Ok(None)
+    }
+    /// 记录某卷已消费到的最新 USN 序号（默认无操作）。
+    #[cfg_attr(not(test), allow(dead_code))] // 0.8.6 阶段一 M3（USN 补账）启用
+    fn set_last_usn(&mut self, volume: &str, last_usn: i64) -> Result<(), String> {
+        let _ = (volume, last_usn);
+        Ok(())
+    }
 }
 
 /// 扫描差集存储契约：把“本次扫描已见键集合”落到存储层（SQLite 临时表 / keyset），
