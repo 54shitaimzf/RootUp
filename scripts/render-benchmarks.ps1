@@ -212,8 +212,9 @@ foreach ($entry in $data) {
     $schema = if ($entry.json.schema -eq 2) { "v2" } else { "v1" }
     $hostInfo = $entry.json.host
     $hostText = if ($hostInfo) { "$($hostInfo.os) | $($hostInfo.cpu)" } else { "unknown" }
+    $ubrText = if ($hostInfo -and $hostInfo.ubr) { " | UBR $($hostInfo.ubr)" } else { "" }
     $commitText = if ($hostInfo.commit) { " | commit $($hostInfo.commit)" } else { "" }
-    $lines.Add("- **$($entry.version)** ($schema) - $hostText$commitText")
+    $lines.Add("- **$($entry.version)** ($schema) - $hostText$ubrText$commitText")
 }
 $lines.Add("")
 

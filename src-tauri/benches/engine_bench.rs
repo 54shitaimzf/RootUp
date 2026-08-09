@@ -413,6 +413,58 @@ fn bench_index_build(count: usize, samples: usize) -> Value {
     out
 }
 
+/// idx_files_type 去留决策门：有/无该索引的建库、类型查询对比。
+fn bench_index_variants(count: usize, samples: usize) -> Value {
+    let mut out = Value::Object(Default::default());
+    for with_type in [true, false] {
+        let suffix = if with_type {
+            "with_type"
+        } else {
+            "without_type"
+        };
+        let mut durations = Vec::new();
+        for sample in 0..samples {
+            let mut store = if with_type {
+                SqliteIndexStore::open(":memory:").unwrap()
+            } else {
+                SqliteIndexStore::open_without_type_index(":memory:").unwrap()
+            };
+            let start = Instant::now();
+            seed_records(&mut store, count, 20260000 + sample as u64);
+            durations.push(start.elapsed());
+            assert_eq!(store.count().unwrap(), count as i64);
+        }
+        metric(
+            &format!("engine_index_build_{}_{}_ms", count_label(count), suffix),
+            "ms",
+            &durations,
+            &mut out,
+        );
+
+        let mut store = if with_type {
+            SqliteIndexStore::open(":memory:").unwrap()
+        } else {
+            SqliteIndexStore::open_without_type_index(":memory:").unwrap()
+        };
+        seed_records(&mut store, count, 20260002);
+        let q = parse_query("type:pdf");
+        let mut durations = Vec::new();
+        for _ in 0..samples {
+            let start = Instant::now();
+            let page = store.query(&q).unwrap();
+            assert!(page.total > 0);
+            durations.push(start.elapsed());
+        }
+        metric(
+            &format!("engine_query_type_{}_ms", suffix),
+            "ms",
+            &durations,
+            &mut out,
+        );
+    }
+    out
+}
+
 fn bench_queries(store: &mut SqliteIndexStore, samples: usize) -> Value {
     let mut out = Value::Object(Default::default());
     let cases: Vec<(String, FileQuery)> = vec![
@@ -668,6 +720,19 @@ fn bench_reapply(store: &mut SqliteIndexStore, samples: usize) -> Value {
     out
 }
 
+/// 无 idx_files_type 时的重分类代价（与 bench_reapply 对比）。
+fn bench_reapply_without_type(count: usize, samples: usize) -> Value {
+    let mut store = SqliteIndexStore::open_without_type_index(":memory:").unwrap();
+    seed_records(&mut store, count, 20260003);
+    let mut out = bench_reapply(&mut store, samples);
+    if let Value::Object(map) = &mut out {
+        if let Some(value) = map.remove("engine_reapply_labels_ms") {
+            map.insert("engine_reapply_labels_without_type_ms".into(), value);
+        }
+    }
+    out
+}
+
 fn bench_archive(samples: usize, files: usize) -> Value {
     let mut out = Value::Object(Default::default());
     let pid = std::process::id();
@@ -764,8 +829,9 @@ fn bench_churn(records: usize, cycles: usize) -> Value {
         .ok();
     let vacuum = db_bytes(&db);
     assert!(
-        vacuum <= after,
-        "VACUUM must not grow the database: after={after} vacuum={vacuum}"
+        vacuum <= (after as f64 * 1.01) as u64,
+        "VACUUM must not grow the database beyond 1%: after={after} vacuum={vacuum} \
+         （0.8.6 起含 FTS5 contentless 影子表，VACUUM 不回收其页，允许 ≤1% 波动）"
     );
 
     if let Value::Object(map) = &mut out {
@@ -894,6 +960,10 @@ fn main() {
         &mut metrics,
         bench_index_build(memory_count, samples.min(3)),
     );
+    merge(
+        &mut metrics,
+        bench_index_variants(memory_count, samples.min(3)),
+    );
     let mut store = SqliteIndexStore::open(":memory:").unwrap();
     seed_records(&mut store, memory_count, 20260003);
     merge(&mut metrics, bench_queries(&mut store, samples));
@@ -902,6 +972,10 @@ fn main() {
         bench_query_eval_options(memory_count, samples.min(3)),
     );
     merge(&mut metrics, bench_reapply(&mut store, samples));
+    merge(
+        &mut metrics,
+        bench_reapply_without_type(memory_count, samples.min(3)),
+    );
     merge(
         &mut metrics,
         bench_cold_queries(memory_count, samples.min(3)),

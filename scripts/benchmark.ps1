@@ -405,12 +405,18 @@ try {
     $npmv = (& npm.cmd --version 2>$null | Select-Object -First 1)
     $ramGb = 0
     try { $ramGb = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1) } catch {}
+    $ubr = ""
+    try {
+        $ubrItem = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name UBR -ErrorAction Stop
+        $ubr = [string]$ubrItem.UBR
+    } catch {}
     $result = [ordered]@{
         schema = 2
         version = $Version
         date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         host = @{
             os = [Environment]::OSVersion.VersionString
+            ubr = $ubr
             cpu = $env:PROCESSOR_IDENTIFIER
             rustc = $rustc
             node = $node

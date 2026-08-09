@@ -6,7 +6,8 @@ param(
     [switch]$Small,
     [switch]$EngineOnly,
     [switch]$SystemOnly,
-    [switch]$NoClean
+    [switch]$NoClean,
+    [switch]$SkipLoadCheck
 )
 
 # Local benchmark suite: engine -> system -> render -> cleanup.
@@ -49,9 +50,15 @@ function Get-HostFingerprint {
     $npmv = (& npm.cmd --version 2>$null | Select-Object -First 1)
     $ramGb = 0
     try { $ramGb = [Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1) } catch {}
+    $ubr = ""
+    try {
+        $ubrItem = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name UBR -ErrorAction Stop
+        $ubr = [string]$ubrItem.UBR
+    } catch {}
     $commit = (& git -C $Repo rev-parse --short HEAD 2>$null)
     return [ordered]@{
         os = [Environment]::OSVersion.VersionString
+        ubr = $ubr
         cpu = $env:PROCESSOR_IDENTIFIER
         rustc = $rustc
         node = $node
@@ -61,12 +68,50 @@ function Get-HostFingerprint {
     }
 }
 
+function Test-QuietEnvironment {
+    param(
+        [int]$Samples = 3,
+        [int]$CpuThreshold = 30,
+        [int]$DiskThreshold = 30
+    )
+    $cpuValues = @()
+    $diskValues = @()
+    for ($i = 0; $i -lt $Samples; $i++) {
+        $cpu = $null
+        $disk = $null
+        try {
+            $cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 2 -MaxSamples 1 -ErrorAction Stop).CounterSamples[0].CookedValue
+        } catch {}
+        try {
+            $disk = (Get-Counter '\PhysicalDisk(_Total)\% Disk Time' -SampleInterval 0 -MaxSamples 1 -ErrorAction Stop).CounterSamples[0].CookedValue
+        } catch {}
+        if ($null -ne $cpu) { $cpuValues += $cpu }
+        if ($null -ne $disk) { $diskValues += $disk }
+        Start-Sleep -Milliseconds 400
+    }
+    $cpuAvg = if ($cpuValues.Count -gt 0) { ($cpuValues | Measure-Object -Average).Average } else { 0 }
+    $diskAvg = if ($diskValues.Count -gt 0) { ($diskValues | Measure-Object -Average).Average } else { 0 }
+    return [pscustomobject]@{
+        Quiet = ($cpuAvg -le $CpuThreshold -and $diskAvg -le $DiskThreshold)
+        Cpu = [Math]::Round($cpuAvg, 1)
+        Disk = [Math]::Round($diskAvg, 1)
+    }
+}
+
 $exe = Join-Path $Repo "src-tauri\target\release\rootup.exe"
 if (-not (Test-Path $exe)) {
     Write-Host "Release exe not found; run: npm run tauri build -- --no-bundle"
     exit 1
 }
 
+if (-not $SkipLoadCheck) {
+    $envCheck = Test-QuietEnvironment
+    if (-not $envCheck.Quiet) {
+        Write-Host ("Load gate FAIL: environment busy (CPU={0}% / disk={1}%). Aborting to avoid dirty baseline." -f $envCheck.Cpu, $envCheck.Disk)
+        exit 1
+    }
+    Write-Host ("Load gate PASS: environment quiet (CPU={0}% / disk={1}%)" -f $envCheck.Cpu, $envCheck.Disk)
+}
 $env:ROOTUP_BENCH_VERSION = $Version
 $env:ROOTUP_BENCH_SAMPLES = "5"
 $env:ROOTUP_BENCH_OUT = Join-Path $Repo ("benchmarks\results\" + $Version + ".engine.json")

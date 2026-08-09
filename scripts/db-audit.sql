@@ -35,6 +35,8 @@ SELECT 'shortcuts_total=' || COUNT(*) FROM shortcuts;
 SELECT 'shortcuts_duplicate_target=' || COUNT(*) FROM (
   SELECT target_path FROM shortcuts GROUP BY target_path HAVING COUNT(*) > 1
 );
+SELECT 'fts_tables=' || COUNT(*) FROM sqlite_master WHERE name = 'files_fts';
+SELECT 'usn_state_rows=' || COUNT(*) FROM usn_state;
 
 .print [indexes]
 SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_files_%' ORDER BY name;

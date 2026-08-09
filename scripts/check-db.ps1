@@ -108,19 +108,20 @@ try {
     if ($tables -notcontains "files") {
         Add-Check "fresh DB (schema initializes on first launch)" $true "user_version=$userVersion journal=$journalMode tables=[$($tables -join ',')]"
     } else {
-        Add-Check "user_version" ($userVersion -eq "4") "got=$userVersion expected=4"
+        Add-Check "user_version" ($userVersion -eq "7") "got=$userVersion expected=7"
         Add-Check "journal_mode" ($journalMode -eq "wal") "got=$journalMode expected=wal"
         Add-Check "no duplicate path_key" ($map["duplicate_path_keys"] -eq 0) "count=$($map['duplicate_path_keys'])"
         Add-Check "no malformed labels" ($map["malformed_labels"] -eq 0) "count=$($map['malformed_labels'])"
         Add-Check "no pending archive without source" ($map["archive_pending_without_source"] -eq 0) "count=$($map['archive_pending_without_source'])"
         $expectedIndexes = @(
             "idx_files_state",
-            "idx_files_modified",
-            "idx_files_type"
+            "idx_files_modified"
         )
         $indexNames = @($indexes | ForEach-Object { $_.Trim() })
         $missing = @($expectedIndexes | Where-Object { $indexNames -notcontains $_ })
         Add-Check "0.8.5 query indexes present" ($missing.Count -eq 0) "missing=$($missing -join ',')"
+        Add-Check "0.8.6 fts5 deferred (absent)" ($map["fts_tables"] -eq 0) "count=$($map['fts_tables'])（决策门未启用）"
+        Add-Check "0.8.6 usn_state table present" ($map.ContainsKey("usn_state_rows")) "rows=$($map['usn_state_rows'])"
         Add-Check "label query plan captured" ($explainLabel.Count -gt 0) "lines=$($explainLabel.Count)"
         Add-Check "AND query plan captured" ($explainAnd.Count -gt 0) "lines=$($explainAnd.Count)"
     }
