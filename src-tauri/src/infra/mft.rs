@@ -524,8 +524,10 @@ fn read_signed_le(bytes: &[u8]) -> i64 {
 }
 
 /// 从 `$MFT` 记录 0 的 $DATA 属性解析 data runs（映射对），返回 `(起始 LCN, 簇数)`。
-/// 参考 Linux-ntfs 文档与 ntfs-3g `mft.c` 的做法：MFT 可能跨多个 run，
-/// 不能只按 MftStartLcn 连续读。
+/// 映射对字段顺序：头字节（高半字节=LCN 增量字节数，低半字节=长度字节数），
+/// 随后是**长度**（无符号 LE），最后是 **LCN 增量**（有符号 LE）。
+/// 参考 Linux-ntfs 文档与 ntfs-3g `runlist.c::ntfs_mapping_pairs_decompress`：
+/// MFT 可能跨多个 run，不能只按 MftStartLcn 连续读。
 fn mft_data_runs(record_buf: &[u8], cluster_size: u32) -> Result<Vec<(u64, u64)>, String> {
     if record_buf.len() < 48 || record_buf[0..4] != FILE_RECORD_SIGNATURE {
         return Err("非 FILE 记录".into());
@@ -569,18 +571,18 @@ fn mft_data_runs(record_buf: &[u8], cluster_size: u32) -> Result<Vec<(u64, u64)>
                 if header == 0 {
                     break;
                 }
-                let len_len = (header >> 4) as usize;
-                let off_len = (header & 0x0F) as usize;
-                if len_len == 0 || off_len == 0 || len_len > 8 || off_len > 8 {
-                    return Err("映射对长度非法".into());
+                let delta_len = (header >> 4) as usize;
+                let length_len = (header & 0x0F) as usize;
+                if length_len == 0 || length_len > 8 || delta_len > 8 {
+                    return Err("映射对长度字段非法".into());
                 }
-                if mp + off_len + len_len > used_size {
+                if mp + length_len + delta_len > used_size {
                     return Err("映射对数据越界".into());
                 }
-                let delta = read_signed_le(&buf[mp..mp + off_len]);
-                mp += off_len;
-                let run_len = read_unsigned_le(&buf[mp..mp + len_len]);
-                mp += len_len;
+                let run_len = read_unsigned_le(&buf[mp..mp + length_len]);
+                mp += length_len;
+                let delta = read_signed_le(&buf[mp..mp + delta_len]);
+                mp += delta_len;
                 let lcn = if first {
                     delta as u64
                 } else {
@@ -1093,15 +1095,15 @@ mod tests {
         buf[attr + 0x28..attr + 0x30].copy_from_slice(&0x3000u64.to_le_bytes());
         buf[attr + 0x30..attr + 0x38].copy_from_slice(&0x3000u64.to_le_bytes());
         buf[attr + 0x38..attr + 0x40].copy_from_slice(&0x3000u64.to_le_bytes());
-        // run1: LCN=0x1000 len=0x10；run2: delta=-0x800 len=0x20
+        // run1: len=0x10 delta=0x1000；run2: len=0x20 delta=-0x800
         let mp = attr + 0x40;
-        buf[mp] = 0x13;
-        buf[mp + 1..mp + 4].copy_from_slice(&0x1000i32.to_le_bytes()[..3]);
-        buf[mp + 4] = 0x10;
-        buf[mp + 5] = 0x13;
-        buf[mp + 6..mp + 9].copy_from_slice(&(-0x800i32).to_le_bytes()[..3]);
-        buf[mp + 9] = 0x20;
-        buf[mp + 10] = 0x00;
+        buf[mp] = 0x33;
+        buf[mp + 1..mp + 4].copy_from_slice(&0x10u32.to_le_bytes()[..3]);
+        buf[mp + 4..mp + 7].copy_from_slice(&0x1000i32.to_le_bytes()[..3]);
+        buf[mp + 7] = 0x33;
+        buf[mp + 8..mp + 11].copy_from_slice(&0x20u32.to_le_bytes()[..3]);
+        buf[mp + 11..mp + 14].copy_from_slice(&(-0x800i32).to_le_bytes()[..3]);
+        buf[mp + 14] = 0x00;
         buf[0x18..0x1C].copy_from_slice(&((attr + 0x50) as u32).to_le_bytes());
 
         let runs = mft_data_runs(&buf, 4096).unwrap();
