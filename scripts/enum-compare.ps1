@@ -2,16 +2,21 @@ param(
     [string]$Root = "",
     [string]$Sizes = "1000,10000,50000",
     [int]$Rounds = 1,
-    [string]$OutFile = "benchmarks\enum-compare.md"
+    [string]$OutFile = "benchmarks\enum-compare.md",
+    [switch]$Mft,
+    [switch]$Edge
 )
 
 <#
-  0.8.6 原生枚举器 vs walkdir 全链路对比（无需管理员）。
-  walkdir 模式：ROOTUP_ENUM=walkdir；原生模式：默认（ROOTUP_ENUM 未设置）。
-  每个模式各跑一次完整应用扫描并快照 DB，用 mft_db_compare.py 比较路径/大小/时间集合。
+  0.8.6 枚举器全链路一致性对比。
+  walkdir 模式：ROOTUP_ENUM=walkdir；原生模式：默认（ROOTUP_ENUM 未设置）；
+  -Mft 时增加 MFT 臂（ROOTUP_MFT_SCAN=1，需管理员；未真正启用 MFT 会判 FAIL）。
+  -Edge 时使用边界语料（Unicode / 隐藏 / 点文件 / 空目录 / junction / 超长路径 / 深链）。
+  每臂各跑一次完整应用扫描并快照 DB，两两用 mft_db_compare.py 比较路径/大小/时间集合。
   Usage:
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\enum-compare.ps1
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\enum-compare.ps1 -Root "C:\Users\Administrator\Desktop"
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\enum-compare.ps1            # 合成三档
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\enum-compare.ps1 -Edge      # 边界语料
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\enum-compare.ps1 -Mft       # 三臂（管理员）
 #>
 
 $ErrorActionPreference = "Stop"
@@ -55,7 +60,41 @@ public static class RootUpCorpusGenEnum {
     [RootUpCorpusGenEnum]::Create($dir, $count, [Math]::Min(8, [Environment]::ProcessorCount))
 }
 
-function Invoke-OneScan([string]$dir, [bool]$win32) {
+function New-EdgeCorpus([string]$dir) {
+    [System.IO.Directory]::CreateDirectory($dir) | Out-Null
+    # Unicode names built from code points (PS 5.1 reads scripts as ANSI, so no literal CJK/emoji).
+    $course = (-join [char[]]@(0x8BFE, 0x7A0B, 0x20, 0x4F5C, 0x4E1A, 0xFF08, 0x7B2C, 0x31, 0x7AE0, 0xFF09)) + ".pdf"
+    $emoji = "notes" + [char]0xD83D + [char]0xDE00 + ".md"
+    [System.IO.File]::WriteAllText((Join-Path $dir $course), "x")
+    [System.IO.File]::WriteAllText((Join-Path $dir $emoji), "x")
+    [System.IO.File]::WriteAllText((Join-Path $dir ".env"), "x")
+    [System.IO.File]::WriteAllText((Join-Path $dir "README"), "x")
+    [System.IO.File]::WriteAllText((Join-Path $dir "tmp.crdownload"), "x")
+    $hidden = Join-Path $dir "hidden.txt"
+    [System.IO.File]::WriteAllText($hidden, "x")
+    [System.IO.File]::SetAttributes($hidden, [System.IO.FileAttributes]::Hidden)
+    [System.IO.Directory]::CreateDirectory((Join-Path $dir "empty")) | Out-Null
+    $deep = Join-Path $dir "deep"
+    for ($d = 0; $d -lt 20; $d++) {
+        $deep = Join-Path $deep ("d" + $d.ToString("00"))
+        [System.IO.Directory]::CreateDirectory($deep) | Out-Null
+    }
+    [System.IO.File]::WriteAllText((Join-Path $deep "leaf.txt"), "x")
+    # Long path (>260): create via verbatim, enumerate via normal path.
+    $longDir = Join-Path $dir (("L" * 70) + "\" + ("M" * 70) + "\" + ("N" * 70) + "\" + ("O" * 70))
+    $verbatim = "\\?\" + $longDir
+    [System.IO.Directory]::CreateDirectory($verbatim) | Out-Null
+    [System.IO.File]::WriteAllText(($verbatim + "\long.txt"), "x")
+    # Junction (best effort; failure does not affect other assertions).
+    $target = Join-Path $env:TEMP ("rootup_enum_edge_target_" + [guid]::NewGuid().ToString("N"))
+    [System.IO.Directory]::CreateDirectory((Join-Path $target "sub")) | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $target "sub\inner.txt"), "x")
+    $link = Join-Path $dir "junction"
+    & cmd /C mklink /J $link $target 2>$null | Out-Null
+    Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+function Invoke-OneScan([string]$dir, [string]$mode) {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
     $settings = @{
@@ -69,7 +108,10 @@ function Invoke-OneScan([string]$dir, [bool]$win32) {
     } | ConvertTo-Json -Depth 8
     [System.IO.File]::WriteAllText($SettingsPath, $settings, (New-Object System.Text.UTF8Encoding($false)))
     Remove-Item $LogFile -Force -ErrorAction SilentlyContinue
-    if ($win32) { Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue } else { $env:ROOTUP_ENUM = "walkdir" }
+    Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue
+    Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
+    if ($mode -eq "walkdir") { $env:ROOTUP_ENUM = "walkdir" }
+    elseif ($mode -eq "mft") { $env:ROOTUP_MFT_SCAN = "1" }
     Start-Process -FilePath $Exe | Out-Null
     $deadline = (Get-Date).AddSeconds(300)
     $line = ""
@@ -82,6 +124,12 @@ function Invoke-OneScan([string]$dir, [bool]$win32) {
             if ($m) { $line = $m.Line }
         }
     }
+    $mftUsed = $false
+    if ($mode -eq "mft" -and (Test-Path $LogFile)) {
+        $mftUsed = (Get-Content $LogFile -Raw -ErrorAction SilentlyContinue) -match "MFT enumerator used"
+    } elseif ($mode -ne "mft") {
+        $mftUsed = $true
+    }
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (-not $line) { return $null }
     return [pscustomobject]@{
@@ -89,6 +137,7 @@ function Invoke-OneScan([string]$dir, [bool]$win32) {
         errors = [int]($line -replace '.*errors=(\d+).*', '$1')
         elapsed = [double]($line -replace '.*elapsed_ms=(\d+).*', '$1')
         dbMs = [double]($line -replace '.*db_ms=(\d+).*', '$1')
+        mftUsed = $mftUsed
     }
 }
 
@@ -100,9 +149,10 @@ function Copy-DbSnapshot([string]$destDir) {
     }
 }
 
-$sizeList = @($Sizes -split '[, ]+' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ })
-if ($Root -ne "") { $sizeList = @(-1) }
-Write-Host "[enum-compare] sizes=<$($sizeList -join ',')> rounds=$Rounds root=<$Root>"
+$modeList = @("walkdir", "native")
+if ($Mft) { $modeList += "mft" }
+$sizeList = if ($Root) { @(-1) } elseif ($Edge) { @(-2) } else { @($Sizes -split '[, ]+' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ }) }
+Write-Host "[enum-compare] modes=$($modeList -join ',') sizes=<$($sizeList -join ',')> rounds=$Rounds root=<$Root> edge=$Edge"
 
 if (Test-Path $SettingsPath) { Copy-Item $SettingsPath $Backup -Force }
 Remove-Item $DbBackup -Recurse -Force -ErrorAction SilentlyContinue
@@ -118,49 +168,66 @@ New-Item -ItemType Directory -Force -Path $SnapDir | Out-Null
 
 try {
     $reportLines = [System.Collections.Generic.List[string]]::new()
-    $reportLines.Add("# Native vs walkdir full-pipeline comparison")
+    $reportLines.Add("# Enumerator full-pipeline consistency")
     $reportLines.Add("")
     $reportLines.Add("- Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
     $reportLines.Add("- Host: $([Environment]::OSVersion.VersionString)")
-    $reportLines.Add("- Root: $(if ($Root) { $Root } else { 'generated' })")
+    $reportLines.Add("- Modes: $($modeList -join ' + ')")
     $reportLines.Add("- Rounds: $Rounds")
     $reportLines.Add("")
-    $reportLines.Add("| label | walk files | native files | walk-only | native-only | size diff | time diff | ratio | verdict |")
+    $reportLines.Add("| label | A files | B files | A-only | B-only | size diff | time diff | ratio | verdict |")
     $reportLines.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     [System.IO.File]::WriteAllLines($Report, $reportLines, (New-Object System.Text.UTF8Encoding($false)))
 
     $allOk = $true
     foreach ($size in $sizeList) {
-        $rawDir = if ($Root) { $Root } else { Join-Path $env:TEMP ("rootup_enum_corpus_" + $size) }
+        $rawDir = if ($Root) { $Root } elseif ($Edge) { Join-Path $env:TEMP "rootup_enum_corpus_edge" } else { Join-Path $env:TEMP ("rootup_enum_corpus_" + $size) }
         if (-not $Root) {
             Remove-Item $rawDir -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host ("[enum-compare] creating corpus {0}..." -f $size)
-            New-Corpus $rawDir $size
+            if ($Edge) {
+                Write-Host "[enum-compare] creating edge corpus..."
+                New-EdgeCorpus $rawDir
+            } else {
+                Write-Host ("[enum-compare] creating corpus {0}..." -f $size)
+                New-Corpus $rawDir $size
+            }
         }
         $dir = $rawDir.Replace("\", "/")
-        $label = if ($Root) { "real" } else { $size }
+        $label = if ($Root) { "real" } elseif ($Edge) { "edge" } else { $size }
         for ($r = 1; $r -le $Rounds; $r++) {
-            foreach ($suffix in @("", "-wal", "-shm")) {
-                Remove-Item (Join-Path $AppData ("rootup.db" + $suffix)) -Force -ErrorAction SilentlyContinue
+            $results = @{}
+            foreach ($mode in $modeList) {
+                foreach ($suffix in @("", "-wal", "-shm")) {
+                    Remove-Item (Join-Path $AppData ("rootup.db" + $suffix)) -Force -ErrorAction SilentlyContinue
+                }
+                Write-Host "[enum-compare] $label round $r $mode..."
+                $res = Invoke-OneScan $dir $mode
+                if (-not $res) {
+                    Write-Host "[enum-compare] $label round $r $mode failed or timed out"
+                    $allOk = $false
+                    continue
+                }
+                if ($mode -eq "mft" -and -not $res.mftUsed) {
+                    Write-Host "[enum-compare] $label round $r mft NOT used (fallback) -> FAIL"
+                    $allOk = $false
+                }
+                Copy-DbSnapshot (Join-Path $SnapDir ("$mode" + "_" + $label + "_" + $r))
+                $results[$mode] = $res
             }
-            Write-Host "[enum-compare] $label round $r walkdir..."
-            $w = Invoke-OneScan $dir $false
-            Copy-DbSnapshot (Join-Path $SnapDir ("walk_" + $label + "_" + $r))
-            foreach ($suffix in @("", "-wal", "-shm")) {
-                Remove-Item (Join-Path $AppData ("rootup.db" + $suffix)) -Force -ErrorAction SilentlyContinue
+            $pairs = @(, @("walkdir", "native"))
+            if ($Mft) {
+                $pairs += , @("walkdir", "mft")
+                $pairs += , @("native", "mft")
             }
-            Write-Host "[enum-compare] $label round $r native..."
-            $n = Invoke-OneScan $dir $true
-            Copy-DbSnapshot (Join-Path $SnapDir ("native_" + $label + "_" + $r))
-            if (-not $w -or -not $n) {
-                Write-Host "[enum-compare] $label round $r scan failed or timed out"
-                $allOk = $false
-                continue
+            foreach ($pair in $pairs) {
+                $a = $pair[0]; $b = $pair[1]
+                if (-not $results.ContainsKey($a) -or -not $results.ContainsKey($b)) { continue }
+                $pairLabel = "$label-$a-vs-$b"
+                & python $Compare (Join-Path $SnapDir ("$a" + "_" + $label + "_" + $r + "\rootup.db")) (Join-Path $SnapDir ("$b" + "_" + $label + "_" + $r + "\rootup.db")) $dir $Report $pairLabel
+                if ($LASTEXITCODE -ne 0) { $allOk = $false }
+                Write-Host ("[enum-compare] {0} {1}={2}ms db={3}ms {4}={5}ms db={6}ms discovered {7}/{8} errors {9}/{10}" -f `
+                    $pairLabel, $a, $results[$a].elapsed, $results[$a].dbMs, $b, $results[$b].elapsed, $results[$b].dbMs, $results[$a].discovered, $results[$b].discovered, $results[$a].errors, $results[$b].errors)
             }
-            & python $Compare (Join-Path $SnapDir ("walk_" + $label + "_" + $r + "\rootup.db")) (Join-Path $SnapDir ("native_" + $label + "_" + $r + "\rootup.db")) $dir $Report $label
-            if ($LASTEXITCODE -ne 0) { $allOk = $false }
-            Write-Host ("[enum-compare] {0} round {1} walk={2}ms db={3}ms native={4}ms db={5}ms discovered {6}/{7} errors {8}/{9}" -f `
-                $label, $r, $w.elapsed, $w.dbMs, $n.elapsed, $n.dbMs, $w.discovered, $n.discovered, $w.errors, $n.errors)
         }
         if (-not $Root) { Remove-Item $rawDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
@@ -169,6 +236,7 @@ try {
 } finally {
     Get-Process -Name rootup -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item Env:ROOTUP_ENUM -ErrorAction SilentlyContinue
+    Remove-Item Env:ROOTUP_MFT_SCAN -ErrorAction SilentlyContinue
     if (Test-Path $Backup) { Move-Item $Backup $SettingsPath -Force } else { Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue }
     if (Test-Path $DbBackup) {
         foreach ($suffix in @("", "-wal", "-shm")) {

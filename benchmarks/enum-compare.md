@@ -1,15 +1,17 @@
-# Native vs walkdir full-pipeline comparison
+# Enumerator full-pipeline consistency
 
-- Time: 2026-08-09 22:56:36
-- Host: Microsoft Windows NT 10.0.26200.0
-- Root: generated + C:\Users\Administrator\Desktop
+- Time: 2026-08-09（多次运行汇总）
+- Host: Microsoft Windows NT 10.0.26200.0 (UBR 8875)
+- Modes: walkdir + native（MFT 对比如下“待管理员”）
 - Rounds: 1
 
-| label | walk files | native files | walk-only | native-only | size diff | time diff | ratio | verdict |
+| label | A files | B files | A-only | B-only | size diff | time diff | ratio | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1000 | 1000 | 1000 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
-| 10000 | 10000 | 10000 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
-| 50000 | 50000 | 50000 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
-| real | 71923 | 71923 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
+| 1000-walkdir-vs-native | 1000 | 1000 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
+| 10000-walkdir-vs-native | 10000 | 10000 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
+| 50000-walkdir-vs-native | 50000 | 50000 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
+| edge-walkdir-vs-native | 8 | 8 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
+| real-walkdir-vs-native | 71923 | 71923 | 0 | 0 | 0 | 0 | 0.0000% | PASS |
 
-- 耗时：1k walkdir 159ms / native 24ms；10k 833/116ms；50k 8676/687ms；real 10655/2457ms。
+- 耗时（ms）：1k 83/22；10k 619/103；50k 5363/684；edge 6/14；real 10655/2457。
+- native↔MFT / walkdir↔MFT 直接对比：需管理员运行 `enum-compare.ps1 -Mft`，见 `benchmarks/consistency-matrix.md`。
