@@ -19,12 +19,18 @@ foreach ($pattern in $patterns) {
 }
 
 $appData = Join-Path $env:APPDATA "com.rootup.desktop"
-foreach ($backup in @(
-    (Join-Path $appData "settings.json.bench.bak"),
-    (Join-Path $appData "settings.json.smoke.bak"),
-    (Join-Path $appData "rootup.db.bench.bak")
-)) {
-    if (Test-Path $backup) { Remove-Item $backup -Force -ErrorAction SilentlyContinue }
+$backupChecks = @(
+    @{ backup = Join-Path $appData "settings.json.bench.bak"; live = Join-Path $appData "settings.json" },
+    @{ backup = Join-Path $appData "settings.json.smoke.bak"; live = Join-Path $appData "settings.json" },
+    @{ backup = Join-Path $appData "rootup.db.bench.bak"; live = Join-Path $appData "rootup.db" }
+)
+foreach ($item in $backupChecks) {
+    if (-not (Test-Path $item.backup)) { continue }
+    if (Test-Path $item.live) {
+        Remove-Item $item.backup -Force -ErrorAction SilentlyContinue
+    } else {
+        Write-Host "[WARN] Keeping $($item.backup): live file missing (potential recovery copy)"
+    }
 }
 
 foreach ($report in @(

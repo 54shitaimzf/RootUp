@@ -55,3 +55,9 @@
 ## 清理
 
 - `bench-cleanup.ps1` 清理本机临时夹具、备份、DryRun/Sample 输出与测试日志；不触碰构建缓存与用户正式数据。
+
+## 语料复用（0.8.6 起）
+
+- 引擎：`ROOTUP_BENCH_PREPARE_ONLY=<dir>` 一次生成 scan10k/scan100k；`ROOTUP_BENCH_USE_CORPUS=<dir>` 复用且不删除，保证 0.8.5-rerun 与 0.8.6 使用逐字节一致的语料。
+- 系统：`ROOTUP_BENCH_PREPARE_FIXTURE=<dir>` 预生成 10k 夹具；`ROOTUP_BENCH_FIXTURE=<dir>` 复用且不在结束时删除。
+- 管理员四态：`bench-scan-paths.ps1` 启动时一次生成全部规模语料，跑完统一清理（`-KeepCorpus` 可保留）。

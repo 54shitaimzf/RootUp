@@ -1,0 +1,465 @@
+{
+    "schema":  2,
+    "version":  "0.8.6",
+    "date":  "2026-08-09T18:30:56Z",
+    "host":  {
+                 "os":  "Microsoft Windows NT 10.0.26200.0",
+                 "ubr":  "8875",
+                 "cpu":  "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+                 "rustc":  "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+                 "node":  "v25.7.0",
+                 "npm":  "11.10.1",
+                 "ram_gb":  127.7,
+                 "commit":  "9950726"
+             },
+    "scenario":  {
+                     "name":  "scan_paths_v1",
+                     "states":  [
+                                    "walkdir",
+                                    "native",
+                                    "mft",
+                                    "optimizer"
+                                ],
+                     "sizes":  [
+                                   1000,
+                                   10000,
+                                   20000,
+                                   30000,
+                                   50000
+                               ],
+                     "rounds":  3,
+                     "real_root":  "",
+                     "strict":  true
+                 },
+    "metrics":  {
+                    "scan_path_1000_walkdir_ms":  {
+                                                      "unit":  "ms",
+                                                      "p50":  129,
+                                                      "p90":  160,
+                                                      "p99":  160,
+                                                      "min":  94,
+                                                      "max":  160,
+                                                      "mean":  127.66666666666667,
+                                                      "cv":  0.21118180421818478,
+                                                      "samples":  3
+                                                  },
+                    "scan_path_1000_native_ms":  {
+                                                     "unit":  "ms",
+                                                     "p50":  24,
+                                                     "p90":  25,
+                                                     "p99":  25,
+                                                     "min":  23,
+                                                     "max":  25,
+                                                     "mean":  24,
+                                                     "cv":  0.034020690871988585,
+                                                     "samples":  3
+                                                 },
+                    "scan_path_1000_mft_ms":  {
+                                                  "unit":  "ms",
+                                                  "p50":  3230,
+                                                  "p90":  4035,
+                                                  "p99":  4035,
+                                                  "min":  3096,
+                                                  "max":  4035,
+                                                  "mean":  3453.6666666666665,
+                                                  "cv":  0.12007207011563607,
+                                                  "samples":  3
+                                              },
+                    "scan_path_1000_mft_mft_read_ms":  {
+                                                           "unit":  "ms",
+                                                           "p50":  2726,
+                                                           "p90":  3552,
+                                                           "p99":  3552,
+                                                           "min":  2617,
+                                                           "max":  3552,
+                                                           "mean":  2965,
+                                                           "cv":  0.14079264641830982,
+                                                           "samples":  3
+                                                       },
+                    "scan_path_1000_optimizer_ms":  {
+                                                        "unit":  "ms",
+                                                        "p50":  29,
+                                                        "p90":  31,
+                                                        "p99":  31,
+                                                        "min":  26,
+                                                        "max":  31,
+                                                        "mean":  28.666666666666668,
+                                                        "cv":  0.071679232592662526,
+                                                        "samples":  3
+                                                    },
+                    "scan_path_10000_walkdir_ms":  {
+                                                       "unit":  "ms",
+                                                       "p50":  956,
+                                                       "p90":  976,
+                                                       "p99":  976,
+                                                       "min":  877,
+                                                       "max":  976,
+                                                       "mean":  936.33333333333337,
+                                                       "cv":  0.0456484024008894,
+                                                       "samples":  3
+                                                   },
+                    "scan_path_10000_native_ms":  {
+                                                      "unit":  "ms",
+                                                      "p50":  106,
+                                                      "p90":  107,
+                                                      "p99":  107,
+                                                      "min":  105,
+                                                      "max":  107,
+                                                      "mean":  106,
+                                                      "cv":  0.0077027979332804346,
+                                                      "samples":  3
+                                                  },
+                    "scan_path_10000_mft_ms":  {
+                                                   "unit":  "ms",
+                                                   "p50":  3111,
+                                                   "p90":  3111,
+                                                   "p99":  3111,
+                                                   "min":  2883,
+                                                   "max":  3111,
+                                                   "mean":  3035,
+                                                   "cv":  0.035413585087431705,
+                                                   "samples":  3
+                                               },
+                    "scan_path_10000_mft_mft_read_ms":  {
+                                                            "unit":  "ms",
+                                                            "p50":  2547,
+                                                            "p90":  2555,
+                                                            "p99":  2555,
+                                                            "min":  2302,
+                                                            "max":  2555,
+                                                            "mean":  2468,
+                                                            "cv":  0.047579073527816665,
+                                                            "samples":  3
+                                                        },
+                    "scan_path_10000_optimizer_ms":  {
+                                                         "unit":  "ms",
+                                                         "p50":  102,
+                                                         "p90":  106,
+                                                         "p99":  106,
+                                                         "min":  100,
+                                                         "max":  106,
+                                                         "mean":  102.66666666666667,
+                                                         "cv":  0.024296476537493124,
+                                                         "samples":  3
+                                                     },
+                    "scan_path_20000_walkdir_ms":  {
+                                                       "unit":  "ms",
+                                                       "p50":  1691,
+                                                       "p90":  1693,
+                                                       "p99":  1693,
+                                                       "min":  1652,
+                                                       "max":  1693,
+                                                       "mean":  1678.6666666666667,
+                                                       "cv":  0.011243357956228805,
+                                                       "samples":  3
+                                                   },
+                    "scan_path_20000_native_ms":  {
+                                                      "unit":  "ms",
+                                                      "p50":  188,
+                                                      "p90":  194,
+                                                      "p99":  194,
+                                                      "min":  181,
+                                                      "max":  194,
+                                                      "mean":  187.66666666666666,
+                                                      "cv":  0.028307952842822785,
+                                                      "samples":  3
+                                                  },
+                    "scan_path_20000_mft_ms":  {
+                                                   "unit":  "ms",
+                                                   "p50":  3009,
+                                                   "p90":  3210,
+                                                   "p99":  3210,
+                                                   "min":  3002,
+                                                   "max":  3210,
+                                                   "mean":  3073.6666666666665,
+                                                   "cv":  0.031377694106675638,
+                                                   "samples":  3
+                                               },
+                    "scan_path_20000_mft_mft_read_ms":  {
+                                                            "unit":  "ms",
+                                                            "p50":  2341,
+                                                            "p90":  2528,
+                                                            "p99":  2528,
+                                                            "min":  2329,
+                                                            "max":  2528,
+                                                            "mean":  2399.3333333333335,
+                                                            "cv":  0.037974245323019559,
+                                                            "samples":  3
+                                                        },
+                    "scan_path_20000_optimizer_ms":  {
+                                                         "unit":  "ms",
+                                                         "p50":  182,
+                                                         "p90":  183,
+                                                         "p99":  183,
+                                                         "min":  180,
+                                                         "max":  183,
+                                                         "mean":  181.66666666666666,
+                                                         "cv":  0.0068654263977503509,
+                                                         "samples":  3
+                                                     },
+                    "scan_path_30000_walkdir_ms":  {
+                                                       "unit":  "ms",
+                                                       "p50":  3920,
+                                                       "p90":  4056,
+                                                       "p99":  4056,
+                                                       "min":  3807,
+                                                       "max":  4056,
+                                                       "mean":  3927.6666666666665,
+                                                       "cv":  0.025918257354942225,
+                                                       "samples":  3
+                                                   },
+                    "scan_path_30000_native_ms":  {
+                                                      "unit":  "ms",
+                                                      "p50":  430,
+                                                      "p90":  436,
+                                                      "p99":  436,
+                                                      "min":  386,
+                                                      "max":  436,
+                                                      "mean":  417.33333333333331,
+                                                      "cv":  0.053412950470608588,
+                                                      "samples":  3
+                                                  },
+                    "scan_path_30000_mft_ms":  {
+                                                   "unit":  "ms",
+                                                   "p50":  3353,
+                                                   "p90":  3480,
+                                                   "p99":  3480,
+                                                   "min":  3306,
+                                                   "max":  3480,
+                                                   "mean":  3379.6666666666665,
+                                                   "cv":  0.021746309025438022,
+                                                   "samples":  3
+                                               },
+                    "scan_path_30000_mft_mft_read_ms":  {
+                                                            "unit":  "ms",
+                                                            "p50":  2587,
+                                                            "p90":  2676,
+                                                            "p99":  2676,
+                                                            "min":  2486,
+                                                            "max":  2676,
+                                                            "mean":  2583,
+                                                            "cv":  0.030049835951547157,
+                                                            "samples":  3
+                                                        },
+                    "scan_path_30000_optimizer_ms":  {
+                                                         "unit":  "ms",
+                                                         "p50":  418,
+                                                         "p90":  456,
+                                                         "p99":  456,
+                                                         "min":  406,
+                                                         "max":  456,
+                                                         "mean":  426.66666666666669,
+                                                         "cv":  0.049951148009830554,
+                                                         "samples":  3
+                                                     },
+                    "scan_path_50000_walkdir_ms":  {
+                                                       "unit":  "ms",
+                                                       "p50":  6719,
+                                                       "p90":  6921,
+                                                       "p99":  6921,
+                                                       "min":  6472,
+                                                       "max":  6921,
+                                                       "mean":  6704,
+                                                       "cv":  0.027388140532615065,
+                                                       "samples":  3
+                                                   },
+                    "scan_path_50000_native_ms":  {
+                                                      "unit":  "ms",
+                                                      "p50":  685,
+                                                      "p90":  745,
+                                                      "p99":  745,
+                                                      "min":  652,
+                                                      "max":  745,
+                                                      "mean":  694,
+                                                      "cv":  0.05547082580668633,
+                                                      "samples":  3
+                                                  },
+                    "scan_path_50000_mft_ms":  {
+                                                   "unit":  "ms",
+                                                   "p50":  3761,
+                                                   "p90":  4021,
+                                                   "p99":  4021,
+                                                   "min":  3479,
+                                                   "max":  4021,
+                                                   "mean":  3753.6666666666665,
+                                                   "cv":  0.058964033023380484,
+                                                   "samples":  3
+                                               },
+                    "scan_path_50000_mft_mft_read_ms":  {
+                                                            "unit":  "ms",
+                                                            "p50":  2647,
+                                                            "p90":  2837,
+                                                            "p99":  2837,
+                                                            "min":  2303,
+                                                            "max":  2837,
+                                                            "mean":  2595.6666666666665,
+                                                            "cv":  0.085144130624477884,
+                                                            "samples":  3
+                                                        },
+                    "scan_path_50000_optimizer_ms":  {
+                                                         "unit":  "ms",
+                                                         "p50":  765,
+                                                         "p90":  772,
+                                                         "p99":  772,
+                                                         "min":  655,
+                                                         "max":  772,
+                                                         "mean":  730.66666666666663,
+                                                         "cv":  0.073331217769790277,
+                                                         "samples":  3
+                                                     }
+                },
+    "consistency":  {
+                        "1000":  {
+                                     "counts":  {
+                                                    "walkdir":  "1000",
+                                                    "native":  "1000",
+                                                    "mft":  "1000",
+                                                    "optimizer":  "1000"
+                                                },
+                                     "errors":  {
+                                                    "walkdir":  "0",
+                                                    "native":  "0",
+                                                    "mft":  "0",
+                                                    "optimizer":  "0"
+                                                },
+                                     "mft_used":  {
+                                                      "walkdir":  "False",
+                                                      "native":  "False",
+                                                      "mft":  "True",
+                                                      "optimizer":  "False"
+                                                  },
+                                     "counts_match":  true,
+                                     "errors_zero":  true,
+                                     "mft_forced_used":  true,
+                                     "db_sets_match":  true
+                                 },
+                        "10000":  {
+                                      "counts":  {
+                                                     "walkdir":  "10000",
+                                                     "native":  "10000",
+                                                     "mft":  "10000",
+                                                     "optimizer":  "10000"
+                                                 },
+                                      "errors":  {
+                                                     "walkdir":  "0",
+                                                     "native":  "0",
+                                                     "mft":  "0",
+                                                     "optimizer":  "0"
+                                                 },
+                                      "mft_used":  {
+                                                       "walkdir":  "False",
+                                                       "native":  "False",
+                                                       "mft":  "True",
+                                                       "optimizer":  "False"
+                                                   },
+                                      "counts_match":  true,
+                                      "errors_zero":  true,
+                                      "mft_forced_used":  true,
+                                      "db_sets_match":  true
+                                  },
+                        "20000":  {
+                                      "counts":  {
+                                                     "walkdir":  "20000",
+                                                     "native":  "20000",
+                                                     "mft":  "20000",
+                                                     "optimizer":  "20000"
+                                                 },
+                                      "errors":  {
+                                                     "walkdir":  "0",
+                                                     "native":  "0",
+                                                     "mft":  "0",
+                                                     "optimizer":  "0"
+                                                 },
+                                      "mft_used":  {
+                                                       "walkdir":  "False",
+                                                       "native":  "False",
+                                                       "mft":  "True",
+                                                       "optimizer":  "False"
+                                                   },
+                                      "counts_match":  true,
+                                      "errors_zero":  true,
+                                      "mft_forced_used":  true,
+                                      "db_sets_match":  true
+                                  },
+                        "30000":  {
+                                      "counts":  {
+                                                     "walkdir":  "30000",
+                                                     "native":  "30000",
+                                                     "mft":  "30000",
+                                                     "optimizer":  "30000"
+                                                 },
+                                      "errors":  {
+                                                     "walkdir":  "0",
+                                                     "native":  "0",
+                                                     "mft":  "0",
+                                                     "optimizer":  "0"
+                                                 },
+                                      "mft_used":  {
+                                                       "walkdir":  "False",
+                                                       "native":  "False",
+                                                       "mft":  "True",
+                                                       "optimizer":  "False"
+                                                   },
+                                      "counts_match":  true,
+                                      "errors_zero":  true,
+                                      "mft_forced_used":  true,
+                                      "db_sets_match":  true
+                                  },
+                        "50000":  {
+                                      "counts":  {
+                                                     "walkdir":  "50000",
+                                                     "native":  "50000",
+                                                     "mft":  "50000",
+                                                     "optimizer":  "50000"
+                                                 },
+                                      "errors":  {
+                                                     "walkdir":  "0",
+                                                     "native":  "0",
+                                                     "mft":  "0",
+                                                     "optimizer":  "0"
+                                                 },
+                                      "mft_used":  {
+                                                       "walkdir":  "False",
+                                                       "native":  "False",
+                                                       "mft":  "True",
+                                                       "optimizer":  "False"
+                                                   },
+                                      "counts_match":  true,
+                                      "errors_zero":  true,
+                                      "mft_forced_used":  true,
+                                      "db_sets_match":  true
+                                  }
+                    },
+    "optimizer":  {
+                      "1000":  {
+                                   "root_count":  0,
+                                   "crossover":  "Some(312500.0)",
+                                   "use_mft":  false,
+                                   "force_mft":  false
+                               },
+                      "10000":  {
+                                    "root_count":  0,
+                                    "crossover":  "Some(312500.0)",
+                                    "use_mft":  false,
+                                    "force_mft":  false
+                                },
+                      "20000":  {
+                                    "root_count":  0,
+                                    "crossover":  "Some(312500.0)",
+                                    "use_mft":  false,
+                                    "force_mft":  false
+                                },
+                      "30000":  {
+                                    "root_count":  0,
+                                    "crossover":  "Some(312500.0)",
+                                    "use_mft":  false,
+                                    "force_mft":  false
+                                },
+                      "50000":  {
+                                    "root_count":  0,
+                                    "crossover":  "Some(312500.0)",
+                                    "use_mft":  false,
+                                    "force_mft":  false
+                                }
+                  }
+}

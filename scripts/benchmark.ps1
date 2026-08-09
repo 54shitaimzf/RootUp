@@ -42,11 +42,17 @@ if (-not $Version) {
 if ($DryRun) { $Rounds = 1; $IdleSeconds = 5 }
 
 if (-not $DeterminismCheck) {
-    $Exe = Join-Path $Repo $ExePath
+    if ([System.IO.Path]::IsPathRooted($ExePath)) {
+        $Exe = $ExePath
+    } else {
+        $Exe = Join-Path $Repo $ExePath
+    }
     if (-not (Test-Path $Exe)) { throw "Release exe not found: $Exe" }
 }
 
 $FileCount = if ($DryRun) { 100 } elseif ($Huge) { 300000 } elseif ($Full) { 100000 } else { 10000 }
+$EnvFixture = $env:ROOTUP_BENCH_FIXTURE
+$EnvPrepareFixture = $env:ROOTUP_BENCH_PREPARE_FIXTURE
 $AppData = Join-Path $env:APPDATA "com.rootup.desktop"
 $SettingsPath = Join-Path $AppData "settings.json"
 $DbPath = Join-Path $AppData "rootup.db"
@@ -54,8 +60,12 @@ $LogDir = Join-Path $env:LOCALAPPDATA "com.rootup.desktop\logs"
 $LogFile = Join-Path $LogDir "rootup.log"
 $SettingsBackup = "$SettingsPath.bench.bak"
 $DbBackup = "$DbPath.bench.bak"
-$FixtureRoot = Join-Path $env:TEMP ("rootup_bench_fixture_" + [guid]::NewGuid().ToString("N"))
-$OutPath = Join-Path $Repo (Join-Path $ResultsDir "$Version.json")
+$FixtureRoot = if ($EnvFixture) { $EnvFixture } else { Join-Path $env:TEMP ("rootup_bench_fixture_" + [guid]::NewGuid().ToString("N")) }
+if ([System.IO.Path]::IsPathRooted($ResultsDir)) {
+    $OutPath = Join-Path $ResultsDir "$Version.json"
+} else {
+    $OutPath = Join-Path $Repo (Join-Path $ResultsDir "$Version.json")
+}
 if ($DryRun) {
     $OutPath = Join-Path $env:TEMP ("rootup_bench_dryrun_" + [guid]::NewGuid().ToString("N") + ".json")
 }
@@ -91,9 +101,23 @@ function Stop-RootUp {
 
 function Restore-UserData {
     Stop-RootUp
-    Remove-Item $SettingsPath, $DbPath, "$DbPath-wal", "$DbPath-shm" -Force -ErrorAction SilentlyContinue
-    if (Test-Path $SettingsBackup) { Move-Item $SettingsBackup $SettingsPath -Force }
-    if (Test-Path $DbBackup) { Move-Item $DbBackup $DbPath -Force }
+    # Restore only from backups we created. Never delete live data when no
+    # backup exists; a missing backup at this point is a hard failure.
+    $settingsOk = $true
+    $dbOk = $true
+    if (Test-Path $SettingsBackup) {
+        Move-Item $SettingsBackup $SettingsPath -Force
+    } elseif (-not (Test-Path $SettingsPath)) {
+        $settingsOk = $false
+    }
+    if (Test-Path $DbBackup) {
+        Move-Item $DbBackup $DbPath -Force
+    } elseif (-not (Test-Path $DbPath)) {
+        $dbOk = $false
+    }
+    if (-not $settingsOk -or -not $dbOk) {
+        throw "Restore-UserData failed: settings_ok=$settingsOk db_ok=$dbOk"
+    }
 }
 
 function Get-GzipKb([string]$Path) {
@@ -202,6 +226,12 @@ if ($DeterminismCheck) {
     exit 0
 }
 
+if ($EnvPrepareFixture) {
+    New-FixtureFromSpec $EnvPrepareFixture $FileCount $Shape
+    Write-Host "Fixture prepared: $EnvPrepareFixture"
+    exit 0
+}
+
 function Get-ProcIO([System.Diagnostics.Process]$Proc) {
     try {
         if ($Proc.HasExited) { return $null }
@@ -300,12 +330,15 @@ function Invoke-OneRound([bool]$FreshDb, [string]$Tag) {
 
 try {
     Stop-RootUp
-    if (Test-Path $SettingsBackup) { Restore-UserData }
+    # Stale backups from an interrupted run must never replace live data.
+    Remove-Item $SettingsBackup, $DbBackup, "$DbPath.bench.bak-wal", "$DbPath.bench.bak-shm" -Force -ErrorAction SilentlyContinue
 
     if (Test-Path $SettingsPath) { Copy-Item $SettingsPath $SettingsBackup -Force }
     if (Test-Path $DbPath) { Copy-Item $DbPath $DbBackup -Force }
 
-    New-FixtureFromSpec $FixtureRoot $FileCount $Shape
+    if (-not (Test-Path $FixtureRoot)) {
+        New-FixtureFromSpec $FixtureRoot $FileCount $Shape
+    }
     $FixtureDir = $FixtureRoot.Replace("\", "/")
     $Settings = @{
         settings = @{
@@ -392,7 +425,11 @@ try {
             samples = $summary.samples
         }
     }
-    $engineFile = Join-Path $Repo (Join-Path $ResultsDir "$Version.engine.json")
+    if ([System.IO.Path]::IsPathRooted($ResultsDir)) {
+        $engineFile = Join-Path $ResultsDir "$Version.engine.json"
+    } else {
+        $engineFile = Join-Path $Repo (Join-Path $ResultsDir "$Version.engine.json")
+    }
     if (Test-Path $engineFile) {
         $engine = Get-Content $engineFile -Raw | ConvertFrom-Json
         foreach ($prop in $engine.metrics.PSObject.Properties) {
@@ -477,6 +514,8 @@ try {
     }
 } finally {
     Restore-UserData
-    Remove-Item $FixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not $EnvFixture) {
+        Remove-Item $FixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
     Remove-Item "$SettingsPath.bench.bak", "$DbPath.bench.bak" -Force -ErrorAction SilentlyContinue
 }

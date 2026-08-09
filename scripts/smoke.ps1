@@ -185,8 +185,9 @@ if ($Sqlite3 -and (Test-Path -LiteralPath $DbPath)) {
 if (Test-Path $Backup) {
     New-Item -ItemType Directory -Path (Split-Path $SettingsPath) -Force | Out-Null
     Move-Item $Backup $SettingsPath -Force
-} else {
-    Remove-Item $SettingsPath -Force -ErrorAction SilentlyContinue
+} elseif (-not (Test-Path $SettingsPath)) {
+    Write-Host "[FAIL] settings.json missing and no smoke backup to restore" -ForegroundColor Red
+    $script:Failures++
 }
 Remove-Item $TestRoot -Recurse -Force -ErrorAction SilentlyContinue
 

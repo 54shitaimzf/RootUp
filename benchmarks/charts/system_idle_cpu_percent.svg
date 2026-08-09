@@ -11,17 +11,14 @@
 <text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>0.5008</text>
 <line x1='70' y1='30' x2='540' y2='30' stroke='#e2e8f0' stroke-width='1'/>
 <text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>1.00</text>
-<polyline points='70,122 226.7,122 383.3,122 540,122' fill='none' stroke='#10b981' stroke-width='2'/>
+<polyline points='70,122 305,122 540,122' fill='none' stroke='#10b981' stroke-width='2'/>
 <circle cx='70' cy='122' r='3.5' fill='#10b981'/>
-<text x='70' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0000</text>
-<text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.3</text>
-<circle cx='226.7' cy='122' r='3.5' fill='#10b981'/>
-<text x='226.7' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0000</text>
-<text x='226.7' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.4</text>
-<circle cx='383.3' cy='122' r='3.5' fill='#10b981'/>
-<text x='383.3' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0000</text>
-<text x='383.3' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5</text>
+<text x='70' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0010</text>
+<text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5-rerun</text>
+<circle cx='305' cy='122' r='3.5' fill='#10b981'/>
+<text x='305' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0010</text>
+<text x='305' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6-dev</text>
 <circle cx='540' cy='122' r='3.5' fill='#10b981'/>
-<text x='540' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0010</text>
-<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6-dev</text>
+<text x='540' y='114' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.0000</text>
+<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6</text>
 </svg>

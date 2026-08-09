@@ -2,26 +2,23 @@
 <rect width='560' height='260' fill='#ffffff'/>
 <text x='70' y='18' font-family='Segoe UI' font-size='13' fill='#0f172a'>engine_query_text_ms (p50, ms)</text>
 <line x1='70' y1='214' x2='540' y2='214' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='218' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>6.26</text>
+<text x='64' y='218' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>10.58</text>
 <line x1='70' y1='168' x2='540' y2='168' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='172' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>17.63</text>
+<text x='64' y='172' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>12.79</text>
 <line x1='70' y1='122' x2='540' y2='122' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='126' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>28.99</text>
+<text x='64' y='126' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>14.99</text>
 <line x1='70' y1='76' x2='540' y2='76' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>40.36</text>
+<text x='64' y='80' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>17.20</text>
 <line x1='70' y1='30' x2='540' y2='30' stroke='#e2e8f0' stroke-width='1'/>
-<text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>51.72</text>
-<polyline points='70,49.1 226.7,46.2 383.3,197.8 540,164.8' fill='none' stroke='#10b981' stroke-width='2'/>
-<circle cx='70' cy='49.1' r='3.5' fill='#10b981'/>
-<text x='70' y='41.1' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>46.99</text>
-<text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.3</text>
-<circle cx='226.7' cy='46.2' r='3.5' fill='#10b981'/>
-<text x='226.7' y='38.2' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>47.72</text>
-<text x='226.7' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.4</text>
-<circle cx='383.3' cy='197.8' r='3.5' fill='#10b981'/>
-<text x='383.3' y='189.8' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>10.26</text>
-<text x='383.3' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5</text>
-<circle cx='540' cy='164.8' r='3.5' fill='#10b981'/>
-<text x='540' y='156.8' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>18.40</text>
-<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6-dev</text>
+<text x='64' y='34' font-family='Consolas' font-size='10' fill='#64748b' text-anchor='end'>19.40</text>
+<polyline points='70,159.4 305,50.9 540,193.1' fill='none' stroke='#10b981' stroke-width='2'/>
+<circle cx='70' cy='159.4' r='3.5' fill='#10b981'/>
+<text x='70' y='151.4' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>13.20</text>
+<text x='70' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.5-rerun</text>
+<circle cx='305' cy='50.9' r='3.5' fill='#10b981'/>
+<text x='305' y='42.9' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>18.40</text>
+<text x='305' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6-dev</text>
+<circle cx='540' cy='193.1' r='3.5' fill='#10b981'/>
+<text x='540' y='185.1' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>11.58</text>
+<text x='540' y='236' font-family='Consolas' font-size='10' fill='#334155' text-anchor='middle'>0.8.6</text>
 </svg>

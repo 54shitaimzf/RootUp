@@ -90,11 +90,15 @@ $files = @(Get-ChildItem $ResultsRoot -Filter "*.json" |
 if ($files.Count -eq 0) { throw "No benchmark result files found in $ResultsRoot" }
 
 function Get-VersionParts([string]$Version) {
-    @($Version -split '[.\-+]' | ForEach-Object {
+    $isPrerelease = $Version -match '-'
+    $parts = @($Version -split '[.\-+]' | ForEach-Object {
         $num = 0
         [int]::TryParse($_, [ref]$num) | Out-Null
         $num
     })
+    # Pre-release/dev versions sort before the final release of the same number.
+    $parts += $(if ($isPrerelease) { 0 } else { 1 })
+    return $parts
 }
 
 function Get-FingerprintKey($hostInfo) {
