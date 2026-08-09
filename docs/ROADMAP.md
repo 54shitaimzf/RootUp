@@ -51,7 +51,7 @@
 ### v0.8.6「规模与体积」（性能，两阶段执行）
 
 > 0.8.6 合并 0.8.5 对接项，拆为两个阶段独立验收：阶段一「监控与查询性能」（风险最高放最前），阶段二「规模与体积」；全部完成后统一发布。
-> 状态：阶段一已实施（2026-08-09）；扫描优化里程碑完成——MFT data runs / 子树定向 / skip_roots 对齐 / USN 句柄与日志 ID 修复，真实目录 71,923 文件 MFT 与 walkdir 数量全等；交叉点实验完成（50k 起 MFT 胜出，20k–30k 边界待 25k 确认）；默认仍 walkdir。
+> 状态：阶段一已实施（2026-08-09）；扫描优化里程碑完成——MFT data runs / 子树定向 / skip_roots 对齐 / USN 句柄与日志 ID 修复 / attribute-list 大小兜底，真实目录 71,923 文件 MFT 与 walkdir 数量、大小、时间全等（size diff=0）；读取微优化（`FILE_FLAG_SEQUENTIAL_SCAN` + 32MiB 块 + FTS 表存在性单次检查 + DB 子批 1000 + 枚举器快照）带来 MFT 总耗时约 5%–8% 可测量下降；交叉点实验完成（50k 起 MFT 胜出，20k–30k 边界待 25k 确认）；默认仍 walkdir。
 
 **阶段一「监控与查询性能」**
 
@@ -60,6 +60,12 @@
 - FTS5 trigram 文本索引：附属表与 files 的同步 / 重建 / 一致性设计，评估后采纳；CJK 单字保留 LIKE 回退。
 - 索引维护复核：安静环境复核 0.8.5 三个索引对 100k 扫描 / 重分类的写入代价，验证 `idx_files_type` 去留，必要时再收窄。
 - 监控目录缺失对账：目录被删 / 盘符卸载 → 相关索引记录标记 deleted 或挂起并提示（修复幽灵文件与“目录不可访问后残留”），与 0.8.8 统一错误码体系预留对接。
+- 扫描优化实验（0.8.6 内验证，默认不引入，决策门：等价全绿 + 收益显著才采纳）：
+  - 并行 MFT 读/解析：按 data run 分 2–4 线程读+解析再合并紧凑索引（FILE 记录相互独立，仅用 `std::thread`，默认顺序执行；参考 WizTree 多线程直读）。
+  - 原生 Win32 枚举器：`FindFirstFileW/FindNextFileW` 直取 `WIN32_FIND_DATA`（大小 / 时间 / 属性），省掉 walkdir 每文件一次 `std::fs::metadata` 系统调用；作为新 `FileEnumerator` 与 walkdir 等价测试（参考 WinDirStat / Everything）。
+  - MFT 读取路径实验：直接读 `\\.\C:\$MFT`（`FILE_FLAG_BACKUP_SEMANTICS`）对比裸卷 DASD；`FILE_FLAG_NO_BUFFERING` + 对齐读（避免 2.6GB 系统缓存污染，吞吐未必提升）。
+  - jwalk 并行遍历复评（0.8.4 决策门到期）：deep/wide 语料 + feature 开关；行为等价且收益 ≥30% 才引入，否则维持 walkdir。
+  - DB 写入微优化（两条路径共用）：`upsert_many` 子批 1000→2000/3000；`mark_scan_seen` 改多行 VALUES；用引擎基准验证收益。
 - 验收：MFT/USN 与 walkdir 等价；降级矩阵全绿；写入代价回落或有明确去向；对账用例全绿。
 
 **阶段二「规模与体积」**
@@ -72,6 +78,7 @@
 
 ### v0.8.7「单元同构」（架构，允许 schema v3 迁移）
 
+- 扫描性能衔接（0.8.6 实验项转正与增量落地）：MFT 默认启用（一致性 + 交叉点阈值双条件，验收通过时）与阈值决策自动化（按上次索引文件数选择 walkdir / MFT）；USN 未变跳过重扫 / 持久化目录表 + USN 增量维护（常驻索引，把全卷 2.6GB 固定读取变为增量，Everything 模式）；0.8.6 实验结论（并行读、原生枚举、jwalk、DB 微优化）在此版本按决策结果转正或归档。
 - 索引升级为 `units` 表（v3）：`kind: file | project | software` + 通用字段（path / name / labels / state / first_seen / modified）+ 各类扩展字段（文件大小 / 类型、项目类型、软件信息）。
 - 统一查询与筛选：`kind:` 语法、搜索覆盖全部单元、文件页“全部 / 文件 / 项目 / 软件”视图；统一详情、标签、打开、定位、归档、快捷方式操作。
 - 软件单元识别：权威标记（PAF / Scoop / 便携启动器）+ 结构启发式 + 置信度 + 用户裁决；PE 版本资源校验评估。
