@@ -37,6 +37,8 @@ const ATTR_STANDARD_INFORMATION: u32 = 0x10;
 const ATTR_FILE_NAME: u32 = 0x30;
 const FILE_ATTR_REPARSE_POINT: u32 = 0x400;
 const MFT_FIXUP_SECTOR: usize = 512;
+const GENERIC_READ: u32 = 0x8000_0000;
+const SYNCHRONIZE: u32 = 0x0010_0000;
 
 /// 解析后的 FILE_NAME 属性（0x30）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -404,18 +406,34 @@ pub fn try_full_scan(
 
     let mft_path = format!("\\\\.\\{drive}\\$MFT");
     let wide: Vec<u16> = mft_path.encode_utf16().chain(std::iter::once(0)).collect();
-    let handle = unsafe {
-        CreateFileW(
-            PCWSTR(wide.as_ptr()),
-            FILE_READ_DATA.0 | FILE_READ_ATTRIBUTES.0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_SEQUENTIAL_SCAN,
-            None,
-        )
+    // 打开 $MFT 的访问组合：优先 GENERIC_READ + SYNCHRONIZE（成熟工具常用），
+    // 失败再退回 FILE_READ_DATA 组合，避免个别系统上单一访问掩码被拒。
+    let access_masks = [
+        GENERIC_READ | FILE_READ_ATTRIBUTES.0 | SYNCHRONIZE,
+        FILE_READ_DATA.0 | FILE_READ_ATTRIBUTES.0 | SYNCHRONIZE,
+    ];
+    let mut handle = None;
+    let mut last_err = String::new();
+    for access in access_masks {
+        match unsafe {
+            CreateFileW(
+                PCWSTR(wide.as_ptr()),
+                access,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                None,
+                OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_SEQUENTIAL_SCAN,
+                None,
+            )
+        } {
+            Ok(h) => {
+                handle = Some(h);
+                break;
+            }
+            Err(e) => last_err = format!("打开 $MFT 失败（可能需要管理员）: {e}"),
+        }
     }
-    .map_err(|e| format!("打开 $MFT 失败（可能需要管理员）: {e}"))?;
+    let handle = handle.ok_or(last_err)?;
     let _guard = RawHandle(handle);
 
     // 读取卷信息需要卷句柄；$MFT 句柄也可用于 DeviceIoControl
@@ -477,6 +495,7 @@ pub fn try_full_scan(
             is_symlink: false,
         });
     }
+    log::info!("scan: MFT enumerator used dir={root}");
     Ok((entries, stats))
 }
 
