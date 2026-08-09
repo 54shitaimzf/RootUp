@@ -272,23 +272,27 @@ pub fn resolve_record_paths(
     let mut failed_samples: Vec<String> = Vec::new();
     for (record_number, attr) in files {
         let parent = attr.parent_ref & MFT_REFERENCE_MASK;
-        let Some(dir_path) = resolve_dir_path(parent, &dirs, &mut cache, drive) else {
-            failed += 1;
-            if failed_samples.len() < 5 {
-                failed_samples.push(format!(
-                    "{} parent={parent:#x} dir_exists={}",
-                    attr.name,
-                    dirs.contains_key(&parent)
-                ));
+        match resolve_dir_path(parent, &dirs, &mut cache, drive) {
+            Ok(dir_path) => {
+                let full = if dir_path.ends_with('/') {
+                    format!("{dir_path}{}", attr.name)
+                } else {
+                    format!("{dir_path}/{}", attr.name)
+                };
+                resolved.push((record_number, full, attr));
             }
-            continue;
-        };
-        let full = if dir_path.ends_with('/') {
-            format!("{dir_path}{}", attr.name)
-        } else {
-            format!("{dir_path}/{}", attr.name)
-        };
-        resolved.push((record_number, full, attr));
+            Err(fail) => {
+                failed += 1;
+                if failed_samples.len() < 8 {
+                    failed_samples.push(format!(
+                        "{} parent={parent:#x} dir_exists={} fail={}",
+                        attr.name,
+                        dirs.contains_key(&parent),
+                        fail.describe()
+                    ));
+                }
+            }
+        }
     }
     log::info!(
         "scan: MFT 解析 dirs={} files={} resolved={} failed={} failed_samples={:?}",
@@ -298,7 +302,44 @@ pub fn resolve_record_paths(
         failed,
         failed_samples
     );
+    let census: Vec<String> = ["Users", "Administrator", "AppData", "Local", "Temp"]
+        .iter()
+        .filter_map(|name| {
+            let hits: Vec<u64> = dirs
+                .iter()
+                .filter(|(_, (n, _))| n == name)
+                .map(|(k, _)| *k)
+                .collect();
+            if hits.is_empty() {
+                None
+            } else {
+                Some(format!("{name}={hits:?}"))
+            }
+        })
+        .collect();
+    log::info!("scan: MFT 关键目录清点 {}", census.join(" "));
     resolved
+}
+
+#[derive(Debug)]
+enum PathFail {
+    MissingDir { record: u64, child: Option<String> },
+    Cycle(u64),
+    TooDeep,
+    CachedNone(u64),
+}
+
+impl PathFail {
+    fn describe(&self) -> String {
+        match self {
+            PathFail::MissingDir { record, child } => {
+                format!("missing_dir(record={record:#x}, child={child:?})")
+            }
+            PathFail::Cycle(record) => format!("cycle(record={record:#x})"),
+            PathFail::TooDeep => "too_deep".to_string(),
+            PathFail::CachedNone(record) => format!("cached_none(record={record:#x})"),
+        }
+    }
 }
 
 /// 解析目录记录 `start` 的完整路径；`cache` 存记录号 → 完整路径（None 表示不可解析）。
@@ -307,39 +348,42 @@ fn resolve_dir_path(
     dirs: &HashMap<u64, (String, u64)>,
     cache: &mut HashMap<u64, Option<String>>,
     drive: &str,
-) -> Option<String> {
+) -> Result<String, PathFail> {
     let mut chain: Vec<(u64, String)> = Vec::new();
     let mut current = start;
     let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
     for _ in 0..128 {
         if let Some(Some(prefix)) = cache.get(&current) {
-            return Some(finish_dir_chain(chain, prefix.clone(), cache));
+            return Ok(finish_dir_chain(chain, prefix.clone(), cache));
         }
         if cache.get(&current) == Some(&None) {
             cache.insert(start, None);
-            return None;
+            return Err(PathFail::CachedNone(current));
         }
         // 卷根 $Root 自环（父引用指向自身）或父引用为 0：路径终点。
         if current == MFT_RECORD_ROOT {
-            return Some(finish_dir_chain(chain, drive.to_string(), cache));
+            return Ok(finish_dir_chain(chain, drive.to_string(), cache));
         }
         let Some((name, parent)) = dirs.get(&current) else {
             cache.insert(start, None);
-            return None;
+            return Err(PathFail::MissingDir {
+                record: current,
+                child: chain.last().map(|(_, n)| n.clone()),
+            });
         };
         if !seen.insert(current) {
             cache.insert(start, None);
-            return None;
+            return Err(PathFail::Cycle(current));
         }
         let next = *parent & MFT_REFERENCE_MASK;
         chain.push((current, name.clone()));
         current = next;
         if current == 0 {
-            return Some(finish_dir_chain(chain, drive.to_string(), cache));
+            return Ok(finish_dir_chain(chain, drive.to_string(), cache));
         }
     }
     cache.insert(start, None);
-    None
+    Err(PathFail::TooDeep)
 }
 
 /// 将已收集的目录链倒序拼接到前缀后，并缓存沿途每个目录的完整路径。
@@ -559,12 +603,22 @@ pub fn try_full_scan(
         .filter(|r| r.is_extent || r.base_record != 0)
         .count();
     let with_names = records.iter().filter(|r| !r.file_names.is_empty()).count();
+    let skipped_reparse_dirs = records
+        .iter()
+        .filter(|r| {
+            r.is_directory
+                && r.file_names
+                    .iter()
+                    .any(|n| n.file_attributes & FILE_ATTR_REPARSE_POINT != 0)
+        })
+        .count();
     log::info!(
-        "scan: MFT 记录构成 total={} dirs={} extents={} with_file_name={}",
+        "scan: MFT 记录构成 total={} dirs={} extents={} with_file_name={} skipped_reparse_dirs={}",
         records.len(),
         dirs_in_records,
         extents,
-        with_names
+        with_names,
+        skipped_reparse_dirs
     );
     let root_long = long_path_of(root);
     let normalized_root = normalize_prefix(&root_long);
@@ -588,8 +642,14 @@ pub fn try_full_scan(
         .iter()
         .filter(|(_, p, _)| p.contains("/Users/"))
         .count();
+    let users_samples: Vec<String> = paths
+        .iter()
+        .filter(|(_, p, _)| p.contains("/Users/"))
+        .take(3)
+        .map(|(_, p, _)| p.clone())
+        .collect();
     log::info!(
-        "scan: MFT 根名命中 total={} samples={root_hit_samples:?} users_hits={users_hits}",
+        "scan: MFT 根名命中 total={} samples={root_hit_samples:?} users_hits={users_hits} users_samples={users_samples:?}",
         root_hit_total
     );
     let records_by_num: HashMap<u64, &MftRecord> =
