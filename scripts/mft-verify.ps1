@@ -26,6 +26,19 @@ $LogFile = Join-Path $env:LOCALAPPDATA "com.rootup.desktop\logs\rootup.log"
 $DbPath = Join-Path $AppData "rootup.db"
 $LogDir = Join-Path $env:TEMP "rootup_mft_logs"
 
+$sizeList = @(1000, 10000, 50000)
+if ($Sizes -ne "") {
+    # PS 5.1 + LF: keep comments ASCII so they never swallow the next line.
+    # Accept comma/space separated values (unquoted -Sizes 20000,30000 arrives as "20000 30000").
+    $sizeList = @($Sizes -split '[, ]+' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ })
+} elseif ($Huge) {
+    $sizeList += @(100000, 300000)
+}
+if ($Sizes -ne "" -and $sizeList.Count -eq 0) {
+    Write-Error "Sizes 参数无法解析: [$Sizes]"
+}
+Write-Host "[mft-verify] SizesParam=<$Sizes> sizes=$($sizeList -join ',')"
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Error "Administrator privileges are required (MFT raw read needs SeBackupPrivilege)."
@@ -33,16 +46,6 @@ if (-not $isAdmin) {
 if (-not (Test-Path $Exe)) {
     Write-Error "Build release first: npm run tauri build -- --no-bundle"
 }
-
-$sizeList = @(1000, 10000, 50000)
-if ($Sizes -ne "") {
-    # 参数名与局部变量区分大小写不敏感，故局部统一用 $sizeList。
-    # 兼容逗号/空格/混合分隔（未加引号的 `-Sizes 20000,30000` 会被解析成 "20000 30000"）。
-    $sizeList = @($Sizes -split '[, ]+' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ })
-} elseif ($Huge) {
-    $sizeList += @(100000, 300000)
-}
-Write-Host "[mft-verify] sizes=$($sizeList -join ',')"
 
 function New-Corpus([string]$dir, [int]$count) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -145,6 +148,8 @@ try {
     $report.Add("- Admin: $isAdmin")
     if ($Root -ne "") { $corpusDesc = "real dir $Root" } else { $corpusDesc = "generated" }
     $report.Add("- Corpus: $corpusDesc")
+    $report.Add("- Sizes param: <$Sizes>")
+    $report.Add("- Sizes used: $($sizeList -join ',')")
     $report.Add("")
     $report.Add("| size | walkdir p50 (ms) | MFT p50 (ms) | count match | errors | winner |")
     $report.Add("| --- | --- | --- | --- | --- | --- |")
