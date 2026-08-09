@@ -8,7 +8,9 @@
 //! 正确性约束：
 //! - 全程边界检查，损坏/截断缓冲返回 Err，不 panic；
 //! - 跳过 extent 记录（base record ≠ 0）、元文件区、重解析点与目录；
-//! - 硬链接取“命名空间优先 + 名称确定性最小”的主名；
+//! - 文件按 FILE_NAME 逐条输出（硬链接多目录项），DOS 短名剔除；
+//! - 解析结果压缩为紧凑目录/文件表，支持“子树定向解析”与“全量回退”；
+//! - USA fixup 原地应用，不逐条复制缓冲；
 //! - 需要管理员（SeBackupPrivilege）；未提权/非 NTFS 一律回退 walkdir。
 
 use crate::core::ignore::IgnoreMatcher;
@@ -16,6 +18,7 @@ use crate::core::path::normalize_path;
 use crate::core::scan::{EnumerateStats, FileEntry};
 use crate::infra::ntfs::{drive_root_of, probe_volume, MFT_REFERENCE_MASK};
 use std::collections::HashMap;
+use std::time::Instant;
 
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
@@ -138,17 +141,17 @@ fn parse_file_name_value(value: &[u8]) -> Result<FileNameAttr, String> {
     })
 }
 
-/// 解析一条 MFT 文件记录（纯函数，可单测）。
-pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
+/// 解析一条 MFT 文件记录（原地应用 USA fixup，输入必须可写且可丢弃）。
+pub fn parse_file_record(input: &mut [u8]) -> Result<MftRecord, String> {
     if input.len() < 48 || input[0..4] != FILE_RECORD_SIGNATURE {
         return Err("非 FILE 记录".into());
     }
-    let mut buf = input.to_vec();
-    apply_fixups(&mut buf)?;
+    let buf = input;
+    apply_fixups(buf)?;
 
-    let flags = read_u16(&buf, 0x16);
-    let attrs_offset = read_u16(&buf, 0x14) as usize;
-    let used_size = read_u32(&buf, 0x18) as usize;
+    let flags = read_u16(buf, 0x16);
+    let attrs_offset = read_u16(buf, 0x14) as usize;
+    let used_size = read_u32(buf, 0x18) as usize;
     if attrs_offset < 48 || attrs_offset >= used_size || used_size > buf.len() {
         return Err("属性区偏移越界".into());
     }
@@ -161,8 +164,8 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
     let mut guard = 0usize;
     while offset + 8 <= used_size && guard < 64 {
         guard += 1;
-        let attr_type = read_u32(&buf, offset);
-        let attr_len = read_u32(&buf, offset + 4) as usize;
+        let attr_type = read_u32(buf, offset);
+        let attr_len = read_u32(buf, offset + 4) as usize;
         if attr_type == ATTR_END {
             break;
         }
@@ -172,8 +175,8 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
         let non_resident = buf[offset + 8] != 0;
         let unnamed = buf[offset + 9] == 0;
         if !non_resident {
-            let value_len = read_u32(&buf, offset + 0x10) as usize;
-            let value_off = read_u16(&buf, offset + 0x14) as usize;
+            let value_len = read_u32(buf, offset + 0x10) as usize;
+            let value_off = read_u16(buf, offset + 0x14) as usize;
             let value = buf
                 .get(offset + value_off..offset + value_off + value_len)
                 .ok_or_else(|| "属性值越界".to_string())?;
@@ -197,11 +200,11 @@ pub fn parse_file_record(input: &[u8]) -> Result<MftRecord, String> {
     }
 
     Ok(MftRecord {
-        record_number: read_u32(&buf, 0x2C) as u64,
+        record_number: read_u32(buf, 0x2C) as u64,
         in_use: flags & 0x01 != 0,
         is_directory: flags & 0x02 != 0,
         is_extent: flags & 0x04 != 0,
-        base_record: read_u64(&buf, 0x20),
+        base_record: read_u64(buf, 0x20),
         file_names,
         si_attributes,
         si_modified_ms,
@@ -227,122 +230,240 @@ pub fn primary_file_name(record: &MftRecord) -> Option<&FileNameAttr> {
     })
 }
 
-/// 由记录集重建目录项路径（父链 + 卷根自环 + 环保护 + 缺失父链跳过）。
-/// 返回 `(记录号, 完整路径, 对应 FILE_NAME 属性)`：
-/// - 目录只参与父链，不输出；
-/// - 文件按 FILE_NAME 逐条输出（硬链接 = 多个目录项），跳过 DOS 短名（namespace 2）与重解析点；
-/// - 卷根 `$Root`（记录 5）的 FILE_NAME 父引用指向自身，视为路径终点，不把 "." 拼进路径。
-pub fn resolve_record_paths(
-    records: &[MftRecord],
-    drive: &str,
-) -> Vec<(u64, String, FileNameAttr)> {
-    let mut dirs: HashMap<u64, (String, u64)> = HashMap::new();
-    let mut files: Vec<(u64, FileNameAttr)> = Vec::new();
-    for record in records {
-        if !record.in_use || record.is_extent || record.base_record != 0 {
+/// 紧凑文件条目：解析后即提取，避免保留全量 MFT 记录。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompactFile {
+    pub record: u64,
+    pub name: String,
+    pub parent: u64,
+    pub size: i64,
+    pub modified_ms: i64,
+}
+
+/// 紧凑索引：目录表（记录号 → (主名, 父记录号)）与文件表。
+#[derive(Debug, Default)]
+pub struct CompactIndex {
+    pub dirs: HashMap<u64, (String, u64)>,
+    pub files: Vec<CompactFile>,
+    pub parsed: usize,
+    pub dir_records: usize,
+    pub extents: usize,
+    pub with_names: usize,
+    pub skipped_reparse_dirs: usize,
+}
+
+/// 将一条解析后的记录并入紧凑索引（目录入表、文件逐 FILE_NAME 输出）。
+pub fn push_record(index: &mut CompactIndex, record: MftRecord) {
+    index.parsed += 1;
+    if !record.in_use || record.is_extent || record.base_record != 0 {
+        if record.is_extent || record.base_record != 0 {
+            index.extents += 1;
+        }
+        return;
+    }
+    if !record.file_names.is_empty() {
+        index.with_names += 1;
+    }
+    if record.is_directory {
+        index.dir_records += 1;
+        if let Some(name) = primary_file_name(&record) {
+            if name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
+                index.skipped_reparse_dirs += 1;
+                return;
+            }
+            index.dirs.insert(
+                record.record_number,
+                (name.name.clone(), name.parent_ref & MFT_REFERENCE_MASK),
+            );
+        }
+        return;
+    }
+    let mut seen: std::collections::HashSet<(u64, String)> = std::collections::HashSet::new();
+    for name in record.file_names.iter() {
+        if name.namespace == 2 || name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
             continue;
         }
-        if record.is_directory {
-            if let Some(name) = primary_file_name(record) {
-                if name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
+        let parent = name.parent_ref & MFT_REFERENCE_MASK;
+        if !seen.insert((parent, name.name.clone())) {
+            continue;
+        }
+        let size = record.data_size.unwrap_or(name.data_size) as i64;
+        let modified_ms = record.si_modified_ms.unwrap_or(name.modified_ms);
+        index.files.push(CompactFile {
+            record: record.record_number,
+            name: name.name.clone(),
+            parent,
+            size,
+            modified_ms,
+        });
+    }
+}
+
+/// 拼接两个路径段（保证恰好一个 `/`）。
+fn join_path(base: &str, name: &str) -> String {
+    if base.is_empty() {
+        name.to_string()
+    } else if base.ends_with('/') {
+        format!("{base}{name}")
+    } else {
+        format!("{base}/{name}")
+    }
+}
+
+/// 按监控根路径段（长路径、大小写不敏感）定位根目录记录号；失败返回 None。
+pub fn locate_root_record(dirs: &HashMap<u64, (String, u64)>, root_long: &str) -> Option<u64> {
+    let normalized = normalize_path(root_long);
+    let mut parts: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+    if parts.first().is_some_and(|p| p.ends_with(':')) {
+        parts.remove(0);
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    let mut children: HashMap<u64, Vec<(u64, String)>> = HashMap::new();
+    for (&rec, (name, parent)) in dirs.iter() {
+        children
+            .entry(*parent)
+            .or_default()
+            .push((rec, name.clone()));
+    }
+    let mut current = MFT_RECORD_ROOT;
+    for part in parts {
+        let found = children.get(&current).and_then(|list| {
+            list.iter()
+                .find(|(_, n)| n.eq_ignore_ascii_case(part))
+                .map(|(rec, _)| *rec)
+        })?;
+        current = found;
+    }
+    Some(current)
+}
+
+/// 子树定向解析：从根记录 BFS，只产出子树内文件（忽略规则与 walkdir 对齐）。
+fn emit_subtree(
+    index: &CompactIndex,
+    root_record: u64,
+    base_path: &str,
+    matcher: &IgnoreMatcher,
+) -> (Vec<FileEntry>, EnumerateStats) {
+    let mut children: HashMap<u64, Vec<(u64, String)>> = HashMap::new();
+    for (&rec, (name, parent)) in index.dirs.iter() {
+        children
+            .entry(*parent)
+            .or_default()
+            .push((rec, name.clone()));
+    }
+    let mut files_by_parent: HashMap<u64, Vec<&CompactFile>> = HashMap::new();
+    for f in index.files.iter() {
+        files_by_parent.entry(f.parent).or_default().push(f);
+    }
+    let mut stats = EnumerateStats::default();
+    let mut entries = Vec::new();
+    let mut visited: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    let mut queue: std::collections::VecDeque<(u64, String)> = std::collections::VecDeque::new();
+    queue.push_back((root_record, base_path.to_string()));
+    visited.insert(root_record);
+    while let Some((rec, path)) = queue.pop_front() {
+        if let Some(files) = files_by_parent.get(&rec) {
+            for f in files {
+                if matcher.is_ignored(&f.name) {
+                    stats.ignored += 1;
                     continue;
                 }
-                dirs.insert(record.record_number, (name.name.clone(), name.parent_ref));
+                stats.discovered += 1;
+                entries.push(FileEntry {
+                    path: join_path(&path, &f.name),
+                    size: f.size,
+                    modified_ms: f.modified_ms,
+                    is_dir: false,
+                    is_symlink: false,
+                });
             }
-        } else {
-            let mut seen: std::collections::HashSet<(u64, String)> =
-                std::collections::HashSet::new();
-            for name in record.file_names.iter() {
-                if name.namespace == 2 || name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
+        }
+        if let Some(kids) = children.get(&rec) {
+            for (child_rec, name) in kids {
+                // 与 walkdir filter_entry 对齐：命中忽略规则的目录整棵跳过。
+                if matcher.is_ignored(name) {
                     continue;
                 }
-                if !seen.insert((name.parent_ref, name.name.clone())) {
-                    continue;
+                if visited.insert(*child_rec) {
+                    queue.push_back((*child_rec, join_path(&path, name)));
                 }
-                files.push((record.record_number, name.clone()));
             }
         }
     }
+    let failed = index
+        .files
+        .iter()
+        .filter(|f| !index.dirs.contains_key(&f.parent))
+        .count();
+    log::info!(
+        "scan: MFT 子树解析 root_record={root_record} entries={} failed={failed}",
+        entries.len()
+    );
+    (entries, stats)
+}
 
+/// 全量回退：父链解析全部路径后按根前缀过滤（子树定位失败时保底）。
+fn emit_fallback(
+    index: &CompactIndex,
+    drive: &str,
+    root_long: &str,
+    base_path: &str,
+    matcher: &IgnoreMatcher,
+) -> (Vec<FileEntry>, EnumerateStats) {
+    let normalized_root = normalize_prefix(root_long);
     let mut cache: HashMap<u64, Option<String>> = HashMap::new();
     cache.insert(MFT_RECORD_ROOT, Some(drive.to_string()));
-    let mut resolved: Vec<(u64, String, FileNameAttr)> = Vec::new();
-    let file_count = files.len();
+    let mut stats = EnumerateStats::default();
+    let mut entries = Vec::new();
     let mut failed = 0usize;
     let mut failed_samples: Vec<String> = Vec::new();
-    let records_by_num: HashMap<u64, &MftRecord> =
-        records.iter().map(|r| (r.record_number, r)).collect();
-    let mut missing_dir_probe: Vec<String> = Vec::new();
-    for (record_number, attr) in files {
-        let parent = attr.parent_ref & MFT_REFERENCE_MASK;
-        match resolve_dir_path(parent, &dirs, &mut cache, drive) {
-            Ok(dir_path) => {
-                let full = if dir_path.ends_with('/') {
-                    format!("{dir_path}{}", attr.name)
-                } else {
-                    format!("{dir_path}/{}", attr.name)
-                };
-                resolved.push((record_number, full, attr));
-            }
-            Err(fail) => {
+    for f in index.files.iter() {
+        let dir_path = match resolve_dir_path(f.parent, &index.dirs, &mut cache, drive) {
+            Ok(p) => p,
+            Err(e) => {
                 failed += 1;
-                if let PathFail::MissingDir { record, child } = &fail {
-                    if missing_dir_probe.len() < 6 {
-                        let detail = records_by_num
-                            .get(record)
-                            .map(|r| {
-                                let names: Vec<(String, u8)> = r
-                                    .file_names
-                                    .iter()
-                                    .map(|n| (n.name.clone(), n.namespace))
-                                    .collect();
-                                format!(
-                                    "parsed in_use={} dir={} names={names:?}",
-                                    r.in_use, r.is_directory
-                                )
-                            })
-                            .unwrap_or_else(|| "NOT_PARSED".to_string());
-                        missing_dir_probe
-                            .push(format!("record={record:#x} child={child:?} => {detail}"));
-                    }
-                }
-                if failed_samples.len() < 8 {
+                if failed_samples.len() < 5 {
                     failed_samples.push(format!(
-                        "{} parent={parent:#x} dir_exists={} fail={}",
-                        attr.name,
-                        dirs.contains_key(&parent),
-                        fail.describe()
+                        "{} parent={:#x} fail={}",
+                        f.name,
+                        f.parent,
+                        e.describe()
                     ));
                 }
+                continue;
             }
+        };
+        let full = join_path(&dir_path, &f.name);
+        let Some(relative) = full.strip_prefix(&normalized_root) else {
+            continue;
+        };
+        let out = join_path(base_path, relative);
+        let parts: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
+        let name = parts.last().copied().unwrap_or(relative);
+        let ignored_dir = parts[..parts.len().saturating_sub(1)]
+            .iter()
+            .any(|seg| matcher.is_ignored(seg));
+        if ignored_dir || matcher.is_ignored(name) {
+            stats.ignored += 1;
+            continue;
         }
+        stats.discovered += 1;
+        entries.push(FileEntry {
+            path: out,
+            size: f.size,
+            modified_ms: f.modified_ms,
+            is_dir: false,
+            is_symlink: false,
+        });
     }
     log::info!(
-        "scan: MFT 解析 dirs={} files={} resolved={} failed={} failed_samples={:?} missing_dir_probe={:?}",
-        dirs.len(),
-        file_count,
-        resolved.len(),
-        failed,
-        failed_samples,
-        missing_dir_probe
+        "scan: MFT 回退解析 resolved={} failed={} failed_samples={failed_samples:?}",
+        entries.len(),
+        failed
     );
-    let census: Vec<String> = ["Users", "Administrator", "AppData", "Local", "Temp"]
-        .iter()
-        .filter_map(|name| {
-            let hits: Vec<u64> = dirs
-                .iter()
-                .filter(|(_, (n, _))| n == name)
-                .map(|(k, _)| *k)
-                .collect();
-            if hits.is_empty() {
-                None
-            } else {
-                Some(format!("{name}={hits:?}"))
-            }
-        })
-        .collect();
-    log::info!("scan: MFT 关键目录清点 {}", census.join(" "));
-    resolved
+    (entries, stats)
 }
 
 #[derive(Debug)]
@@ -683,8 +804,10 @@ pub fn try_full_scan(
     let runs = mft_data_runs(&zero_buf, bytes_per_cluster)?;
     log::info!("scan: MFT data runs={runs:?}");
 
-    let mut records: Vec<MftRecord> = Vec::new();
+    let mut index = CompactIndex::default();
+    let mut parse_ms: u128 = 0;
     let mut parse_fail_samples: Vec<String> = Vec::new();
+    let started_read = Instant::now();
     let chunk_size = (MFT_READ_TARGET / record_size).max(1) * record_size;
     let mut chunk = vec![0u8; chunk_size];
     let mut pending: Vec<u8> = Vec::with_capacity(record_size * 2);
@@ -718,10 +841,11 @@ pub fn try_full_scan(
             pending.extend_from_slice(&chunk[..read as usize]);
             let mut start = 0usize;
             while pending.len() - start >= record_size {
-                let record_buf = &pending[start..start + record_size];
+                let record_buf = &mut pending[start..start + record_size];
                 if record_buf[0..4] == FILE_RECORD_SIGNATURE {
+                    let parse_started = Instant::now();
                     match parse_file_record(record_buf) {
-                        Ok(record) => records.push(record),
+                        Ok(record) => push_record(&mut index, record),
                         Err(e) => {
                             if parse_fail_samples.len() < 20 {
                                 let rn = if record_buf.len() >= 0x30 {
@@ -733,6 +857,7 @@ pub fn try_full_scan(
                             }
                         }
                     }
+                    parse_ms += parse_started.elapsed().as_millis();
                 }
                 start += record_size;
             }
@@ -752,118 +877,41 @@ pub fn try_full_scan(
             }
         }
     }
+    let read_ms = started_read.elapsed().as_millis();
     log::info!(
-        "scan: MFT 读取完成 records={} read_mb={}",
-        records.len(),
+        "scan: MFT 读取完成 parsed={} read_mb={}",
+        index.parsed,
         total_read / (1024 * 1024)
     );
-    if records.is_empty() {
+    if index.files.is_empty() && index.dirs.is_empty() {
         return Err("MFT 未解析出任何记录".into());
     }
     if !parse_fail_samples.is_empty() {
         log::info!("scan: MFT 解析失败 samples={parse_fail_samples:?}",);
     }
 
-    let mut stats = EnumerateStats::default();
-    let paths = resolve_record_paths(&records, &drive);
-    log::info!(
-        "scan: MFT 路径重建 file_entries={} drive={}",
-        paths.len(),
-        drive
-    );
-    let dirs_in_records = records.iter().filter(|r| r.is_directory).count();
-    let extents = records
-        .iter()
-        .filter(|r| r.is_extent || r.base_record != 0)
-        .count();
-    let with_names = records.iter().filter(|r| !r.file_names.is_empty()).count();
-    let skipped_reparse_dirs = records
-        .iter()
-        .filter(|r| {
-            r.is_directory
-                && r.file_names
-                    .iter()
-                    .any(|n| n.file_attributes & FILE_ATTR_REPARSE_POINT != 0)
-        })
-        .count();
-    log::info!(
-        "scan: MFT 记录构成 total={} dirs={} extents={} with_file_name={} skipped_reparse_dirs={}",
-        records.len(),
-        dirs_in_records,
-        extents,
-        with_names,
-        skipped_reparse_dirs
-    );
     let root_long = long_path_of(root);
-    let normalized_root = normalize_prefix(&root_long);
-    let root_prefix = normalize_prefix(root);
-    let root_basename = normalized_root
-        .trim_end_matches('/')
-        .rsplit('/')
-        .next()
-        .unwrap_or("");
-    let root_hit_total = paths
-        .iter()
-        .filter(|(_, p, _)| p.contains(root_basename))
-        .count();
-    let root_hit_samples: Vec<String> = paths
-        .iter()
-        .filter(|(_, p, _)| p.contains(root_basename))
-        .take(3)
-        .map(|(_, p, _)| p.clone())
-        .collect();
-    let users_hits = paths
-        .iter()
-        .filter(|(_, p, _)| p.contains("/Users/"))
-        .count();
-    let users_samples: Vec<String> = paths
-        .iter()
-        .filter(|(_, p, _)| p.contains("/Users/"))
-        .take(3)
-        .map(|(_, p, _)| p.clone())
-        .collect();
+    let base_path = normalize_path(root);
+    let resolve_started = Instant::now();
+    let located = locate_root_record(&index.dirs, &root_long);
+    log::info!("scan: MFT 根定位 root={root_long} record={located:?}");
+    let (entries, stats) = match located {
+        Some(root_record) => emit_subtree(&index, root_record, &base_path, matcher),
+        None => emit_fallback(&index, &drive, &root_long, &base_path, matcher),
+    };
+    let resolve_ms = resolve_started.elapsed().as_millis();
     log::info!(
-        "scan: MFT 根名命中 total={} samples={root_hit_samples:?} users_hits={users_hits} users_samples={users_samples:?}",
-        root_hit_total
+        "scan: MFT 阶段 read_ms={read_ms} parse_ms={parse_ms} resolve_ms={resolve_ms} read_mb={} dirs={} files={} parsed={} extents={} with_names={} skipped_reparse_dirs={}",
+        total_read / (1024 * 1024),
+        index.dirs.len(),
+        index.files.len(),
+        index.parsed,
+        index.extents,
+        index.with_names,
+        index.skipped_reparse_dirs
     );
-    let records_by_num: HashMap<u64, &MftRecord> =
-        records.iter().map(|r| (r.record_number, r)).collect();
-    let mut entries = Vec::new();
-    for (record_number, path, attr) in paths.iter() {
-        let Some(relative) = path.strip_prefix(&normalized_root) else {
-            continue;
-        };
-        let full = normalize_path(&format!("{root_prefix}{relative}"));
-        let parts: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
-        let name = parts.last().copied().unwrap_or(relative);
-        // 与 walkdir 的 filter_entry 对齐：被忽略规则命中的祖先目录整棵跳过。
-        let ignored_dir = parts[..parts.len().saturating_sub(1)]
-            .iter()
-            .any(|seg| matcher.is_ignored(seg));
-        if ignored_dir || matcher.is_ignored(name) {
-            stats.ignored += 1;
-            continue;
-        }
-        let record = records_by_num.get(record_number).copied();
-        let size = record.and_then(|r| r.data_size).unwrap_or(attr.data_size) as i64;
-        let modified_ms = record
-            .and_then(|r| r.si_modified_ms)
-            .unwrap_or(attr.modified_ms);
-        stats.discovered += 1;
-        entries.push(FileEntry {
-            path: full,
-            size,
-            modified_ms,
-            is_dir: false,
-            is_symlink: false,
-        });
-    }
     if entries.is_empty() {
-        let samples: Vec<String> = paths.iter().take(5).map(|(_, p, _)| p.clone()).collect();
-        log::warn!(
-            "scan: MFT 根前缀无匹配 root={} samples={samples:?}",
-            normalized_root
-        );
+        log::warn!("scan: MFT 产出为空 root={root_long} located={located:?}");
     }
     log::info!("scan: MFT enumerator used dir={root}");
     Ok((entries, stats))
@@ -929,8 +977,8 @@ mod tests {
 
     #[test]
     fn parses_file_name_record_with_fixups() {
-        let buf = base_record_buffer("报告.pdf", 42, 0x01);
-        let record = parse_file_record(&buf).unwrap();
+        let mut buf = base_record_buffer("报告.pdf", 42, 0x01);
+        let record = parse_file_record(&mut buf).unwrap();
         assert_eq!(record.record_number, 42);
         assert!(record.in_use);
         assert!(!record.is_directory);
@@ -945,14 +993,14 @@ mod tests {
 
     #[test]
     fn rejects_truncated_and_corrupted_records() {
-        let buf = base_record_buffer("a.txt", 1, 0x01);
-        assert!(parse_file_record(&buf[..48]).is_err());
-        assert!(parse_file_record(&buf[..400]).is_err());
+        let mut buf = base_record_buffer("a.txt", 1, 0x01);
+        assert!(parse_file_record(&mut buf[..48]).is_err());
+        assert!(parse_file_record(&mut buf[..400]).is_err());
         let mut corrupted = buf.clone();
         corrupted[0x16..0x18].copy_from_slice(&0xFFFFu16.to_le_bytes());
         corrupted[10] ^= 0xFF;
         // 损坏的 USA 或属性区应返回 Err 或不产生非法字段
-        let _ = parse_file_record(&corrupted);
+        let _ = parse_file_record(&mut corrupted);
     }
 
     #[test]
@@ -970,13 +1018,13 @@ mod tests {
             for b in buf.iter_mut() {
                 *b = next() as u8;
             }
-            let _ = parse_file_record(&buf);
+            let _ = parse_file_record(&mut buf);
         }
     }
 
     #[test]
     fn primary_name_prefers_win32_namespace_and_lexicographic_min() {
-        let mut record = parse_file_record(&base_record_buffer("b.txt", 1, 0x01)).unwrap();
+        let mut record = parse_file_record(&mut base_record_buffer("b.txt", 1, 0x01)).unwrap();
         record.file_names.push(FileNameAttr {
             parent_ref: 0,
             creation_ms: 0,
@@ -1001,23 +1049,30 @@ mod tests {
     }
 
     #[test]
-    fn resolve_record_paths_handles_root_self_loop_hardlinks_and_cycles() {
+    fn compact_index_subtree_and_fallback_match_walkdir_semantics() {
         // 卷根 $Root（记录 5）：FILE_NAME 父引用指向自身（NTFS 真实布局）。
-        let mut vol_root = parse_file_record(&base_record_buffer(".", 5, 0x03)).unwrap();
+        let mut vol_root = parse_file_record(&mut base_record_buffer(".", 5, 0x03)).unwrap();
         vol_root.is_directory = true;
         vol_root.file_names[0].parent_ref = (0x0100u64 << 48) | 5;
-
-        let mut root = parse_file_record(&base_record_buffer("root", 3, 0x03)).unwrap();
+        let mut root = parse_file_record(&mut base_record_buffer("root", 3, 0x03)).unwrap();
         root.is_directory = true;
         root.file_names[0].parent_ref = (0x0101u64 << 48) | 5;
-        let mut dir = parse_file_record(&base_record_buffer("dir", 2, 0x03)).unwrap();
+        let mut dir = parse_file_record(&mut base_record_buffer("dir", 2, 0x03)).unwrap();
         dir.is_directory = true;
         dir.file_names[0].parent_ref = (0x0102u64 << 48) | 3;
-        let mut alt = parse_file_record(&base_record_buffer("alt", 4, 0x03)).unwrap();
+        let mut alt = parse_file_record(&mut base_record_buffer("alt", 4, 0x03)).unwrap();
         alt.is_directory = true;
         alt.file_names[0].parent_ref = (0x0103u64 << 48) | 3;
+        // 命中默认忽略规则的目录（exact_names=desktop.ini）应整棵剪掉。
+        let mut ignored_dir =
+            parse_file_record(&mut base_record_buffer("desktop.ini", 9, 0x03)).unwrap();
+        ignored_dir.is_directory = true;
+        ignored_dir.file_names[0].parent_ref = (0x0107u64 << 48) | 3;
+        let mut ignored_file =
+            parse_file_record(&mut base_record_buffer("inner.txt", 10, 0x01)).unwrap();
+        ignored_file.file_names[0].parent_ref = (0x0108u64 << 48) | 9;
 
-        let mut file = parse_file_record(&base_record_buffer("a.txt", 1, 0x01)).unwrap();
+        let mut file = parse_file_record(&mut base_record_buffer("a.txt", 1, 0x01)).unwrap();
         file.file_names[0].parent_ref = (0x0104u64 << 48) | 2;
         // 硬链接：同一记录另一个 FILE_NAME 指向不同父目录。
         file.file_names.push(FileNameAttr {
@@ -1041,29 +1096,63 @@ mod tests {
             namespace: 2,
             name: "A.TXT".into(),
         });
-
-        let mut reparse = parse_file_record(&base_record_buffer("link", 6, 0x01)).unwrap();
+        let mut reparse = parse_file_record(&mut base_record_buffer("link", 6, 0x01)).unwrap();
         reparse.file_names[0].file_attributes |= FILE_ATTR_REPARSE_POINT;
-        let mut cycle_a = parse_file_record(&base_record_buffer("ca", 7, 0x01)).unwrap();
-        let mut cycle_b = parse_file_record(&base_record_buffer("cb", 8, 0x01)).unwrap();
+        let mut cycle_a = parse_file_record(&mut base_record_buffer("ca", 7, 0x01)).unwrap();
+        let mut cycle_b = parse_file_record(&mut base_record_buffer("cb", 8, 0x01)).unwrap();
         cycle_a.file_names[0].parent_ref = (0x0200u64 << 48) | 8;
         cycle_b.file_names[0].parent_ref = (0x0201u64 << 48) | 7;
 
-        let records = vec![vol_root, root, dir, alt, file, reparse, cycle_a, cycle_b];
-        let paths = resolve_record_paths(&records, "C:");
-        let by_path: Vec<&str> = paths.iter().map(|(_, p, _)| p.as_str()).collect();
-        assert!(by_path.contains(&"C:/root/dir/a.txt"));
-        assert!(by_path.contains(&"C:/root/alt/a2.txt"), "硬链接应逐条输出");
-        assert!(!by_path.contains(&"C:/root/dir/A.TXT"), "DOS 短名不应输出");
-        assert!(!by_path.contains(&"C:/link"), "重解析点不应产出");
-        assert!(!by_path.contains(&"C:/ca"), "父链成环不应产出");
-        assert!(!by_path.contains(&"C:/cb"), "父链成环不应产出");
-        assert!(
-            paths
-                .iter()
-                .all(|(rn, _, _)| *rn != 2 && *rn != 3 && *rn != 4 && *rn != 5),
-            "目录不应作为文件输出"
+        let mut index = CompactIndex::default();
+        for record in [
+            vol_root,
+            root,
+            dir,
+            alt,
+            ignored_dir,
+            ignored_file,
+            file,
+            reparse,
+            cycle_a,
+            cycle_b,
+        ] {
+            push_record(&mut index, record);
+        }
+        let matcher = IgnoreMatcher::new();
+
+        assert_eq!(locate_root_record(&index.dirs, "C:/root"), Some(3));
+        assert_eq!(
+            locate_root_record(&index.dirs, "c:/ROOT"),
+            Some(3),
+            "大小写不敏感"
         );
+        assert_eq!(locate_root_record(&index.dirs, "C:/missing"), None);
+
+        let (sub_entries, sub_stats) = emit_subtree(&index, 3, "C:/root", &matcher);
+        let sub_paths: Vec<&str> = sub_entries.iter().map(|e| e.path.as_str()).collect();
+        assert!(sub_paths.contains(&"C:/root/dir/a.txt"));
+        assert!(
+            sub_paths.contains(&"C:/root/alt/a2.txt"),
+            "硬链接应逐条输出"
+        );
+        assert!(
+            !sub_paths.contains(&"C:/root/dir/A.TXT"),
+            "DOS 短名不应输出"
+        );
+        assert!(
+            !sub_paths.contains(&"C:/root/desktop.ini/inner.txt"),
+            "忽略目录应整棵剪掉"
+        );
+        assert!(!sub_paths.contains(&"C:/root/link"), "重解析点不应产出");
+        assert!(!sub_paths.contains(&"C:/root/ca") && !sub_paths.contains(&"C:/root/cb"));
+        assert_eq!(sub_stats.discovered, 2);
+
+        let (fb_entries, _) = emit_fallback(&index, "C:", "C:/root", "C:/root", &matcher);
+        let fb_paths: Vec<&str> = fb_entries.iter().map(|e| e.path.as_str()).collect();
+        assert!(fb_paths.contains(&"C:/root/dir/a.txt"));
+        assert!(fb_paths.contains(&"C:/root/alt/a2.txt"));
+        assert!(!fb_paths.contains(&"C:/root/dir/A.TXT"));
+        assert!(!fb_paths.contains(&"C:/root/desktop.ini/inner.txt"));
     }
 
     #[test]
