@@ -263,6 +263,7 @@ impl ScanLoop {
         let mut processed = 0usize;
         let mut cancelled = false;
         let mut flush_errors = 0usize;
+        let mut db_ms: u128 = 0;
 
         let mut handle_entry = |entry: FileEntry| -> bool {
             if self.shared.cancel.load(Ordering::SeqCst) {
@@ -280,16 +281,20 @@ impl ScanLoop {
             seen_batch.push(path_key(&entry.path));
             batch.push(record);
             if seen_batch.len() >= self.params.batch_size {
+                let db_started = Instant::now();
                 if let Err(e) = self.flush_seen(&mut seen_batch) {
                     flush_errors += 1;
                     log::error!("scan: 写入已见批次失败: {e}");
                 }
+                db_ms += db_started.elapsed().as_millis();
             }
             if batch.len() >= self.params.batch_size {
+                let db_started = Instant::now();
                 if let Err(e) = self.flush_batch(&mut batch) {
                     flush_errors += 1;
                     log::error!("scan: 写入批次失败: {e}");
                 }
+                db_ms += db_started.elapsed().as_millis();
             }
             processed += 1;
             if processed - last_progress >= self.params.progress_interval {
@@ -329,6 +334,7 @@ impl ScanLoop {
             }
         };
 
+        let db_started = Instant::now();
         if let Err(e) = self.flush_seen(&mut seen_batch) {
             flush_errors += 1;
             log::error!("scan: 写入已见批次失败: {e}");
@@ -337,6 +343,7 @@ impl ScanLoop {
             flush_errors += 1;
             log::error!("scan: 写入批次失败: {e}");
         }
+        db_ms += db_started.elapsed().as_millis();
 
         let cancelled = cancelled || self.shared.cancel.load(Ordering::SeqCst);
         let discovered = enumerate_stats.discovered;
@@ -351,12 +358,14 @@ impl ScanLoop {
 
         if cancelled {
             // 清理差集临时表并跳过删除标记
+            let diff_started = Instant::now();
             if let Ok(mut s) = self.store.lock() {
                 let _ = s.finish_scan_diff(
                     self.params.deletion_guard_ratio,
                     self.params.deletion_guard_min as i64,
                 );
             }
+            db_ms += diff_started.elapsed().as_millis();
             let summary = ScanSummary {
                 dir: dir.to_string(),
                 discovered,
@@ -369,7 +378,7 @@ impl ScanLoop {
                 files_per_sec,
                 cancelled: true,
             };
-            log::info!("scan: 取消 dir={dir} elapsed_ms={elapsed_ms}");
+            log::info!("scan: 取消 dir={dir} elapsed_ms={elapsed_ms} db_ms={db_ms}");
             self.sink.on_event(ScanEvent::Cancelled {
                 summary: summary.clone(),
             });
@@ -377,6 +386,7 @@ impl ScanLoop {
         }
 
         // 差集：风暴守卫 → 候选二次确认（当前仍存在则不标） → 批量标记
+        let diff_started = Instant::now();
         let diff = self
             .store
             .lock()
@@ -387,6 +397,7 @@ impl ScanLoop {
                     self.params.deletion_guard_min as i64,
                 )
             });
+        db_ms += diff_started.elapsed().as_millis();
         let mut updated = 0usize;
         let mut missing_deleted = 0i64;
         match diff {
@@ -406,16 +417,20 @@ impl ScanLoop {
                         .collect();
                     if !missing.is_empty() {
                         match self.store.lock() {
-                            Ok(mut s) => match s.mark_missing(&missing) {
-                                Ok(n) => {
-                                    missing_deleted = n;
-                                    log::info!("scan: 差集 dir={dir} deleted={n}");
+                            Ok(mut s) => {
+                                let mark_started = Instant::now();
+                                match s.mark_missing(&missing) {
+                                    Ok(n) => {
+                                        missing_deleted = n;
+                                        log::info!("scan: 差集 dir={dir} deleted={n}");
+                                    }
+                                    Err(e) => {
+                                        errors += 1;
+                                        log::error!("scan: 差集写入失败 dir={dir}: {e}");
+                                    }
                                 }
-                                Err(e) => {
-                                    errors += 1;
-                                    log::error!("scan: 差集写入失败 dir={dir}: {e}");
-                                }
-                            },
+                                db_ms += mark_started.elapsed().as_millis();
+                            }
                             Err(e) => {
                                 errors += 1;
                                 log::error!("scan: 差集锁失败 dir={dir}: {e}");
@@ -432,7 +447,9 @@ impl ScanLoop {
 
         // 扫描完成后的轻量维护（SQLite 执行 PRAGMA optimize）
         if let Ok(mut s) = self.store.lock() {
+            let opt_started = Instant::now();
             let _ = s.optimize();
+            db_ms += opt_started.elapsed().as_millis();
         }
 
         let added = discovered.saturating_sub(updated);
@@ -452,7 +469,7 @@ impl ScanLoop {
             summary: summary.clone(),
         });
         log::info!(
-            "scan: 完成 dir={dir} discovered={} added={} updated={} ignored={} errors={} missing={} elapsed_ms={} files_per_sec={:.1} cancelled=false",
+            "scan: 完成 dir={dir} discovered={} added={} updated={} ignored={} errors={} missing={} elapsed_ms={} db_ms={} files_per_sec={:.1} cancelled=false",
             summary.discovered,
             summary.added,
             summary.updated,
@@ -460,6 +477,7 @@ impl ScanLoop {
             summary.errors,
             summary.missing_deleted,
             summary.elapsed_ms,
+            db_ms,
             summary.files_per_sec
         );
     }

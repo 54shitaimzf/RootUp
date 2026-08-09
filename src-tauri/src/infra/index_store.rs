@@ -566,33 +566,45 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         {
-            let mut stmt = tx
-                .prepare(
-                    r#"
-                    INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-                    ON CONFLICT(path) DO UPDATE SET
-                        name = excluded.name,
-                        size = excluded.size,
-                        file_type = excluded.file_type,
-                        labels = excluded.labels,
-                        modified = excluded.modified,
-                        state = excluded.state
-                    "#,
-                )
-                .map_err(|e| e.to_string())?;
-            for record in records {
-                stmt.execute(params![
-                    record.path,
-                    record.name,
-                    record.size,
-                    record.file_type,
-                    record.labels,
-                    record.first_seen,
-                    record.modified,
-                    record.state,
-                ])
-                .map_err(|e| e.to_string())?;
+            // 多行 VALUES 批量写入（子批 500，控制在变量数上限内），
+            // first_seen 不参与冲突更新以保留首次发现时间。
+            for chunk in records.chunks(500) {
+                let mut sql = String::from(
+                    "INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state) VALUES ",
+                );
+                let mut values: Vec<Value> = Vec::with_capacity(chunk.len() * 8);
+                for (i, record) in chunk.iter().enumerate() {
+                    if i > 0 {
+                        sql.push(',');
+                    }
+                    let base = i * 8;
+                    sql.push_str(&format!(
+                        "(?{},?{},?{},?{},?{},?{},?{},?{})",
+                        base + 1,
+                        base + 2,
+                        base + 3,
+                        base + 4,
+                        base + 5,
+                        base + 6,
+                        base + 7,
+                        base + 8
+                    ));
+                    values.push(Value::Text(record.path.clone()));
+                    values.push(Value::Text(record.name.clone()));
+                    values.push(Value::Integer(record.size));
+                    values.push(Value::Text(record.file_type.clone()));
+                    values.push(Value::Text(record.labels.clone()));
+                    values.push(Value::Integer(record.first_seen));
+                    values.push(Value::Integer(record.modified));
+                    values.push(Value::Text(record.state.clone()));
+                }
+                sql.push_str(
+                    " ON CONFLICT(path) DO UPDATE SET name=excluded.name, size=excluded.size, \
+                     file_type=excluded.file_type, labels=excluded.labels, \
+                     modified=excluded.modified, state=excluded.state",
+                );
+                tx.execute(&sql, params_from_iter(values.iter()))
+                    .map_err(|e| e.to_string())?;
             }
             for record in records {
                 sync_fts_for_path(&tx, &record.path)?;

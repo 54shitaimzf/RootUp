@@ -103,7 +103,7 @@ pub struct ScanParams {
 impl Default for ScanParams {
     fn default() -> Self {
         Self {
-            batch_size: 500,
+            batch_size: 2000,
             progress_interval: 2000,
             deletion_guard_ratio: 0.25,
             deletion_guard_min: 500,
