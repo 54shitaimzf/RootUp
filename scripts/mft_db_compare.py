@@ -11,6 +11,8 @@ import sys
 
 
 def load(db_path, root):
+    # DB 内路径统一为前斜杠；脚本传入的根路径可能是反斜杠风格。
+    root = root.replace("\\", "/").rstrip("/")
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     cur = conn.cursor()
     rows = cur.execute(

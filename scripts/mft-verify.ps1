@@ -37,10 +37,12 @@ if (-not (Test-Path $Exe)) {
 $sizeList = @(1000, 10000, 50000)
 if ($Sizes -ne "") {
     # 参数名与局部变量区分大小写不敏感，故局部统一用 $sizeList。
-    $sizeList = @($Sizes.Split(',') | ForEach-Object { [int]($_.Trim()) })
+    # 兼容逗号/空格/混合分隔（未加引号的 `-Sizes 20000,30000` 会被解析成 "20000 30000"）。
+    $sizeList = @($Sizes -split '[, ]+' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ })
 } elseif ($Huge) {
     $sizeList += @(100000, 300000)
 }
+Write-Host "[mft-verify] sizes=$($sizeList -join ',')"
 
 function New-Corpus([string]$dir, [int]$count) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
