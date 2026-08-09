@@ -112,17 +112,17 @@ New-Item -ItemType Directory -Force -Path $SnapDir | Out-Null
 try {
     $rootLong = Get-LongPath $Root
     $ubr = try { (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name UBR).UBR } catch { '?' }
-    $report = [System.Collections.Generic.List[string]]::new()
-    $report.Add("# MFT real-dir consistency validation")
-    $report.Add("")
-    $report.Add("- Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
-    $report.Add("- Host: $([Environment]::OSVersion.VersionString) (UBR $ubr)")
-    $report.Add("- Root: $rootLong")
-    $report.Add("- Rounds: $Rounds")
-    $report.Add("")
-    $report.Add("| round | walk files | mft files | walk-only | mft-only | size diff | time diff | ratio | verdict |")
-    $report.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
-    [System.IO.File]::WriteAllLines($Report, $report, (New-Object System.Text.UTF8Encoding($false)))
+    $reportLines = [System.Collections.Generic.List[string]]::new()
+    $reportLines.Add("# MFT real-dir consistency validation")
+    $reportLines.Add("")
+    $reportLines.Add("- Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+    $reportLines.Add("- Host: $([Environment]::OSVersion.VersionString) (UBR $ubr)")
+    $reportLines.Add("- Root: $rootLong")
+    $reportLines.Add("- Rounds: $Rounds")
+    $reportLines.Add("")
+    $reportLines.Add("| round | walk files | mft files | walk-only | mft-only | size diff | time diff | ratio | verdict |")
+    $reportLines.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    [System.IO.File]::WriteAllLines($Report, $reportLines, (New-Object System.Text.UTF8Encoding($false)))
 
     $allOk = $true
     for ($r = 1; $r -le $Rounds; $r++) {

@@ -353,6 +353,7 @@ pub fn read_usn_delta(drive: &str, start_usn: u64) -> Result<(Vec<UsnRecord>, u6
     }
     let first_usn = u64::from_le_bytes(query[8..16].try_into().unwrap());
     let current = u64::from_le_bytes(query[16..24].try_into().unwrap());
+    let usn_journal_id = u64::from_le_bytes(query[0..8].try_into().unwrap());
     if first_usn > start_usn {
         return Err(format!(
             "USN 日志已裁剪（first={first_usn} > last={start_usn}），无法补账"
@@ -369,7 +370,9 @@ pub fn read_usn_delta(drive: &str, start_usn: u64) -> Result<(Vec<UsnRecord>, u6
         ReturnOnlyOnClose: 0,
         Timeout: 0,
         BytesToWaitFor: 0,
-        UsnJournalID: 0,
+        // UsnJournalID 必须等于卷当前日志 ID，否则 FSCTL_READ_USN_JOURNAL 返回
+        // ERROR_INVALID_PARAMETER（0x80070057）。
+        UsnJournalID: usn_journal_id,
     };
     let mut buf = vec![0u8; 1 << 20];
     loop {
