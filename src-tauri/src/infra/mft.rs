@@ -237,6 +237,8 @@ pub struct CompactFile {
     pub name: String,
     pub parent: u64,
     pub size: i64,
+    /// `$DATA` 属性是否解析到真实大小（false = 走 FILE_NAME 兜底，可能需要元数据补查）。
+    pub size_known: bool,
     pub modified_ms: i64,
 }
 
@@ -287,6 +289,7 @@ pub fn push_record(index: &mut CompactIndex, record: MftRecord) {
         if !seen.insert((parent, name.name.clone())) {
             continue;
         }
+        let size_known = record.data_size.is_some();
         let size = record.data_size.unwrap_or(name.data_size) as i64;
         let modified_ms = record.si_modified_ms.unwrap_or(name.modified_ms);
         index.files.push(CompactFile {
@@ -294,6 +297,7 @@ pub fn push_record(index: &mut CompactIndex, record: MftRecord) {
             name: name.name.clone(),
             parent,
             size,
+            size_known,
             modified_ms,
         });
     }
@@ -377,9 +381,17 @@ fn emit_subtree(
                     continue;
                 }
                 stats.discovered += 1;
+                let size = if f.size_known {
+                    f.size
+                } else {
+                    // attribute-list extent 未解析到 $DATA：按路径补一次元数据（仅异常项）。
+                    std::fs::metadata(&full)
+                        .map(|m| m.len() as i64)
+                        .unwrap_or(f.size)
+                };
                 entries.push(FileEntry {
                     path: full,
-                    size: f.size,
+                    size,
                     modified_ms: f.modified_ms,
                     is_dir: false,
                     is_symlink: false,
@@ -464,9 +476,16 @@ fn emit_fallback(
             continue;
         }
         stats.discovered += 1;
+        let size = if f.size_known {
+            f.size
+        } else {
+            std::fs::metadata(&out)
+                .map(|m| m.len() as i64)
+                .unwrap_or(f.size)
+        };
         entries.push(FileEntry {
             path: out,
-            size: f.size,
+            size,
             modified_ms: f.modified_ms,
             is_dir: false,
             is_symlink: false,
@@ -1228,6 +1247,37 @@ mod tests {
 
         let runs = mft_data_runs(&buf, 4096).unwrap();
         assert_eq!(runs, vec![(0x1000, 0x10), (0x800, 0x20)]);
+    }
+
+    #[test]
+    fn unknown_size_falls_back_to_metadata() {
+        let dir =
+            std::env::temp_dir().join(format!("rootup_mft_size_fallback_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.bin"), vec![0u8; 1234]).unwrap();
+
+        let mut index = CompactIndex::default();
+        index.dirs.insert(2, ("size_dir".into(), 5));
+        index.files.push(CompactFile {
+            record: 1,
+            name: "a.bin".into(),
+            parent: 2,
+            size: 0,
+            size_known: false,
+            modified_ms: 0,
+        });
+        let matcher = IgnoreMatcher::new();
+        let (entries, _) = emit_subtree(
+            &index,
+            2,
+            &normalize_path(&dir.to_string_lossy()),
+            &matcher,
+            &[],
+        );
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].size, 1234, "attribute-list 缺失大小应补查元数据");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
