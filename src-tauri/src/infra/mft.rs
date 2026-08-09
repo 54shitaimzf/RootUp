@@ -35,6 +35,7 @@ const FILE_ATTR_REPARSE_POINT: u32 = 0x400;
 const MFT_FIXUP_SECTOR: usize = 512;
 const MFT_READ_TARGET: usize = 8 * 1024 * 1024;
 const MFT_PROGRESS_INTERVAL: u64 = 256 * 1024 * 1024;
+const MFT_RECORD_ROOT: u64 = 5;
 const GENERIC_READ: u32 = 0x8000_0000;
 const FSCTL_ALLOW_EXTENDED_DASD_IO: u32 = 0x0009_0083;
 const LONG_PATH_BUF: usize = 32 * 1024;
@@ -226,106 +227,130 @@ pub fn primary_file_name(record: &MftRecord) -> Option<&FileNameAttr> {
     })
 }
 
-/// 由记录集重建 记录号 → 完整路径（父链 + 环保护 + 缺失父链跳过）。
+/// 由记录集重建目录项路径（父链 + 卷根自环 + 环保护 + 缺失父链跳过）。
+/// 返回 `(记录号, 完整路径, 对应 FILE_NAME 属性)`：
+/// - 目录只参与父链，不输出；
+/// - 文件按 FILE_NAME 逐条输出（硬链接 = 多个目录项），跳过 DOS 短名（namespace 2）与重解析点；
+/// - 卷根 `$Root`（记录 5）的 FILE_NAME 父引用指向自身，视为路径终点，不把 "." 拼进路径。
 pub fn resolve_record_paths(
     records: &[MftRecord],
     drive: &str,
-) -> HashMap<u64, (String, FileNameAttr)> {
-    let mut chosen: HashMap<u64, (String, u64)> = HashMap::new();
-    let mut meta: HashMap<u64, FileNameAttr> = HashMap::new();
-    let mut is_dir: std::collections::HashSet<u64> = std::collections::HashSet::new();
+) -> Vec<(u64, String, FileNameAttr)> {
+    let mut dirs: HashMap<u64, (String, u64)> = HashMap::new();
+    let mut files: Vec<(u64, FileNameAttr)> = Vec::new();
     for record in records {
         if !record.in_use || record.is_extent || record.base_record != 0 {
             continue;
         }
         if record.is_directory {
-            is_dir.insert(record.record_number);
-        }
-        if let Some(name) = primary_file_name(record) {
-            if name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
-                continue;
+            if let Some(name) = primary_file_name(record) {
+                if name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
+                    continue;
+                }
+                dirs.insert(record.record_number, (name.name.clone(), name.parent_ref));
             }
-            chosen.insert(record.record_number, (name.name.clone(), name.parent_ref));
-            meta.insert(record.record_number, name.clone());
+        } else {
+            let mut seen: std::collections::HashSet<(u64, String)> =
+                std::collections::HashSet::new();
+            for name in record.file_names.iter() {
+                if name.namespace == 2 || name.file_attributes & FILE_ATTR_REPARSE_POINT != 0 {
+                    continue;
+                }
+                if !seen.insert((name.parent_ref, name.name.clone())) {
+                    continue;
+                }
+                files.push((record.record_number, name.clone()));
+            }
         }
     }
 
     let mut cache: HashMap<u64, Option<String>> = HashMap::new();
-    let mut resolved: HashMap<u64, (String, FileNameAttr)> = HashMap::new();
-    for &record_number in chosen.keys() {
-        let mut segments = Vec::new();
-        let mut current = record_number;
-        let mut seen = std::collections::HashSet::new();
-        let mut cached_prefix: Option<String> = None;
-        let mut ok = true;
-        for _ in 0..128 {
-            if let Some(Some(prefix)) = cache.get(&current) {
-                cached_prefix = Some(prefix.clone());
-                break;
-            }
-            if cache.get(&current) == Some(&None) {
-                ok = false;
-                break;
-            }
-            let Some((name, parent)) = chosen.get(&current) else {
-                ok = false;
-                break;
-            };
-            if !seen.insert(current) {
-                ok = false;
-                break;
-            }
-            segments.push(name.clone());
-            current = *parent & MFT_REFERENCE_MASK;
-            if current == 0 {
-                break;
-            }
-        }
-        if !ok {
-            cache.insert(record_number, None);
+    cache.insert(MFT_RECORD_ROOT, Some(drive.to_string()));
+    let mut resolved: Vec<(u64, String, FileNameAttr)> = Vec::new();
+    for (record_number, attr) in files {
+        let Some(dir_path) = resolve_dir_path(
+            attr.parent_ref & MFT_REFERENCE_MASK,
+            &dirs,
+            &mut cache,
+            drive,
+        ) else {
             continue;
-        }
-        let full = match cached_prefix {
-            Some(prefix) if segments.is_empty() => prefix,
-            Some(prefix) => {
-                segments.reverse();
-                format!("{prefix}/{}", segments.join("/"))
-            }
-            None => {
-                if segments.is_empty() {
-                    cache.insert(record_number, None);
-                    continue;
-                }
-                segments.reverse();
-                format!("{drive}/{}", segments.join("/"))
-            }
         };
-        let attr = meta
-            .get(&record_number)
-            .cloned()
-            .unwrap_or_else(|| FileNameAttr {
-                parent_ref: 0,
-                creation_ms: 0,
-                modified_ms: 0,
-                allocated_size: 0,
-                data_size: 0,
-                file_attributes: 0,
-                namespace: 1,
-                name: String::new(),
-            });
-        cache.insert(record_number, Some(full));
-        if !is_dir.contains(&record_number) {
-            resolved.insert(
-                record_number,
-                (cache[&record_number].clone().unwrap(), attr),
-            );
-        }
+        let full = if dir_path.ends_with('/') {
+            format!("{dir_path}{}", attr.name)
+        } else {
+            format!("{dir_path}/{}", attr.name)
+        };
+        resolved.push((record_number, full, attr));
     }
     resolved
 }
 
+/// 解析目录记录 `start` 的完整路径；`cache` 存记录号 → 完整路径（None 表示不可解析）。
+fn resolve_dir_path(
+    start: u64,
+    dirs: &HashMap<u64, (String, u64)>,
+    cache: &mut HashMap<u64, Option<String>>,
+    drive: &str,
+) -> Option<String> {
+    let mut chain: Vec<(u64, String)> = Vec::new();
+    let mut current = start;
+    let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    for _ in 0..128 {
+        if let Some(Some(prefix)) = cache.get(&current) {
+            return Some(finish_dir_chain(chain, prefix.clone(), cache));
+        }
+        if cache.get(&current) == Some(&None) {
+            cache.insert(start, None);
+            return None;
+        }
+        // 卷根 $Root 自环（父引用指向自身）或父引用为 0：路径终点。
+        if current == MFT_RECORD_ROOT {
+            return Some(finish_dir_chain(chain, drive.to_string(), cache));
+        }
+        let Some((name, parent)) = dirs.get(&current) else {
+            cache.insert(start, None);
+            return None;
+        };
+        if !seen.insert(current) {
+            cache.insert(start, None);
+            return None;
+        }
+        let next = *parent & MFT_REFERENCE_MASK;
+        chain.push((current, name.clone()));
+        current = next;
+        if current == 0 {
+            return Some(finish_dir_chain(chain, drive.to_string(), cache));
+        }
+    }
+    cache.insert(start, None);
+    None
+}
+
+/// 将已收集的目录链倒序拼接到前缀后，并缓存沿途每个目录的完整路径。
+fn finish_dir_chain(
+    mut chain: Vec<(u64, String)>,
+    prefix: String,
+    cache: &mut HashMap<u64, Option<String>>,
+) -> String {
+    let mut path = prefix;
+    for (node, name) in chain.drain(..).rev() {
+        path = if path.ends_with('/') || path.is_empty() {
+            format!("{path}{name}")
+        } else {
+            format!("{path}/{name}")
+        };
+        cache.insert(node, Some(path.clone()));
+    }
+    path
+}
+
 fn normalize_prefix(root: &str) -> String {
     let mut s = root.replace('\\', "/");
+    if s.len() >= 2 && s.as_bytes()[1] == b':' {
+        let drive = s[0..1].to_ascii_uppercase();
+        s = format!("{drive}{}", &s[1..]);
+    }
     if !s.ends_with('/') {
         s.push('/');
     }
@@ -508,13 +533,18 @@ pub fn try_full_scan(
 
     let mut stats = EnumerateStats::default();
     let paths = resolve_record_paths(&records, &drive);
+    log::info!(
+        "scan: MFT 路径重建 file_entries={} drive={}",
+        paths.len(),
+        drive
+    );
     let root_long = long_path_of(root);
     let normalized_root = normalize_prefix(&root_long);
     let root_prefix = normalize_prefix(root);
     let records_by_num: HashMap<u64, &MftRecord> =
         records.iter().map(|r| (r.record_number, r)).collect();
     let mut entries = Vec::new();
-    for (record_number, (path, attr)) in paths.iter() {
+    for (record_number, path, attr) in paths.iter() {
         let Some(relative) = path.strip_prefix(&normalized_root) else {
             continue;
         };
@@ -542,6 +572,13 @@ pub fn try_full_scan(
             is_dir: false,
             is_symlink: false,
         });
+    }
+    if entries.is_empty() {
+        let samples: Vec<String> = paths.iter().take(5).map(|(_, p, _)| p.clone()).collect();
+        log::warn!(
+            "scan: MFT 根前缀无匹配 root={} samples={samples:?}",
+            normalized_root
+        );
     }
     log::info!("scan: MFT enumerator used dir={root}");
     Ok((entries, stats))
@@ -679,34 +716,69 @@ mod tests {
     }
 
     #[test]
-    fn resolve_record_paths_skips_extents_dirs_reparse_and_cycles() {
+    fn resolve_record_paths_handles_root_self_loop_hardlinks_and_cycles() {
+        // 卷根 $Root（记录 5）：FILE_NAME 父引用指向自身（NTFS 真实布局）。
+        let mut vol_root = parse_file_record(&base_record_buffer(".", 5, 0x03)).unwrap();
+        vol_root.is_directory = true;
+        vol_root.file_names[0].parent_ref = (0x0100u64 << 48) | 5;
+
         let mut root = parse_file_record(&base_record_buffer("root", 3, 0x03)).unwrap();
         root.is_directory = true;
+        root.file_names[0].parent_ref = (0x0101u64 << 48) | 5;
         let mut dir = parse_file_record(&base_record_buffer("dir", 2, 0x03)).unwrap();
         dir.is_directory = true;
-        let file = parse_file_record(&base_record_buffer("a.txt", 1, 0x01)).unwrap();
-        let mut reparse = parse_file_record(&base_record_buffer("link", 5, 0x01)).unwrap();
-        reparse.file_names[0].file_attributes |= FILE_ATTR_REPARSE_POINT;
+        dir.file_names[0].parent_ref = (0x0102u64 << 48) | 3;
+        let mut alt = parse_file_record(&base_record_buffer("alt", 4, 0x03)).unwrap();
+        alt.is_directory = true;
+        alt.file_names[0].parent_ref = (0x0103u64 << 48) | 3;
 
-        let mut records = vec![root, dir, file, reparse];
-        // 父引用：a.txt 的父 = 2，dir 的父 = 3
-        // 使用带序号的打包 MFT 引用验证掩码（高 16 位序号应被剥离）。
-        records[0].file_names[0].parent_ref = 0;
-        records[1].file_names[0].parent_ref = (0x0100u64 << 48) | 3;
-        records[2].file_names[0].parent_ref = (0x0101u64 << 48) | 2;
+        let mut file = parse_file_record(&base_record_buffer("a.txt", 1, 0x01)).unwrap();
+        file.file_names[0].parent_ref = (0x0104u64 << 48) | 2;
+        // 硬链接：同一记录另一个 FILE_NAME 指向不同父目录。
+        file.file_names.push(FileNameAttr {
+            parent_ref: (0x0105u64 << 48) | 4,
+            creation_ms: 0,
+            modified_ms: 0,
+            allocated_size: 0,
+            data_size: 0,
+            file_attributes: 0,
+            namespace: 1,
+            name: "a2.txt".into(),
+        });
+        // DOS 短名（namespace 2）不应作为独立目录项输出。
+        file.file_names.push(FileNameAttr {
+            parent_ref: (0x0106u64 << 48) | 2,
+            creation_ms: 0,
+            modified_ms: 0,
+            allocated_size: 0,
+            data_size: 0,
+            file_attributes: 0,
+            namespace: 2,
+            name: "A.TXT".into(),
+        });
+
+        let mut reparse = parse_file_record(&base_record_buffer("link", 6, 0x01)).unwrap();
+        reparse.file_names[0].file_attributes |= FILE_ATTR_REPARSE_POINT;
         let mut cycle_a = parse_file_record(&base_record_buffer("ca", 7, 0x01)).unwrap();
         let mut cycle_b = parse_file_record(&base_record_buffer("cb", 8, 0x01)).unwrap();
         cycle_a.file_names[0].parent_ref = (0x0200u64 << 48) | 8;
         cycle_b.file_names[0].parent_ref = (0x0201u64 << 48) | 7;
-        records.extend([cycle_a, cycle_b]);
 
+        let records = vec![vol_root, root, dir, alt, file, reparse, cycle_a, cycle_b];
         let paths = resolve_record_paths(&records, "C:");
-        assert_eq!(
-            paths.get(&1).map(|(p, _)| p.as_str()),
-            Some("C:/root/dir/a.txt")
+        let by_path: Vec<&str> = paths.iter().map(|(_, p, _)| p.as_str()).collect();
+        assert!(by_path.contains(&"C:/root/dir/a.txt"));
+        assert!(by_path.contains(&"C:/root/alt/a2.txt"), "硬链接应逐条输出");
+        assert!(!by_path.contains(&"C:/root/dir/A.TXT"), "DOS 短名不应输出");
+        assert!(!by_path.contains(&"C:/link"), "重解析点不应产出");
+        assert!(!by_path.contains(&"C:/ca"), "父链成环不应产出");
+        assert!(!by_path.contains(&"C:/cb"), "父链成环不应产出");
+        assert!(
+            paths
+                .iter()
+                .all(|(rn, _, _)| *rn != 2 && *rn != 3 && *rn != 4 && *rn != 5),
+            "目录不应作为文件输出"
         );
-        assert!(!paths.contains_key(&5), "重解析点不应产出");
-        assert!(!paths.contains_key(&7), "父链成环不应产出");
     }
 
     #[test]
