@@ -21,6 +21,10 @@ use windows::Win32::System::Ioctl::{
 };
 use windows::Win32::System::IO::DeviceIoControl;
 
+/// MFT 引用（MFT_REFERENCE）：低 48 位为记录号，高 16 位为序号。
+/// FILE_NAME / USN 记录中的文件引用与父引用均为该打包格式，取记录号时需掩码。
+pub const MFT_REFERENCE_MASK: u64 = 0x0000_FFFF_FFFF_FFFF;
+
 /// 卷能力探测结果。
 #[derive(Debug, Clone)]
 #[cfg_attr(not(test), allow(dead_code))] // 0.8.6 阶段一 M3（USN 补账）消费
@@ -179,8 +183,10 @@ pub fn parse_usn_records(buf: &[u8]) -> Vec<UsnRecord> {
         if !(major == 2 || major == 3) || record_len < 60 || offset + record_len > buf.len() {
             break;
         }
-        let file_ref = u64::from_le_bytes(buf[offset + 8..offset + 16].try_into().unwrap());
-        let parent_ref = u64::from_le_bytes(buf[offset + 16..offset + 24].try_into().unwrap());
+        let file_ref = u64::from_le_bytes(buf[offset + 8..offset + 16].try_into().unwrap())
+            & MFT_REFERENCE_MASK;
+        let parent_ref = u64::from_le_bytes(buf[offset + 16..offset + 24].try_into().unwrap())
+            & MFT_REFERENCE_MASK;
         let usn = u64::from_le_bytes(buf[offset + 24..offset + 32].try_into().unwrap());
         let ft = u64::from_le_bytes(buf[offset + 32..offset + 40].try_into().unwrap());
         let reason = u32::from_le_bytes(buf[offset + 40..offset + 44].try_into().unwrap());
@@ -460,8 +466,11 @@ mod tests {
             let mut buf = vec![0u8; record_len];
             buf[0..4].copy_from_slice(&(record_len as u32).to_le_bytes());
             buf[4..6].copy_from_slice(&2u16.to_le_bytes()); // major V2
-            buf[8..16].copy_from_slice(&file_ref.to_le_bytes());
-            buf[16..24].copy_from_slice(&parent.to_le_bytes());
+                                                            // 引用是打包的 MFT 引用（高 16 位序号），解析时应剥离。
+            let file_ref_packed = (0xABCDu64 << 48) | file_ref;
+            let parent_packed = (0x1234u64 << 48) | parent;
+            buf[8..16].copy_from_slice(&file_ref_packed.to_le_bytes());
+            buf[16..24].copy_from_slice(&parent_packed.to_le_bytes());
             buf[24..32].copy_from_slice(&42u64.to_le_bytes()); // usn
             buf[40..44].copy_from_slice(&reason.to_le_bytes());
             buf[56..58].copy_from_slice(&((name_units.len() * 2) as u16).to_le_bytes());

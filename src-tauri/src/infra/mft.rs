@@ -14,7 +14,7 @@
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::path::normalize_path;
 use crate::core::scan::{EnumerateStats, FileEntry};
-use crate::infra::ntfs::{drive_root_of, probe_volume};
+use crate::infra::ntfs::{drive_root_of, probe_volume, MFT_REFERENCE_MASK};
 use std::collections::HashMap;
 
 use windows::core::PCWSTR;
@@ -125,7 +125,8 @@ fn parse_file_name_value(value: &[u8]) -> Result<FileNameAttr, String> {
         units.push(u16::from_le_bytes([chunk[0], chunk[1]]));
     }
     Ok(FileNameAttr {
-        parent_ref: read_u64(value, 0x00),
+        // FILE_NAME 的父引用是打包的 MFT 引用（记录号 + 序号），只取记录号部分。
+        parent_ref: read_u64(value, 0x00) & MFT_REFERENCE_MASK,
         creation_ms: filetime_to_ms(read_u64(value, 0x08)),
         modified_ms: filetime_to_ms(read_u64(value, 0x10)),
         allocated_size: read_u64(value, 0x28),
@@ -275,7 +276,7 @@ pub fn resolve_record_paths(
                 break;
             }
             segments.push(name.clone());
-            current = *parent;
+            current = *parent & MFT_REFERENCE_MASK;
             if current == 0 {
                 break;
             }
@@ -684,13 +685,14 @@ mod tests {
 
         let mut records = vec![root, dir, file, reparse];
         // 父引用：a.txt 的父 = 2，dir 的父 = 3
+        // 使用带序号的打包 MFT 引用验证掩码（高 16 位序号应被剥离）。
         records[0].file_names[0].parent_ref = 0;
-        records[1].file_names[0].parent_ref = 3;
-        records[2].file_names[0].parent_ref = 2;
+        records[1].file_names[0].parent_ref = (0x0100u64 << 48) | 3;
+        records[2].file_names[0].parent_ref = (0x0101u64 << 48) | 2;
         let mut cycle_a = parse_file_record(&base_record_buffer("ca", 7, 0x01)).unwrap();
         let mut cycle_b = parse_file_record(&base_record_buffer("cb", 8, 0x01)).unwrap();
-        cycle_a.file_names[0].parent_ref = 8;
-        cycle_b.file_names[0].parent_ref = 7;
+        cycle_a.file_names[0].parent_ref = (0x0200u64 << 48) | 8;
+        cycle_b.file_names[0].parent_ref = (0x0201u64 << 48) | 7;
         records.extend([cycle_a, cycle_b]);
 
         let paths = resolve_record_paths(&records, "C:");
