@@ -267,13 +267,20 @@ pub fn resolve_record_paths(
     let mut cache: HashMap<u64, Option<String>> = HashMap::new();
     cache.insert(MFT_RECORD_ROOT, Some(drive.to_string()));
     let mut resolved: Vec<(u64, String, FileNameAttr)> = Vec::new();
+    let file_count = files.len();
+    let mut failed = 0usize;
+    let mut failed_samples: Vec<String> = Vec::new();
     for (record_number, attr) in files {
-        let Some(dir_path) = resolve_dir_path(
-            attr.parent_ref & MFT_REFERENCE_MASK,
-            &dirs,
-            &mut cache,
-            drive,
-        ) else {
+        let parent = attr.parent_ref & MFT_REFERENCE_MASK;
+        let Some(dir_path) = resolve_dir_path(parent, &dirs, &mut cache, drive) else {
+            failed += 1;
+            if failed_samples.len() < 5 {
+                failed_samples.push(format!(
+                    "{} parent={parent:#x} dir_exists={}",
+                    attr.name,
+                    dirs.contains_key(&parent)
+                ));
+            }
             continue;
         };
         let full = if dir_path.ends_with('/') {
@@ -283,6 +290,14 @@ pub fn resolve_record_paths(
         };
         resolved.push((record_number, full, attr));
     }
+    log::info!(
+        "scan: MFT 解析 dirs={} files={} resolved={} failed={} failed_samples={:?}",
+        dirs.len(),
+        file_count,
+        resolved.len(),
+        failed,
+        failed_samples
+    );
     resolved
 }
 
@@ -538,9 +553,45 @@ pub fn try_full_scan(
         paths.len(),
         drive
     );
+    let dirs_in_records = records.iter().filter(|r| r.is_directory).count();
+    let extents = records
+        .iter()
+        .filter(|r| r.is_extent || r.base_record != 0)
+        .count();
+    let with_names = records.iter().filter(|r| !r.file_names.is_empty()).count();
+    log::info!(
+        "scan: MFT 记录构成 total={} dirs={} extents={} with_file_name={}",
+        records.len(),
+        dirs_in_records,
+        extents,
+        with_names
+    );
     let root_long = long_path_of(root);
     let normalized_root = normalize_prefix(&root_long);
     let root_prefix = normalize_prefix(root);
+    let root_basename = normalized_root
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
+    let root_hit_total = paths
+        .iter()
+        .filter(|(_, p, _)| p.contains(root_basename))
+        .count();
+    let root_hit_samples: Vec<String> = paths
+        .iter()
+        .filter(|(_, p, _)| p.contains(root_basename))
+        .take(3)
+        .map(|(_, p, _)| p.clone())
+        .collect();
+    let users_hits = paths
+        .iter()
+        .filter(|(_, p, _)| p.contains("/Users/"))
+        .count();
+    log::info!(
+        "scan: MFT 根名命中 total={} samples={root_hit_samples:?} users_hits={users_hits}",
+        root_hit_total
+    );
     let records_by_num: HashMap<u64, &MftRecord> =
         records.iter().map(|r| (r.record_number, r)).collect();
     let mut entries = Vec::new();
