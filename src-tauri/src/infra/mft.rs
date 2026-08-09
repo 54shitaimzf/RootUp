@@ -460,8 +460,8 @@ fn long_path_of(path: &str) -> String {
     path.to_string()
 }
 
-/// 读取卷布局：记录大小、MFT 起始字节偏移、MFT 有效数据长度。
-fn ntfs_volume_mft_layout(volume: HANDLE) -> Result<(u32, u64, u64), String> {
+/// 读取卷布局：记录大小、MFT 起始字节偏移、MFT 有效数据长度、簇大小。
+fn ntfs_volume_mft_layout(volume: HANDLE) -> Result<(u32, u64, u64, u32), String> {
     let mut out = [0u8; 96];
     let mut returned = 0u32;
     unsafe {
@@ -499,7 +499,108 @@ fn ntfs_volume_mft_layout(volume: HANDLE) -> Result<(u32, u64, u64), String> {
         record_size,
         mft_start_lcn * bytes_per_cluster as u64,
         mft_valid_len,
+        bytes_per_cluster,
     ))
+}
+
+fn read_unsigned_le(bytes: &[u8]) -> u64 {
+    let mut v: u64 = 0;
+    for (i, &b) in bytes.iter().enumerate() {
+        v |= (b as u64) << (i * 8);
+    }
+    v
+}
+
+fn read_signed_le(bytes: &[u8]) -> i64 {
+    let mut v: i64 = 0;
+    for (i, &b) in bytes.iter().enumerate() {
+        v |= (b as i64) << (i * 8);
+    }
+    let bits = bytes.len() * 8;
+    if bits < 64 && (v >> (bits - 1)) & 1 == 1 {
+        v |= -1i64 << bits;
+    }
+    v
+}
+
+/// 从 `$MFT` 记录 0 的 $DATA 属性解析 data runs（映射对），返回 `(起始 LCN, 簇数)`。
+/// 参考 Linux-ntfs 文档与 ntfs-3g `mft.c` 的做法：MFT 可能跨多个 run，
+/// 不能只按 MftStartLcn 连续读。
+fn mft_data_runs(record_buf: &[u8], cluster_size: u32) -> Result<Vec<(u64, u64)>, String> {
+    if record_buf.len() < 48 || record_buf[0..4] != FILE_RECORD_SIGNATURE {
+        return Err("非 FILE 记录".into());
+    }
+    if cluster_size == 0 {
+        return Err("簇大小为 0".into());
+    }
+    let mut buf = record_buf.to_vec();
+    apply_fixups(&mut buf)?;
+    let attrs_offset = read_u16(&buf, 0x14) as usize;
+    let used_size = read_u32(&buf, 0x18) as usize;
+    if attrs_offset < 48 || attrs_offset >= used_size || used_size > buf.len() {
+        return Err("属性区偏移越界".into());
+    }
+    let mut offset = attrs_offset;
+    let mut guard = 0usize;
+    while offset + 8 <= used_size && guard < 64 {
+        guard += 1;
+        let attr_type = read_u32(&buf, offset);
+        let attr_len = read_u32(&buf, offset + 4) as usize;
+        if attr_type == ATTR_END {
+            break;
+        }
+        if attr_len < 0x18 || offset + attr_len > used_size {
+            return Err("属性头越界".into());
+        }
+        let non_resident = buf[offset + 8] != 0;
+        let unnamed = buf[offset + 9] == 0;
+        if attr_type == ATTR_DATA && non_resident && unnamed {
+            let mapping_offset = read_u16(&buf, offset + 0x20) as usize;
+            let mut mp = offset + mapping_offset;
+            let mut runs: Vec<(u64, u64)> = Vec::new();
+            let mut prev_lcn: i64 = 0;
+            let mut first = true;
+            loop {
+                if mp >= used_size {
+                    return Err("映射对越界".into());
+                }
+                let header = buf[mp];
+                mp += 1;
+                if header == 0 {
+                    break;
+                }
+                let len_len = (header >> 4) as usize;
+                let off_len = (header & 0x0F) as usize;
+                if len_len == 0 || off_len == 0 || len_len > 8 || off_len > 8 {
+                    return Err("映射对长度非法".into());
+                }
+                if mp + off_len + len_len > used_size {
+                    return Err("映射对数据越界".into());
+                }
+                let delta = read_signed_le(&buf[mp..mp + off_len]);
+                mp += off_len;
+                let run_len = read_unsigned_le(&buf[mp..mp + len_len]);
+                mp += len_len;
+                let lcn = if first {
+                    delta as u64
+                } else {
+                    prev_lcn.wrapping_add(delta) as u64
+                };
+                if run_len == 0 {
+                    return Err("映射对运行长度为 0".into());
+                }
+                prev_lcn = lcn as i64;
+                first = false;
+                runs.push((lcn, run_len));
+            }
+            if runs.is_empty() {
+                return Err("$MFT 无数据运行".into());
+            }
+            return Ok(runs);
+        }
+        offset += attr_len;
+    }
+    Err("未找到 $MFT 的 $DATA 属性".into())
 }
 
 /// MFT 快速全量扫描（实验性，`ROOTUP_MFT_SCAN=1` + 管理员 + NTFS 才启用）。
@@ -560,60 +661,93 @@ pub fn try_full_scan(
     }
     .map_err(|e| format!("FSCTL_ALLOW_EXTENDED_DASD_IO 失败: {e}"))?;
 
-    let (record_size, mft_offset, mft_valid_len) = ntfs_volume_mft_layout(handle)?;
+    let (record_size, mft_offset, mft_valid_len, bytes_per_cluster) =
+        ntfs_volume_mft_layout(handle)?;
     let record_size = record_size as usize;
+    let cluster_size = bytes_per_cluster as u64;
     if mft_valid_len == 0 {
         return Err("MFT 有效数据长度为 0".into());
     }
+
+    // $MFT 可能跨多个 data run：先读记录 0 的映射对，再按 run 流式读取。
+    let mut zero_buf = vec![0u8; record_size];
+    let mut read0 = 0u32;
+    unsafe { SetFilePointerEx(handle, mft_offset as i64, None, FILE_BEGIN) }
+        .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
+    let io0 = unsafe { ReadFile(handle, Some(&mut zero_buf[..]), Some(&mut read0), None) };
+    if io0.is_err() || read0 < record_size as u32 {
+        return Err("读取 $MFT 记录 0 失败".into());
+    }
+    let runs = mft_data_runs(&zero_buf, bytes_per_cluster)?;
+    log::info!("scan: MFT data runs={runs:?}");
 
     let mut records: Vec<MftRecord> = Vec::new();
     let mut parse_fail_samples: Vec<String> = Vec::new();
     let chunk_size = (MFT_READ_TARGET / record_size).max(1) * record_size;
     let mut chunk = vec![0u8; chunk_size];
-    let mut position = mft_offset;
+    let mut pending: Vec<u8> = Vec::with_capacity(record_size * 2);
     let mut total_read = 0u64;
     let mut progress_logged = 0u64;
-    while total_read < mft_valid_len {
-        let want = ((mft_valid_len - total_read) as usize).min(chunk_size);
-        let mut read = 0u32;
-        unsafe { SetFilePointerEx(handle, position as i64, None, FILE_BEGIN) }
-            .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
-        let io = unsafe { ReadFile(handle, Some(&mut chunk[..want]), Some(&mut read), None) };
-        if io.is_err() {
-            return Err("读取 $MFT 失败".into());
-        }
-        if read == 0 {
+    let mut bytes_remaining = mft_valid_len;
+    'outer: for (lcn, run_len) in runs {
+        if bytes_remaining == 0 {
             break;
         }
-        let mut off = 0usize;
-        while off + record_size <= read as usize {
-            let record_buf = &chunk[off..off + record_size];
-            if record_buf[0..4] == FILE_RECORD_SIGNATURE {
-                match parse_file_record(record_buf) {
-                    Ok(record) => records.push(record),
-                    Err(e) => {
-                        if parse_fail_samples.len() < 20 {
-                            let rn = if record_buf.len() >= 0x30 {
-                                read_u32(record_buf, 0x2C)
-                            } else {
-                                0
-                            };
-                            parse_fail_samples.push(format!("record={rn} err={e}"));
+        if lcn == 0 {
+            return Err("$MFT 含稀疏运行，无法读取".into());
+        }
+        let run_bytes = run_len.saturating_mul(cluster_size);
+        let run_to_read = run_bytes.min(bytes_remaining);
+        let run_start = lcn.saturating_mul(cluster_size);
+        let mut run_done = 0u64;
+        while run_done < run_to_read {
+            let want = ((run_to_read - run_done) as usize).min(chunk_size);
+            let pos = run_start + run_done;
+            let mut read = 0u32;
+            unsafe { SetFilePointerEx(handle, pos as i64, None, FILE_BEGIN) }
+                .map_err(|e| format!("SetFilePointerEx 失败: {e}"))?;
+            let io = unsafe { ReadFile(handle, Some(&mut chunk[..want]), Some(&mut read), None) };
+            if io.is_err() {
+                return Err("读取 $MFT 失败".into());
+            }
+            if read == 0 {
+                break 'outer;
+            }
+            pending.extend_from_slice(&chunk[..read as usize]);
+            let mut start = 0usize;
+            while pending.len() - start >= record_size {
+                let record_buf = &pending[start..start + record_size];
+                if record_buf[0..4] == FILE_RECORD_SIGNATURE {
+                    match parse_file_record(record_buf) {
+                        Ok(record) => records.push(record),
+                        Err(e) => {
+                            if parse_fail_samples.len() < 20 {
+                                let rn = if record_buf.len() >= 0x30 {
+                                    read_u32(record_buf, 0x2C)
+                                } else {
+                                    0
+                                };
+                                parse_fail_samples.push(format!("record={rn} err={e}"));
+                            }
                         }
                     }
                 }
+                start += record_size;
             }
-            off += record_size;
-        }
-        position += read as u64;
-        total_read += read as u64;
-        if total_read.saturating_sub(progress_logged) >= MFT_PROGRESS_INTERVAL {
-            progress_logged = total_read;
-            log::info!(
-                "scan: MFT 读取进度 {} MiB / {} MiB",
-                total_read / (1024 * 1024),
-                mft_valid_len / (1024 * 1024)
-            );
+            if start > 0 {
+                pending.drain(..start);
+            }
+            run_done += read as u64;
+            total_read += read as u64;
+            bytes_remaining = bytes_remaining.saturating_sub(read as u64);
+            if total_read.saturating_sub(progress_logged) >= MFT_PROGRESS_INTERVAL {
+                progress_logged = total_read;
+                log::info!(
+                    "scan: MFT 读取进度 {} MiB / {} MiB",
+                    total_read / (1024 * 1024),
+                    mft_valid_len / (1024 * 1024)
+                );
+            }
         }
     }
     log::info!(
@@ -928,6 +1062,50 @@ mod tests {
                 .all(|(rn, _, _)| *rn != 2 && *rn != 3 && *rn != 4 && *rn != 5),
             "目录不应作为文件输出"
         );
+    }
+
+    #[test]
+    fn parses_mft_data_runs_from_mapping_pairs() {
+        let mut buf = vec![0u8; 1024];
+        buf[0..4].copy_from_slice(&FILE_RECORD_SIGNATURE);
+        buf[0x04..0x06].copy_from_slice(&48u16.to_le_bytes());
+        buf[0x06..0x08].copy_from_slice(&3u16.to_le_bytes());
+        let usa_signature = 0xAAAAu16;
+        buf[48..50].copy_from_slice(&usa_signature.to_le_bytes());
+        for sector in 0..2 {
+            let end = (sector + 1) * 512 - 2;
+            let original = read_u16(&buf, end);
+            buf[end..end + 2].copy_from_slice(&usa_signature.to_le_bytes());
+            buf[50 + sector * 2..52 + sector * 2].copy_from_slice(&original.to_le_bytes());
+        }
+        buf[0x14..0x16].copy_from_slice(&56u16.to_le_bytes());
+        buf[0x16..0x18].copy_from_slice(&1u16.to_le_bytes());
+        buf[0x2C..0x30].copy_from_slice(&0u32.to_le_bytes());
+
+        let attr = 56usize;
+        buf[attr..attr + 4].copy_from_slice(&ATTR_DATA.to_le_bytes());
+        buf[attr + 4..attr + 8].copy_from_slice(&0x50u32.to_le_bytes());
+        buf[attr + 8] = 1; // non-resident
+        buf[attr + 9] = 0; // unnamed
+        buf[attr + 0x10..attr + 0x18].copy_from_slice(&0u64.to_le_bytes());
+        buf[attr + 0x18..attr + 0x20].copy_from_slice(&0x2Fu64.to_le_bytes());
+        buf[attr + 0x20..attr + 0x22].copy_from_slice(&0x40u16.to_le_bytes());
+        buf[attr + 0x28..attr + 0x30].copy_from_slice(&0x3000u64.to_le_bytes());
+        buf[attr + 0x30..attr + 0x38].copy_from_slice(&0x3000u64.to_le_bytes());
+        buf[attr + 0x38..attr + 0x40].copy_from_slice(&0x3000u64.to_le_bytes());
+        // run1: LCN=0x1000 len=0x10；run2: delta=-0x800 len=0x20
+        let mp = attr + 0x40;
+        buf[mp] = 0x13;
+        buf[mp + 1..mp + 4].copy_from_slice(&0x1000i32.to_le_bytes()[..3]);
+        buf[mp + 4] = 0x10;
+        buf[mp + 5] = 0x13;
+        buf[mp + 6..mp + 9].copy_from_slice(&(-0x800i32).to_le_bytes()[..3]);
+        buf[mp + 9] = 0x20;
+        buf[mp + 10] = 0x00;
+        buf[0x18..0x1C].copy_from_slice(&((attr + 0x50) as u32).to_le_bytes());
+
+        let runs = mft_data_runs(&buf, 4096).unwrap();
+        assert_eq!(runs, vec![(0x1000, 0x10), (0x800, 0x20)]);
     }
 
     #[test]
