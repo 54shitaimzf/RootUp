@@ -36,10 +36,11 @@ const ATTR_FILE_NAME: u32 = 0x30;
 const ATTR_DATA: u32 = 0x80;
 const FILE_ATTR_REPARSE_POINT: u32 = 0x400;
 const MFT_FIXUP_SECTOR: usize = 512;
-const MFT_READ_TARGET: usize = 8 * 1024 * 1024;
+const MFT_READ_TARGET: usize = 32 * 1024 * 1024;
 const MFT_PROGRESS_INTERVAL: u64 = 256 * 1024 * 1024;
 const MFT_RECORD_ROOT: u64 = 5;
 const GENERIC_READ: u32 = 0x8000_0000;
+const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
 const FSCTL_ALLOW_EXTENDED_DASD_IO: u32 = 0x0009_0083;
 const LONG_PATH_BUF: usize = 32 * 1024;
 
@@ -796,7 +797,7 @@ pub fn try_full_scan(
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             None,
             OPEN_EXISTING,
-            FILE_FLAGS_AND_ATTRIBUTES(0),
+            FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_SEQUENTIAL_SCAN),
             None,
         )
     }

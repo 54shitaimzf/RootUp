@@ -29,6 +29,14 @@ impl FileEnumerator for WalkDirEnumerator {
         on_file: &mut dyn FnMut(FileEntry) -> bool,
     ) -> Result<EnumerateStats, String> {
         let mut stats = EnumerateStats::default();
+        // 跳过集在枚举开始时快照一次，避免每个目录重复加锁与克隆；
+        // 时间戳也只取一次，作为 metadata 失败时的 fallback。
+        let skip_roots = self
+            .skip_roots
+            .lock()
+            .map(|roots| roots.clone())
+            .unwrap_or_default();
+        let now_ms = now_millis();
         let walker = WalkDir::new(root)
             .follow_links(false)
             .into_iter()
@@ -41,12 +49,7 @@ impl FileEnumerator for WalkDirEnumerator {
                     return false;
                 }
                 let path = normalize_path(&entry.path().to_string_lossy());
-                let skipped = self
-                    .skip_roots
-                    .lock()
-                    .map(|roots| under_any(&path, &roots))
-                    .unwrap_or(false);
-                !skipped
+                !under_any(&path, &skip_roots)
             });
 
         for entry in walker {
@@ -80,7 +83,6 @@ impl FileEnumerator for WalkDirEnumerator {
                 }
             };
             let path = normalize_path(&entry.path().to_string_lossy());
-            let now_ms = now_millis();
             let modified_ms = metadata
                 .modified()
                 .ok()

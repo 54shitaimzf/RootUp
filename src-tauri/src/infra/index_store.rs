@@ -566,9 +566,10 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         {
-            // 多行 VALUES 批量写入（子批 500，控制在变量数上限内），
+            // 多行 VALUES 批量写入（子批 1000：8 参数/行 = 8000 变量，低于 SQLite 32766 上限），
             // first_seen 不参与冲突更新以保留首次发现时间。
-            for chunk in records.chunks(500) {
+            const SUB_BATCH: usize = 1000;
+            for chunk in records.chunks(SUB_BATCH) {
                 let mut sql = String::from(
                     "INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state) VALUES ",
                 );
@@ -606,8 +607,11 @@ impl IndexStore for SqliteIndexStore {
                 tx.execute(&sql, params_from_iter(values.iter()))
                     .map_err(|e| e.to_string())?;
             }
-            for record in records {
-                sync_fts_for_path(&tx, &record.path)?;
+            // FTS 表未启用时一次性跳过，避免每条记录重复查询 sqlite_master。
+            if fts_table_exists(&tx) {
+                for record in records {
+                    sync_fts_for_path(&tx, &record.path)?;
+                }
             }
         }
         tx.commit().map_err(|e| e.to_string())?;
