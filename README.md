@@ -30,6 +30,8 @@ RootUp 是一款面向学生和日常桌面整理的 Windows 工具。下载、�
 - 可选“自动归档”：只归档分类明确的新文件，默认关闭。
 - 所有归档都记录在案，一键撤销。
 
+> ⚠️ 安全提醒：归档是「移动」操作，不是复制。**不要归档系统目录（Windows / Program Files / ProgramData / System32 等）、已安装软件的目录或正在运行程序的文件**——整树移动会破坏软件依赖的绝对路径（注册表、配置、快捷方式），可能导致软件损坏。RootUp 目前会拒绝覆盖与跨盘、提示文件占用，且只归档已索引文件；v0.8.8 将加入系统 / 软件目录保护、归档预检与整树移动风险报告。归档前请确认目录归属，误操作可在一键撤销中恢复。
+
 ### 学业管理
 
 - **课程表**：周视图时间轴，支持单双周/指定周次、堆叠与铺开查看；学期即课表，可新建、编辑、复制、删除。
@@ -177,7 +179,7 @@ RootUp is a Windows desktop app that keeps your files organized without the effo
 ### Features
 
 - **File organization & search** — watch folders, auto-classify into Documents / Images / Videos / Audio / Archives / Code / Installers / Data, custom labels, full-text search with syntax (`type:` / `label:` / `state:` / `size:` / `before:` / `after:`), editable ignore rules and classification presets. Since 0.8.5, queries are 70%+ faster with stable cursor pagination, and explicit AND syntax (`+label:` or `label:a AND label:b`) is supported; since 0.8.6, full scans are up to ~90% faster on large corpora.
-- **Safe archiving** — archive files, filtered results or whole projects (desktop shortcuts update automatically); optional auto-archive for clearly classified files; everything can be undone.
+- **Safe archiving** — archive files, filtered results or whole projects (desktop shortcuts update automatically); optional auto-archive for clearly classified files; everything can be undone. Never archive system folders, installed-software directories, or files of running programs: archiving moves files and can break software that relies on absolute paths. Protected-path checks and an archive preflight report are planned for v0.8.8.
 - **Study tools** — weekly course schedule (odd/even/custom weeks), homework tracking with deadlines and reminders, tray badge and one-click jump to unfinished homework.
 - **Projects & IDEs** — auto-detects 15 common project types and tools like VS Code, Cursor, JetBrains, MATLAB, Typora and Obsidian; open / reveal / open in IDE from any file row.
 - **Desktop experience** — tray residency with zero background browser memory, light/dark/system theme, 中文/English UI, first-run onboarding and built-in help center.
