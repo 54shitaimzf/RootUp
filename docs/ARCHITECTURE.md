@@ -16,12 +16,13 @@ RootUp/
 ├── src/                          # React 前端
 │   ├── main.tsx                  # 入口（仅挂载 App）
 │   ├── App.tsx                   # 布局组装：Sidebar + 页面切换 + 主题/i18n
-│   ├── pages/                    # 页面层入口：文件 / 项目 / 学业 / 小工具 / 设置
-│   ├── features/<domain>/components/  # 功能域私有 UI 与测试（study / settings）
+│   ├── pages/                    # 页面层入口：文件 / 项目 / 学业 / 小工具 / 设置（只保留页面壳）
+│   ├── features/<domain>/        # 功能域：components/（页面级 UI 与测试）、hooks/、model.ts（纯逻辑）
+│   │   └── files/                # 文件页域：FileRow / FileList / FileToolbar / FileBanners / ArchiveConfirmDialog
 │   ├── components/               # 通用 UI 层：Modal、Button、Banner、Sidebar 等跨功能复用组件
 │   ├── hooks/                    # 通用逻辑层：useSettings / useFiles / useScan 等
 │   ├── lib/                      # 基础设施层：类型化 invoke 封装（Tauri API 边界）、纯函数、数据模型
-│   ├── theme/                    # 横切：tokens.css（设计令牌）+ ThemeProvider
+│   ├── theme/                    # 横切：tokens.css（设计令牌）+ ThemeProvider + icons.ts（图标唯一入口）
 │   ├── i18n/                     # 横切：i18next 配置与 zh-CN / en 字典
 │   └── styles/
 ├── src-tauri/
@@ -34,6 +35,7 @@ RootUp/
 │   │   └── infra/                # 平台适配层：storage、scanner、tray、window
 │   ├── tauri.conf.json
 │   └── capabilities/
+├── fixtures/                     # 跨语言契约真源（双端 include/import 共同断言）
 ├── docs/                         # VISION / ROADMAP / ARCHITECTURE / CONTRACTS
 └── resources/                    # 图标等非代码资源
 ```
@@ -78,6 +80,9 @@ pages → features / components / hooks → lib(API) → Tauri commands → core
 - **组件样式自包含**：组件不得依赖外部容器的文字颜色等样式继承，关键文本必须显式声明浅色/深色两类颜色；弹窗等浮层即使渲染在布局容器之外也要完整可读。
 - **生命周期契约必做项**：桌面壳改动必须对照"后台生命周期"一节核对 `CloseRequested`、`ExitRequested`、单实例三件事，避免破坏后台常驻行为。
 - **共享一致性 fixtures**：`fixtures/` 下的 JSON 由 Rust（`include_str!`）与 TS（JSON import）共同消费；新增跨语言语义（如提醒分组、默认值）一律先落 fixture 再实现/断言，不引入代码生成工具链。
+- **应用级事件名注册表**：真源为 `fixtures/app-contracts.json` 的 `events`；Rust 侧 `core/events.rs` 常量（`EVENT_*` + `all_app_events()`），前端镜像 `lib/events.ts`（`APP_EVENTS`），双端测试断言与 fixture 一致。emit/listen 一律引用常量，`check-arch` / `check-rust-arch` 门禁禁止注册表外出现裸事件名字面量（测试断言除外）。新增事件 = fixture + 双端常量 + 测试各一处，门禁自动防漂移。
+- **文件状态单一来源**：`fileStates` 同在 `fixtures/app-contracts.json`；TS 侧 `lib/tauri.ts` 导出 `FILE_STATES` 联合类型（`FileRecord.state` 消费），Rust 侧 `core/events.rs::FileState` 枚举（`as_str`/`from_str` round-trip 单测），比较与迁移一律经枚举，不裸串。
+- **类别视觉注册表**：`categories` 真源同 fixture；前端 `lib/categoryDefs.ts` 统一「图标 + 圆底配色」（`resolveCategoryKey` / `resolveCategoryVisual`，未知回退 other），`FileTypeIcon`/`FilterIcon`/归档预览共用，Rust 测试断言 `Category::ALL` 与 fixture 一致；禁止平行硬编码。阶段三标签/方案/软件单元的数据图标 key 注册表沿用同一「key → 视觉」形态。
 - **公共时间工具**：Unix 毫秒时间戳统一走 `infra/time.rs::now_millis()`，禁止各 infra 模块重复实现。
 - **测试策略与设施**：纯逻辑（lib/、core/、infra/）用 vitest / cargo test 覆盖；组件与 hooks 用 `@testing-library/react` + jsdom 覆盖交互边界（键盘协议、弹窗开关、分页合并、事件状态机），mock 约定为 `vi.mock("../lib/tauri")` 与 `vi.mock("@tauri-apps/api/event")`，测试设施全部位于 devDependencies，不进入生产产物。新增组件测试照此扩展，禁止跳过关键交互边界。
 - **日志前缀约定**：前端行为日志统一 `ui: ` 前缀（如 `ui: 刷新`、`ui: 加载更多 offset=N`）；后端子系统沿用各自前缀（`settings:` / `scan:` / `watch:` / `archive:` / `unit:` / `shortcut:` / `labels:` / `habits:` / `project:` / `ide:` / `open:` / `startup:` / `query:` / `filter:` / `autocomplete:`）。`settings: 加载` 由 `get_settings` 输出，冒烟脚本据此断言。
@@ -187,6 +192,10 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 `ScanService::new(store, classifier, matcher, params, sink)` 全注入；Tauri 侧仅提供 `TauriScanSink`（emit 前端事件）与分类链组装，业务层零 Tauri 依赖；AI/课程分类 = 新增 `Classifier` 追加进链。
 
+### 监听热路径与设置缓存推送
+
+监听回调（`files-changed` 批次广播 + 自动归档入队）**零磁盘 IO**：自动归档开关与归档根不重读 settings.json，而是由 `infra::managed_state::refresh` 在全部设置写路径（`set_settings` / `reset_settings` / 托盘切换 / 启动装配）后推送到 `ArchiveService` 缓存（`update(root, enabled)`），回调内只读内存状态（`try_state` + `is_active()`）。约定：任何新增的「设置驱动后台行为」沿用同一模式——写路径推送缓存，热路径读缓存；不得在监听/扫描回调里调用 `storage::load_settings`。副作用说明：settings.json 为应用私有文件，外部手改不会在下一批次「顺带生效」，需经应用内设置或重启。
+
 ### 事件协议
 
 `scan-progress`（`ScanEvent::Progress`）与 `scan-finished`（Finished/Failed/Cancelled），payload 为 `ScanEvent`（`type` 判别字段）。
@@ -268,6 +277,8 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 - **自定义下拉契约**：`components/Select.tsx` 为自绘下拉（触发按钮 + portal 到 body + fixed 定位，z-60），定位由 `lib/dropdown.ts` 纯函数计算（最小宽度 240px、视口左右钳制、底部不足向上翻转、最大高度 60vh）；选项结构 `{ value, label, icon?, dotClass?, description?, disabled? }`；支持点击/Enter/Space/↓ 打开、↑/↓/Home/End/Enter 键盘导航、`searchable` 输入过滤（标签+描述子串、大小写不敏感）、Esc 先清词再关闭、外点关闭；短列表（≤7 项）显式 `searchable={false}`；选中项品牌高亮 + Check。原生 `<select>` 已全部替换（9 处），`TimeSelect` 保持独立。
 - **输入法保护约定**：所有键盘快捷键处理前必须判断 `isComposing(event)`（`lib/ime.ts`，兼容 React 合成事件与原生事件），拼音组合期间一律放行给输入法；`useImeGuard` 在 App 根部挂载，窗口失焦时释放编辑元素焦点以结束残留组合。新增键盘监听必须遵循，禁止在组合期间拦截按键。
 - **品牌与可访问性**：品牌主色薄荷绿 + 中性灰，浅色 / 深色双主题跟随系统；`IconButton` 必带可读 label 与 tooltip（纯装饰图标不参与交互）。
+- **图标消费模型**：UI 图标唯一入口为 `theme/icons.ts`（具名再导出 lucide，不影响 tree-shaking）；组件与数据注册表一律从该路径导入，`check-arch` 门禁禁止其它任何文件直连 `lucide-react`（白名单仅 `theme/icons.ts`）。v1.3 Iris 皮肤替换图标集时只改该模块，组件零改动。数据图标（标签 icon/color 等 key）经 `lib/labelDefs.ts` 解析，类别视觉经 `lib/categoryDefs.ts`；阶段三建立统一的 lib key 注册表后收敛进同一 key 空间。
+- **文件页结构**：`pages/FilePage.tsx` 只做页面壳（状态装配、行为处理与布局组合）；行渲染、列表、批量工具条、横幅与归档弹层在 `features/files/components/`，纯逻辑（常量、自动补全候选、行展示派生、归档预览）在 `features/files/model.ts`，归档动作状态机在 `features/files/hooks/useFileArchive.ts`。`FileRow` 以「记录 + 展示派生」为 props 形态，供阶段二 units 四视图与 v0.9.4 命令面板复用；页面壳内禁止再内联大段 UI 实现。
 
 ## 学业模块
 

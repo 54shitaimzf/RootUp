@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 0.8.7 阶段一（契约与界面地基）
+
+- 契约单点化：新增 `fixtures/app-contracts.json` 跨语言契约真源（应用级事件名 / 文件状态 / 类别清单）；Rust `core/events.rs` 事件常量段、TS `lib/events.ts` 镜像与双端 fixture 一致性测试；全部 emit/listen 改用常量；`check-arch` / `check-rust-arch` 新增裸事件名字面量防漂移门禁（正反用例自测）。
+- FileState 收口：TS `FILE_STATES` 联合类型替代内联串联合（`FileRecord.state` / 筛选选项收口），Rust 监听回调经 `FileState::Indexed` 枚举比较，不再裸串。
+- 类别视觉注册表：`lib/categoryDefs.ts` 统一「图标 + 圆底配色」（`resolveCategoryKey` / `resolveCategoryVisual`，未知回退 other），`FileTypeIcon` 变薄为纯渲染，`FilterIcon` / 归档预览迁移，删除三处平行硬编码；Rust `Category::ALL` 与 fixture 一致性断言。
+- 图标消费模型统一（上半）：`theme/icons.ts` 成为全库唯一 lucide 入口（v1.3 皮肤替换断点），37 处直连导入全部迁移；`check-arch` 新增 lucide 直连门禁（白名单仅 `theme/icons.ts`）；构建对比 tree-shaking 无回退（首包 gzip 104.68 → 104.81 kB）。
+- 监听热路径修复：`ArchiveService::is_active()`（三态单测），监听回调删除每次批次的 `load_settings` 磁盘读，改经 `managed_state::refresh` 推送的内存缓存；设置写路径（设置保存/恢复默认/托盘切换/启动装配）全覆盖，切换即生效。
+- 文件页拆解：`pages/FilePage.tsx` 收敛为页面壳（951 → 432 行）；`features/files/` 新增 model 纯逻辑、FileRow / FileList / FileToolbar / FileBanners / ArchiveConfirmDialog 五组件与 useFileArchive 归档状态机；FileRow 以「记录 + 展示派生」为 props，供阶段二四视图与 v0.9.4 命令面板复用；FilePage.test 断言零删除全绿，真实应用 9 组深/浅 × 中/英前后矩阵截图对比无回归（`docs/reports/assets/0.8.7-phase1/`）。
+- 修复 tray_menu 种子测试日期漂移（临期判断基准对齐运行日，此前随日期推移必然失败）。
+
 ### 0.8.7-dev 开版
 
 - 版本推进 0.8.7-dev；v0.8.7「单元同构」在 ROADMAP 固化为四阶段执行（契约与界面地基 → units 统一索引 → 软件单元 → 监看管道与快速扫描），条目与验收按阶段拆分。
