@@ -164,6 +164,8 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 ## 文件索引、扫描与监听
 
+> 监控与扫描的演进过程、设计取舍与历史迭代拆分另见 [FILE_MONITORING.md](FILE_MONITORING.md)。
+
 ### 模块与职责
 
 - `core/path.rs`：`normalize_path`（统一 `/` 分隔符、去尾斜杠）与 `is_subpath`（组件级包含判定，Windows 小写比较）；所有入库、差集、前缀匹配、目录去重统一走它；`is_missing_dir_error`（Windows os error 2/3）供目录缺失对账判定。
@@ -265,6 +267,7 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 - **切换控件**：`SegmentedControl` 支持 `segmented`（默认，`p-1/gap-1`）与 `tabs`（底边线 + 品牌色下划线）两种变体；页面主切换用 tabs（支持 `icon`/`equal`/`badge`），次级筛选用 segmented。
 - **自定义下拉契约**：`components/Select.tsx` 为自绘下拉（触发按钮 + portal 到 body + fixed 定位，z-60），定位由 `lib/dropdown.ts` 纯函数计算（最小宽度 240px、视口左右钳制、底部不足向上翻转、最大高度 60vh）；选项结构 `{ value, label, icon?, dotClass?, description?, disabled? }`；支持点击/Enter/Space/↓ 打开、↑/↓/Home/End/Enter 键盘导航、`searchable` 输入过滤（标签+描述子串、大小写不敏感）、Esc 先清词再关闭、外点关闭；短列表（≤7 项）显式 `searchable={false}`；选中项品牌高亮 + Check。原生 `<select>` 已全部替换（9 处），`TimeSelect` 保持独立。
 - **输入法保护约定**：所有键盘快捷键处理前必须判断 `isComposing(event)`（`lib/ime.ts`，兼容 React 合成事件与原生事件），拼音组合期间一律放行给输入法；`useImeGuard` 在 App 根部挂载，窗口失焦时释放编辑元素焦点以结束残留组合。新增键盘监听必须遵循，禁止在组合期间拦截按键。
+- **品牌与可访问性**：品牌主色薄荷绿 + 中性灰，浅色 / 深色双主题跟随系统；`IconButton` 必带可读 label 与 tooltip（纯装饰图标不参与交互）。
 
 ## 学业模块
 
