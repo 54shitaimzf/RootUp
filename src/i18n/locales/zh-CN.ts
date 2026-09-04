@@ -296,7 +296,7 @@ export default {
     remove: "移除",
     removeDir: "移除监控目录",
     removeCleanupConfirm:
-      "移除“{{dir}}”后，该目录下约 {{count}} 个文件将从文件页移除（不影响磁盘文件，重新添加并扫描可恢复）。确定移除？",
+      "移除该目录后，其下约 {{count}} 个文件将从文件页移除（不影响磁盘文件，重新添加并扫描可恢复）。确定移除？",
     dirEmpty: "尚未添加监控目录",
     dirMissing: "目录不存在或不可访问，恢复后重扫可找回文件",
     rescanAll: "重新扫描全部",

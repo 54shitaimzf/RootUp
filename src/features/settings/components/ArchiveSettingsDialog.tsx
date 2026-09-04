@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Undo2 } from "../../../theme/icons";
-import { listArchiveBatches, undoArchive, type ArchiveBatch } from "../../../lib/tauri";
+import { Undo2, FolderOpen } from "../../../theme/icons";
+import {
+  listArchiveBatches,
+  openDirectoryDialog,
+  undoArchive,
+  type ArchiveBatch,
+} from "../../../lib/tauri";
 import { formatTimestamp } from "../../../lib/fileUtils";
 import { Button } from "../../../components/Button";
 import { IconButton } from "../../../components/IconButton";
@@ -68,6 +73,15 @@ export function ArchiveSettingsDialog({
     }
   };
 
+  const browse = async () => {
+    try {
+      const dir = await openDirectoryDialog();
+      if (dir) setRootInput(dir);
+    } catch {
+      // 选择器不可用或用户取消：保留手输路径
+    }
+  };
+
   return (
     <Modal
       open={open}
@@ -92,13 +106,24 @@ export function ArchiveSettingsDialog({
 
         <div>
           <SectionLabel>{t("settings.archiveRootLabel")}</SectionLabel>
-          <Input
-            type="text"
-            value={rootInput}
-            onChange={(event) => setRootInput(event.target.value)}
-            placeholder={t("settings.archiveRootPlaceholder")}
-            className="mt-1.5 w-full font-mono"
-          />
+          <div className="mt-1.5 flex items-center gap-2">
+            <Input
+              type="text"
+              value={rootInput}
+              onChange={(event) => setRootInput(event.target.value)}
+              placeholder={t("settings.archiveRootPlaceholder")}
+              className="min-w-0 flex-1 font-mono"
+            />
+            <Button
+              variant="secondary"
+              size="md"
+              icon={FolderOpen}
+              className="shrink-0"
+              onClick={() => void browse()}
+            >
+              {t("settings.browse")}
+            </Button>
+          </div>
         </div>
 
         <div>

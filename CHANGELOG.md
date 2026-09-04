@@ -11,6 +11,7 @@
 - 修复归档预览路径混合分隔符（`archivePreview` 以 `/` 拼 Windows 根产生 `D:\Arc/document/a.pdf`）：`lib/fileUtils.ts` 新增 `resolveArchiveDir` / `joinArchivePath` / `archiveDestPath` 纯函数（统一 `/` 规范 + 剥除根尾部多余分隔符），文件归档与项目归档共用。
 - 「归档当前筛选」在 COUNT 治理（筛选态 `total=-1`）下不再显示「(-1)」：按钮与确认弹层退化为无计数文案（`archiveFilteredPlain` / `archiveConfirmNoCount` 等）。
 - 设置页归档行摘要 ReactNode 化；归档设置弹窗「最近归档」样本目标只显示文件名（悬浮显完整路径）；自动归档提示与归档说明文案「归档根」改「档案库」表述。
+- 微调（反馈收口）：移除监控目录确认弹层不再把完整路径插值进句子（长路径产生难看横向滚动条）——路径独立成截断行、悬浮 Tooltip 显全路径，`ConfirmDialog` 说明文字补 `break-words` 兜底其余插值弹层；监控目录列表长路径补省略号（内层 `min-w-0`）；归档确认弹层文件行加盒底样式与说明文字形成视觉分层；归档根输入框旁新增「浏览…」按钮，接入既有原生目录选择器（`openDirectoryDialog`，与监控目录添加同源），取消选择不动手输路径。
 - 修复 CI clippy 1.98 新 lint `chunks_exact_to_as_chunks` 构建失败：mft / ntfs UTF-16 解析改用 `as_chunks::<2>()`（语义等价，本地 rustup 1.98.1 复现红→修复转绿）。
 
 ### 0.8.7 阶段一（契约与界面地基）

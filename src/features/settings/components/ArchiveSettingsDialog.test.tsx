@@ -5,9 +5,14 @@ import { ArchiveSettingsDialog } from "./ArchiveSettingsDialog";
 vi.mock("../../../lib/tauri", () => ({
   listArchiveBatches: vi.fn(),
   undoArchive: vi.fn(),
+  openDirectoryDialog: vi.fn(),
 }));
 
-import { listArchiveBatches, undoArchive } from "../../../lib/tauri";
+import {
+  listArchiveBatches,
+  openDirectoryDialog,
+  undoArchive,
+} from "../../../lib/tauri";
 
 function renderDialog(
   overrides: Partial<Parameters<typeof ArchiveSettingsDialog>[0]> = {},
@@ -74,5 +79,26 @@ describe("ArchiveSettingsDialog", () => {
     renderDialog({ onSave });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(await screen.findByText(/归档根不能与监控目录相同/)).toBeInTheDocument();
+  });
+
+  it("浏览按钮经目录选择器回填归档根", async () => {
+    vi.mocked(openDirectoryDialog).mockResolvedValue("D:/Picked/Root");
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "浏览…" }));
+    await waitFor(() =>
+      expect(
+        (screen.getByPlaceholderText("如：D:\\Archive") as HTMLInputElement).value,
+      ).toBe("D:/Picked/Root"),
+    );
+  });
+
+  it("浏览取消选择不改动手输路径", async () => {
+    vi.mocked(openDirectoryDialog).mockResolvedValue(null);
+    renderDialog({ root: "C:/Keep" });
+    fireEvent.click(screen.getByRole("button", { name: "浏览…" }));
+    await waitFor(() => expect(openDirectoryDialog).toHaveBeenCalled());
+    expect(
+      (screen.getByPlaceholderText("如：D:\\Archive") as HTMLInputElement).value,
+    ).toBe("C:/Keep");
   });
 });

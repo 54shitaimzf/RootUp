@@ -50,7 +50,7 @@ export function ConfirmDialog({
       }
     >
       {description && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>
+        <p className="break-words text-sm text-slate-500 dark:text-slate-400">{description}</p>
       )}
       {children}
     </Modal>

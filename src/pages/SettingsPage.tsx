@@ -54,6 +54,7 @@ import { DirectoryAdder } from "../components/DirectoryAdder";
 import { RevealLink } from "../components/RevealLink";
 import { Select } from "../components/Select";
 import { SettingsInfoDialog } from "../components/SettingsInfoDialog";
+import { Tooltip } from "../components/Tooltip";
 import { IgnoreRulesDialog } from "../features/settings/components/IgnoreRulesDialog";
 import { ClassifyMappingDialog } from "../features/settings/components/ClassifyMappingDialog";
 import { LabelManageDialog } from "../features/settings/components/LabelManageDialog";
@@ -542,7 +543,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                             className="size-1.5 shrink-0 rounded-full bg-amber-500"
                           />
                         )}
-                        <span className="truncate">{dir}</span>
+                        <span className="min-w-0 truncate">{dir}</span>
                       </span>
                       <button
                         type="button"
@@ -884,14 +885,21 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         open={removeTarget !== null}
         title={t("settings.removeDir")}
         description={t("settings.removeCleanupConfirm", {
-          dir: removeTarget?.dir ?? "",
           count: removeTarget?.count ?? 0,
         })}
         confirmLabel={t("settings.remove")}
         danger
         onConfirm={() => void handleRemoveConfirm()}
         onCancel={() => setRemoveTarget(null)}
-      />
+      >
+        {removeTarget && (
+          <Tooltip content={removeTarget.dir} className="mt-2 block">
+            <span className="block cursor-default truncate rounded-md bg-slate-50 px-2.5 py-1.5 font-mono text-xs text-secondary dark:bg-slate-800">
+              {removeTarget.dir}
+            </span>
+          </Tooltip>
+        )}
+      </ConfirmDialog>
       <ProjectOpenDialog
         open={projectOpenOpen}
         initial={{

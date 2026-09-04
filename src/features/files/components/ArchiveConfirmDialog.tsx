@@ -55,7 +55,7 @@ export function ArchiveConfirmDialog({
       content={archiveDestPath(archiveRoot, file.labels, file.name)}
       className="block"
     >
-      <span className="block cursor-default truncate py-0.5 text-sm text-slate-600 dark:text-slate-300">
+      <span className="block cursor-default truncate rounded-md bg-slate-50 px-2.5 py-1 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
         {file.name}
       </span>
     </Tooltip>
@@ -89,7 +89,7 @@ export function ArchiveConfirmDialog({
           <div className="mt-3 text-xs font-medium text-strong">
             {t("files.archivePreviewLabel")}
           </div>
-          <div className="mt-1">
+          <div className="mt-1 space-y-1">
             {selectedFiles.slice(0, PREVIEW_COUNT).map(fileRow)}
           </div>
           {selectedFiles.length > PREVIEW_COUNT && (
@@ -115,7 +115,7 @@ export function ArchiveConfirmDialog({
             <ChevronLeft aria-hidden="true" className="size-3.5" />
             {t("files.back")}
           </Button>
-          <div className="mt-1 divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="mt-1 space-y-1">
             {selectedFiles.map(fileRow)}
           </div>
         </>

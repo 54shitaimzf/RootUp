@@ -303,7 +303,7 @@ export default {
     remove: "Remove",
     removeDir: "Remove watched folder",
     removeCleanupConfirm:
-      "Removing “{{dir}}” will hide about {{count}} indexed file(s) from the Files page (disk files are untouched; re-adding and rescanning restores them). Remove?",
+      "Removing this folder will hide about {{count}} indexed file(s) from the Files page (disk files are untouched; re-adding and rescanning restores them). Remove?",
     dirEmpty: "No watched folders yet",
     dirMissing: "Folder is missing or inaccessible; rescan after it returns to recover files",
     rescanAll: "Rescan all",
