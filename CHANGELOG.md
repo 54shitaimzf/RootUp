@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### 0.8.7 界面优化（归档目的地展示）
+
+- 归档目的地统一「档案库」友好名（en 为 Library）：确认弹层、设置页归档行、项目归档确认不再平铺完整路径，目的地渲染为下划线链接（新共享组件 `components/RevealLink.tsx`——Tooltip 悬浮显完整路径、点击在资源管理器定位、根未创建等失败静默；品牌链接文本样式立规入 ARCHITECTURE）。
+- 归档确认弹层结构化：删除「根 + 3 条完整目标路径」的字符串拼接（其 `\n` 在 `<p>` 中从未换行、三条路径粘成一团），改为简洁导语 + 档案库链接 + 前 3 个待归档文件名（悬浮显单文件完整目标路径）；超出 3 个提供「查看全部」完整列表视图（同弹窗切换视图、加宽、内部滚动、可返回，footer 归档/取消常驻，重开弹层自动复位）；筛选模式补齐目的地展示。
+- 修复归档预览路径混合分隔符（`archivePreview` 以 `/` 拼 Windows 根产生 `D:\Arc/document/a.pdf`）：`lib/fileUtils.ts` 新增 `resolveArchiveDir` / `joinArchivePath` / `archiveDestPath` 纯函数（统一 `/` 规范 + 剥除根尾部多余分隔符），文件归档与项目归档共用。
+- 「归档当前筛选」在 COUNT 治理（筛选态 `total=-1`）下不再显示「(-1)」：按钮与确认弹层退化为无计数文案（`archiveFilteredPlain` / `archiveConfirmNoCount` 等）。
+- 设置页归档行摘要 ReactNode 化；归档设置弹窗「最近归档」样本目标只显示文件名（悬浮显完整路径）；自动归档提示与归档说明文案「归档根」改「档案库」表述。
+- 修复 CI clippy 1.98 新 lint `chunks_exact_to_as_chunks` 构建失败：mft / ntfs UTF-16 解析改用 `as_chunks::<2>()`（语义等价，本地 rustup 1.98.1 复现红→修复转绿）。
+
 ### 0.8.7 阶段一（契约与界面地基）
 
 - 契约单点化：新增 `fixtures/app-contracts.json` 跨语言契约真源（应用级事件名 / 文件状态 / 类别清单）；Rust `core/events.rs` 事件常量段、TS `lib/events.ts` 镜像与双端 fixture 一致性测试；全部 emit/listen 改用常量；`check-arch` / `check-rust-arch` 新增裸事件名字面量防漂移门禁（正反用例自测）。
