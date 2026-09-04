@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../../../theme/icons";
 import type { CustomOpenCommand, ProjectKind } from "../../../lib/tauri";
 import { listDetectedTools } from "../../../lib/tauri";
 import { PREFERRED_IDE_OPTIONS } from "../../../lib/projects";

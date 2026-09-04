@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { X } from "../theme/icons";
 
 export type BannerVariant = "brand" | "warn" | "error" | "info";
 

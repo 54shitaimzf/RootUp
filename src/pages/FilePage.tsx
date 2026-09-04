@@ -7,9 +7,8 @@ import {
   Copy,
   ExternalLink,
   LocateFixed,
-} from "lucide-react";
-import { CATEGORY_ICON, FileTypeIcon } from "../components/FileTypeIcon";
-import { FilterBar } from "../components/FilterBar";
+} from "../theme/icons";
+import { FileTypeIcon } from "../components/FileTypeIcon";import { FilterBar } from "../components/FilterBar";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
 import { useHelpCenter } from "../components/HelpCenter";
 import { Banner } from "../components/Banner";
@@ -27,6 +26,7 @@ import { useFilterHabits } from "../hooks/useFilterHabits";
 import { useLabelDefs } from "../hooks/useLabelDefs";
 import type { ScanController } from "../hooks/useScan";
 import { LABEL_COLORS, labelColorKey } from "../lib/labelDefs";
+import { resolveCategoryKey } from "../lib/categoryDefs";
 import { buildCourseLabelDefs } from "../lib/studyStore";
 import { getStudyData } from "../lib/tauri";
 import {
@@ -420,7 +420,7 @@ export function FilePage({
   const archivePreview = (path: string, labels: string) => {
     const name = path.split("/").pop() ?? path;
     const first = labels.split(",")[0]?.trim() ?? "";
-    const dir = first && first in CATEGORY_ICON ? first : "other";
+    const dir = resolveCategoryKey(first);
     return `${archiveRoot}/${dir}/${name}`;
   };
   const archiveDescription = archiveTarget

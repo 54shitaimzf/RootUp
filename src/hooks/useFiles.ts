@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { loadMoreMerge, mergeFiles } from "../lib/fileUtils";
+import { APP_EVENTS } from "../lib/events";
 import {
   logEvent,
   queryFiles,
@@ -57,7 +58,7 @@ export function useFiles(
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen<FileRecord[]>("files-changed", (event) => {
+    listen<FileRecord[]>(APP_EVENTS.filesChanged, (event) => {
       const hasFilter = query.trim() !== "";
       if (!hasFilter && offset === 0) {
         setItems((prev) =>

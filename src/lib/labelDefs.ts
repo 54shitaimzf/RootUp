@@ -20,7 +20,7 @@ import {
   Trophy,
   Wrench,
   type LucideIcon,
-} from "lucide-react";
+} from "../theme/icons";
 
 /** 预设标签图标注册表（lucide 线性图标，统一矢量方案；未知 key 回退 Tag）。 */
 export const LABEL_ICONS: Record<string, LucideIcon> = {

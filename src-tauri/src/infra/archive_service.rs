@@ -45,6 +45,20 @@ impl ArchiveService {
         self.inner.enabled.store(enabled, Ordering::SeqCst);
     }
 
+    /// 自动归档是否处于生效状态（开关开启且归档根非空）。
+    ///
+    /// 监听热路径以本方法代替重读 settings.json：设置变更时由
+    /// `infra::managed_state::refresh` 推送缓存（update），回调内零磁盘 IO。
+    pub fn is_active(&self) -> bool {
+        self.inner.enabled.load(Ordering::SeqCst)
+            && !self
+                .inner
+                .root
+                .lock()
+                .map(|root| root.is_empty())
+                .unwrap_or(true)
+    }
+
     pub fn enqueue(&self, path: String) {
         if !self.inner.enabled.load(Ordering::SeqCst) {
             return;
@@ -153,6 +167,22 @@ mod tests {
         service.update("C:/Archive".into(), true);
         service.enqueue("C:/a.pdf".into());
         assert_eq!(service.inner.queue.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn is_active_requires_enabled_and_non_empty_root() {
+        // 关 + 根：不生效
+        let service = ArchiveService::new(store(), "C:/Archive".into(), false);
+        assert!(!service.is_active());
+        // 开 + 空根：不生效
+        service.update(String::new(), true);
+        assert!(!service.is_active());
+        // 开 + 根：生效
+        service.update("C:/Archive".into(), true);
+        assert!(service.is_active());
+        // 设置变更推送即生效（缓存语义）：再次关闭立即不生效
+        service.update("C:/Archive".into(), false);
+        assert!(!service.is_active());
     }
 
     #[test]

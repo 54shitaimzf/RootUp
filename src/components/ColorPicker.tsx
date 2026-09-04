@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles } from "../theme/icons";
 import {
   LABEL_COLOR_KEYS,
   LABEL_COLORS,

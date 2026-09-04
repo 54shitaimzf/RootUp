@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
+import { APP_EVENTS } from "../lib/events";
 import { hideToTray, quitApp } from "../lib/tauri";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
@@ -8,7 +9,7 @@ import type { CloseAction } from "../lib/tauri";
 
 /**
  * 关闭确认弹窗：
- * Rust 侧拦截关闭请求并广播 "close-requested"，
+ * Rust 侧拦截关闭请求并广播 close-requested 事件，
  * 本组件据此弹出，由用户选择后台运行或退出。
  */
 export function CloseConfirmDialog({
@@ -22,7 +23,7 @@ export function CloseConfirmDialog({
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen<null>("close-requested", () => setOpen(true))
+    listen<null>(APP_EVENTS.closeRequested, () => setOpen(true))
       .then((fn) => {
         unlisten = fn;
       })

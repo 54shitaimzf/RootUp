@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search } from "../../../theme/icons";
 import {
   buildEffectiveMap,
   resetExtensionCategory,

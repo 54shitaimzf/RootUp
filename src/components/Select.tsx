@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "../theme/icons";
 import { useTranslation } from "react-i18next";
 import { isComposing } from "../lib/ime";
 import { dropdownPosition } from "../lib/dropdown";

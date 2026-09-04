@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FolderKanban, FolderOpen, Palette } from "lucide-react";
+import { FolderKanban, FolderOpen, Palette } from "../theme/icons";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 

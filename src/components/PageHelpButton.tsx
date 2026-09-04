@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "../theme/icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./Button";
 import { useHelpCenter } from "./HelpCenter";

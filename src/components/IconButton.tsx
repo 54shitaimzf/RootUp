@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "../theme/icons";
 import { Tooltip } from "./Tooltip";
 
 export type IconButtonSize = "xs" | "sm" | "md";

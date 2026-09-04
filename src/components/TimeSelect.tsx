@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Clock, Minus, Plus } from "lucide-react";
+import { ChevronDown, Clock, Minus, Plus } from "../theme/icons";
 import { isComposing } from "../lib/ime";
 import { minToTime, snapToFiveMinutes, timeToMin } from "../lib/study";
 import type { InputSize } from "./Input";

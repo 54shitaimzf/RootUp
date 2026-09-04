@@ -3,6 +3,29 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// 应用级事件名常量（真源为 fixtures/app-contracts.json，双端测试断言一致；
+/// 前端镜像为 src/lib/events.ts）。emit/listen 一律使用常量，禁止裸字符串。
+pub const EVENT_SCAN_PROGRESS: &str = "scan-progress";
+pub const EVENT_SCAN_FINISHED: &str = "scan-finished";
+pub const EVENT_FILES_CHANGED: &str = "files-changed";
+pub const EVENT_SETTINGS_CHANGED: &str = "settings-changed";
+pub const EVENT_CLOSE_REQUESTED: &str = "close-requested";
+pub const EVENT_PROJECT_OPEN: &str = "project-open";
+pub const EVENT_STUDY_HOMEWORK_OPEN: &str = "study-homework-open";
+
+/// 全部应用级事件名（fixture 一致性测试与门禁枚举用）。
+pub fn all_app_events() -> [&'static str; 7] {
+    [
+        EVENT_SCAN_PROGRESS,
+        EVENT_SCAN_FINISHED,
+        EVENT_FILES_CHANGED,
+        EVENT_SETTINGS_CHANGED,
+        EVENT_CLOSE_REQUESTED,
+        EVENT_PROJECT_OPEN,
+        EVENT_STUDY_HOMEWORK_OPEN,
+    ]
+}
+
 /// 归一化后的事件类型（由平台事件转换而来）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileEventKind {
@@ -143,6 +166,22 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
     use std::time::Instant;
+
+    #[test]
+    fn app_event_names_match_fixture() {
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        let events = value["events"].as_object().expect("events 应为对象");
+        for name in all_app_events() {
+            assert!(
+                events.values().any(|v| v.as_str() == Some(name)),
+                "fixture 缺少事件 {name}"
+            );
+        }
+        // 常量与 fixture 一一对应：fixture 中不允许出现常量未覆盖的事件
+        assert_eq!(events.len(), all_app_events().len(), "事件数应与常量一致");
+    }
 
     fn ev(kind: FileEventKind) -> NormalizedEvent {
         NormalizedEvent {

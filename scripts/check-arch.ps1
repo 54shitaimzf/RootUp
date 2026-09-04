@@ -71,5 +71,54 @@ if ($Violations.Count -gt 0) {
     exit 1
 }
 
-Write-Host "Architecture check passed ($Checked relative imports, all one-way)."
+# --- Event-name drift guard -------------------------------------------------
+# App-level event names (source of truth: fixtures/app-contracts.json) must be
+# referenced via src/lib/events.ts constants; raw quoted literals outside the
+# registry fail the check (test files excluded, assertions may use literals).
+$EventsRegistry = "src/lib/events.ts"
+$EventAlternation = "scan-progress|scan-finished|files-changed|settings-changed|close-requested|project-open|study-homework-open"
+$EventRegex = "[`"']($EventAlternation)[`"']"
+$EventViolations = [System.Collections.Generic.List[string]]::new()
+
+foreach ($File in $Files) {
+    $Rel = $File.FullName.Substring($Repo.Length + 1).Replace("\", "/")
+    if ($Rel -eq $EventsRegistry) { continue }
+    $Content = Get-Content -Path $File.FullName -Raw -Encoding UTF8
+    foreach ($Match in [regex]::Matches($Content, $EventRegex)) {
+        $EventViolations.Add("$Rel -> raw event literal '$($Match.Groups[1].Value)' (use lib/events.ts APP_EVENTS)")
+    }
+}
+
+if ($EventViolations.Count -gt 0) {
+    Write-Host "Architecture check FAILED (raw event-name literals):" -ForegroundColor Red
+    foreach ($V in $EventViolations) { Write-Host "  $V" -ForegroundColor Red }
+    Write-Host "Found $($EventViolations.Count) raw event literals outside $EventsRegistry."
+    exit 1
+}
+
+# --- Icon consumption guard --------------------------------------------------
+# All icon imports must go through src/theme/icons.ts (the v1.3 skin swap point);
+# importing lucide-react directly anywhere else fails the check (tests included).
+$IconsEntry = "src/theme/icons.ts"
+$LucideRegex = "from\s+[`"']lucide-react[`"']"
+$IconViolations = [System.Collections.Generic.List[string]]::new()
+$AllTsFiles = Get-ChildItem -Path $SrcDir -Recurse -File -Include *.ts, *.tsx
+
+foreach ($File in $AllTsFiles) {
+    $Rel = $File.FullName.Substring($Repo.Length + 1).Replace("\", "/")
+    if ($Rel -eq $IconsEntry) { continue }
+    $Content = Get-Content -Path $File.FullName -Raw -Encoding UTF8
+    if ($Content -match $LucideRegex) {
+        $IconViolations.Add("$Rel -> direct lucide-react import (use theme/icons.ts)")
+    }
+}
+
+if ($IconViolations.Count -gt 0) {
+    Write-Host "Architecture check FAILED (direct lucide-react imports):" -ForegroundColor Red
+    foreach ($V in $IconViolations) { Write-Host "  $V" -ForegroundColor Red }
+    Write-Host "Found $($IconViolations.Count) direct imports outside $IconsEntry."
+    exit 1
+}
+
+Write-Host "Architecture check passed ($Checked relative imports, all one-way; event names via registry; icons via theme/icons)."
 exit 0

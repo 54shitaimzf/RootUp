@@ -1,5 +1,5 @@
 import { forwardRef, type MouseEvent, type ReactNode, type Ref } from "react";
-import { X } from "lucide-react";
+import { X } from "../theme/icons";
 import { IconButton } from "./IconButton";
 
 export type ChipSize = "sm" | "md";

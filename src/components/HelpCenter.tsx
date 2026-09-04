@@ -17,7 +17,7 @@ import {
   ListChecks,
   Search,
   Settings2,
-} from "lucide-react";
+} from "../theme/icons";
 import { Modal } from "./Modal";
 import { SectionLabel } from "./SectionLabel";
 import { SyntaxTable } from "./SyntaxTable";

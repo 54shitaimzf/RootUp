@@ -8,8 +8,9 @@ import {
   Link2,
   RefreshCw,
   Trash2,
-} from "lucide-react";
+} from "../theme/icons";
 import { useSettings } from "../hooks/useSettings";
+import { APP_EVENTS } from "../lib/events";
 import type { PageKey } from "../lib/nav";
 import {
   addProjectDir,
@@ -90,7 +91,7 @@ export function ProjectsPage({
   // 快捷方式唤起 RootUp 时自动切到本页并刷新
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen<string>("project-open", () => {
+    listen<string>(APP_EVENTS.projectOpen, () => {
       void load();
       setNotice(t("projects.openedFromShortcut"));
     })

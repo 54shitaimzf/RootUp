@@ -1,4 +1,4 @@
-import { Tag, type LucideIcon } from "lucide-react";
+import { Tag, type LucideIcon } from "../theme/icons";
 import { LABEL_ICONS, labelIconKey } from "../lib/labelDefs";
 
 /** 自定义标签图标统一入口（未知 key 回退 Tag），矢量单一来源。 */

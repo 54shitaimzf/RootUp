@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "../theme/icons";
 
 export type ButtonVariant =
   | "primary"

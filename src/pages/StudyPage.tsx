@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, ClipboardList } from "lucide-react";
+import { CalendarDays, ClipboardList } from "../theme/icons";
 import { Banner } from "../components/Banner";
 import { Button } from "../components/Button";
 import { InlineNotice } from "../components/InlineNotice";

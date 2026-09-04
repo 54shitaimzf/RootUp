@@ -7,7 +7,7 @@ import {
   Sprout,
   Wrench,
   type LucideIcon,
-} from "lucide-react";
+} from "../theme/icons";
 import { useTranslation } from "react-i18next";
 import { APP_NAME, APP_VERSION } from "../lib/constants";
 import type { PageKey } from "../lib/nav";

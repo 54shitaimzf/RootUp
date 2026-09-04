@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { APP_EVENTS } from "../lib/events";
 import {
   defaultSettings,
   getSettings,
@@ -62,7 +63,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // 托盘等外部入口修改设置后同步刷新（如主题快速切换）。
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen<null>("settings-changed", () => {
+    listen<null>(APP_EVENTS.settingsChanged, () => {
       getSettings()
         .then((value) => {
           latestRef.current = value;

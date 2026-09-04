@@ -1,0 +1,23 @@
+{
+  "events": {
+    "scanProgress": "scan-progress",
+    "scanFinished": "scan-finished",
+    "filesChanged": "files-changed",
+    "settingsChanged": "settings-changed",
+    "closeRequested": "close-requested",
+    "projectOpen": "project-open",
+    "studyHomeworkOpen": "study-homework-open"
+  },
+  "fileStates": ["pending", "indexed", "archived", "deleted"],
+  "categories": [
+    "document",
+    "image",
+    "video",
+    "audio",
+    "archive",
+    "code",
+    "installer",
+    "data",
+    "other"
+  ]
+}

@@ -98,5 +98,37 @@ if ($Violations.Count -gt 0) {
     exit 1
 }
 
-Write-Host "Rust architecture check passed ($Checked files, layer rules enforced)."
+# --- Event-name drift guard -------------------------------------------------
+# App-level event names (source of truth: fixtures/app-contracts.json) must be
+# referenced via core/events.rs constants; raw string literals elsewhere fail.
+# Checked on comment-stripped code BEFORE string stripping (the literals live
+# in strings); the registry module itself is exempt.
+function Get-CommentFreeCode([string]$content) {
+    $content = [regex]::Replace($content, '(?m)//[^\r\n]*', '')
+    return [regex]::Replace($content, '(?s)/\*.*?\*/', '')
+}
+
+$EventsRegistry = "src-tauri/src/core/events.rs"
+$EventAlternation = "scan-progress|scan-finished|files-changed|settings-changed|close-requested|project-open|study-homework-open"
+$EventRegex = '"(' + $EventAlternation + ')"'
+$EventViolations = [System.Collections.Generic.List[string]]::new()
+
+foreach ($File in $Files) {
+    $Rel = $File.FullName.Substring($Repo.Length + 1).Replace("\", "/")
+    if ($Rel -eq $EventsRegistry) { continue }
+    $Content = Get-Content -Path $File.FullName -Raw -Encoding UTF8
+    $Code = Get-CommentFreeCode $Content
+    foreach ($Match in [regex]::Matches($Code, $EventRegex)) {
+        $EventViolations.Add("$Rel -> raw event literal '$($Match.Groups[1].Value)' (use core::events constants)")
+    }
+}
+
+if ($EventViolations.Count -gt 0) {
+    Write-Host "Rust architecture check FAILED (raw event-name literals):" -ForegroundColor Red
+    foreach ($V in $EventViolations) { Write-Host "  $V" -ForegroundColor Red }
+    Write-Host "Found $($EventViolations.Count) raw event literals outside $EventsRegistry."
+    exit 1
+}
+
+Write-Host "Rust architecture check passed ($Checked files, layer rules + event-name registry enforced)."
 exit 0

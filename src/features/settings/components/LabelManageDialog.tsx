@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "../../../theme/icons";
 import type { LabelDef } from "../../../lib/tauri";
 import { deleteLabelDef, saveLabelDef } from "../../../lib/tauri";
 import {

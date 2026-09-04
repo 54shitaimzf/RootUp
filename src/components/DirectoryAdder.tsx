@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen } from "../theme/icons";
 import { Button } from "./Button";
 import { Input } from "./Input";
 import { isComposing } from "../lib/ime";

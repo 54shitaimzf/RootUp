@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Info, Lightbulb, Sparkles } from "lucide-react";
+import { Info, Lightbulb, Sparkles } from "../theme/icons";
 import { Modal } from "./Modal";
 import { SectionLabel } from "./SectionLabel";
 import { Button } from "./Button";

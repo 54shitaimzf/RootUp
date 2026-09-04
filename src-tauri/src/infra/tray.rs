@@ -245,7 +245,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                         log::warn!("tray: 切换自动归档失败: {e}");
                     } else {
                         let _ = managed_state::refresh(app);
-                        let _ = app.emit("settings-changed", ());
+                        let _ = app.emit(crate::core::events::EVENT_SETTINGS_CHANGED, ());
                         let _ = refresh_tray(app);
                     }
                 }
@@ -260,14 +260,14 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                     if let Err(e) = storage::save_settings(app, &settings) {
                         log::warn!("tray: 保存主题失败: {e}");
                     } else {
-                        let _ = app.emit("settings-changed", ());
+                        let _ = app.emit(crate::core::events::EVENT_SETTINGS_CHANGED, ());
                         let _ = refresh_tray(app);
                     }
                 }
                 _ if id.starts_with("study-homework:") => {
                     let homework_id = id.trim_start_matches("study-homework:");
                     let _ = crate::infra::window::ensure_main_window(app);
-                    let _ = app.emit("study-homework-open", homework_id);
+                    let _ = app.emit(crate::core::events::EVENT_STUDY_HOMEWORK_OPEN, homework_id);
                 }
                 _ => {}
             }

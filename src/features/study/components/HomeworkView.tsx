@@ -7,7 +7,7 @@ import {
   Pencil,
   Plus,
   Trash2,
-} from "lucide-react";
+} from "../../../theme/icons";
 import { Button } from "../../../components/Button";
 import { Chip } from "../../../components/Chip";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";

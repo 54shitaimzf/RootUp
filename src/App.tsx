@@ -8,6 +8,7 @@ import { useScan, type ScanController } from "./hooks/useScan";
 import { useImeGuard } from "./hooks/useImeGuard";
 import { SettingsProvider, useSettings } from "./hooks/useSettings";
 import i18n from "./i18n";
+import { APP_EVENTS } from "./lib/events";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { HelpCenterProvider } from "./components/HelpCenter";
 import { appReady, takeStartupIntent } from "./lib/tauri";
@@ -96,7 +97,7 @@ function Shell() {
   useEffect(() => {
     let unlistenHomework: (() => void) | undefined;
     let unlistenProject: (() => void) | undefined;
-    listen<string | null>("study-homework-open", (event) => {
+    listen<string | null>(APP_EVENTS.studyHomeworkOpen, (event) => {
       setPage("study");
       setStudyFocus(event.payload ? { homeworkId: event.payload } : {});
     })
@@ -104,7 +105,7 @@ function Shell() {
         unlistenHomework = fn;
       })
       .catch(() => {});
-    listen<string>("project-open", () => {
+    listen<string>(APP_EVENTS.projectOpen, () => {
       setPage("projects");
     })
       .then((fn) => {

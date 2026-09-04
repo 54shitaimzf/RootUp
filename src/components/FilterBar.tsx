@@ -7,7 +7,7 @@ import {
   type WheelEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "../theme/icons";
 import { sortFilterItems, type FilterHabits } from "../lib/filterHabits";
 import { LABEL_COLORS, labelColorKey } from "../lib/labelDefs";
 import { logEvent, type LabelDef } from "../lib/tauri";

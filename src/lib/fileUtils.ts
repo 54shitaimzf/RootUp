@@ -1,4 +1,4 @@
-import type { FileRecord } from "./tauri";
+import type { FileRecord, FileState } from "./tauri";
 
 /** 筛选器组合参数（新手路径：点选 → 生成查询串） */
 export interface QueryParts {
@@ -8,8 +8,11 @@ export interface QueryParts {
   labels?: string[];
 }
 
-/** 状态筛选固定选项（与后端 state 查询一致）。 */
-export const FILTER_STATE_OPTIONS = ["pending", "indexed"] as const;
+/** 状态筛选固定选项（UI 可选子集；全量状态见 lib/tauri.ts 的 FILE_STATES）。 */
+export const FILTER_STATE_OPTIONS = [
+  "pending",
+  "indexed",
+] as const satisfies readonly FileState[];
 
 /** 将筛选器状态组合为搜索语法字符串（后端 query_files 解析） */
 export function buildQuery(parts: QueryParts): string {

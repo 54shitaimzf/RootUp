@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays } from "../theme/icons";
 import { SegmentedControl } from "./SegmentedControl";
 
 describe("SegmentedControl", () => {

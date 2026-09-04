@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
+import { Check } from "../../../theme/icons";
 import { RULE_PRESETS } from "../../../lib/presets";
 import type { CurrentScheme } from "../../../lib/effectiveMap";
 import type { RuleScheme } from "../../../lib/tauri";

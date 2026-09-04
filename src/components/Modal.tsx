@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { X } from "../theme/icons";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "./IconButton";
 import { isComposing } from "../lib/ime";

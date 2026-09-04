@@ -323,6 +323,20 @@ pub fn is_valid_label_key(key: &str) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn category_keys_match_fixture() {
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        let categories = value["categories"].as_array().expect("categories 应为数组");
+        let expected: Vec<String> = Category::ALL.iter().map(|c| c.key().to_string()).collect();
+        let actual: Vec<String> = categories
+            .iter()
+            .map(|v| v.as_str().expect("类别应为字符串").to_string())
+            .collect();
+        assert_eq!(actual, expected, "fixture categories 应与 Category::ALL 一致");
+    }
+
     fn input<'a>(name: &'a str, file_type: &'a str) -> ClassifyInput<'a> {
         ClassifyInput {
             name,

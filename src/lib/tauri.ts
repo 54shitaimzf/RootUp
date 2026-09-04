@@ -173,6 +173,18 @@ export interface ClassifyDefaultEntry {
   category: string;
 }
 
+/**
+ * 文件状态（与 Rust 侧 core::events::FileState 对应；真源为 fixtures/app-contracts.json 的 fileStates）。
+ * emit/listen 之外的状态字面量一律用此类型收口，禁止散落裸字符串联合。
+ */
+export const FILE_STATES = [
+  "pending",
+  "indexed",
+  "archived",
+  "deleted",
+] as const;
+export type FileState = (typeof FILE_STATES)[number];
+
 /** 与 Rust 侧 core::index::FileRecord 对应 */
 export interface FileRecord {
   id: number;
@@ -183,7 +195,7 @@ export interface FileRecord {
   labels: string;
   first_seen: number;
   modified: number;
-  state: "pending" | "indexed" | "archived" | "deleted";
+  state: FileState;
 }
 
 /** 与 Rust 侧 core::query::QueryPage 对应 */

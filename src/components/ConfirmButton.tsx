@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "../theme/icons";
 import { Button, type ButtonSize, type ButtonVariant } from "./Button";
 
 /**

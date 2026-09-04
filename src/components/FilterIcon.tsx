@@ -1,6 +1,6 @@
-import { Tag } from "lucide-react";
+import { resolveCategoryVisual } from "../lib/categoryDefs";
+import { Tag } from "../theme/icons";
 import { AllBadgeIcon } from "./AllBadgeIcon";
-import { CATEGORY_ICON } from "./FileTypeIcon";
 
 export type FilterIconKind =
   | "category"
@@ -26,7 +26,7 @@ export function FilterIcon({
   value?: string;
 }) {
   if (kind === "category") {
-    const Icon = CATEGORY_ICON[value ?? "other"] ?? CATEGORY_ICON.other;
+    const Icon = resolveCategoryVisual(value).icon;
     return <Icon aria-hidden="true" className="size-3.5 shrink-0" />;
   }
   if (kind === "state") {

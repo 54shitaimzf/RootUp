@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Undo2 } from "lucide-react";
+import { Undo2 } from "../../../theme/icons";
 import { listArchiveBatches, undoArchive, type ArchiveBatch } from "../../../lib/tauri";
 import { formatTimestamp } from "../../../lib/fileUtils";
 import { Button } from "../../../components/Button";

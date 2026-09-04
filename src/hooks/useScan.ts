@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { APP_EVENTS } from "../lib/events";
 import {
   cancelScan,
   getScanStatus,
@@ -24,7 +25,7 @@ export function useScan() {
     let unlistenProgress: (() => void) | undefined;
     let unlistenFinished: (() => void) | undefined;
 
-    listen<ScanEventPayload>("scan-progress", (event) => {
+    listen<ScanEventPayload>(APP_EVENTS.scanProgress, (event) => {
       if (event.payload.type !== "progress") return;
       const p = event.payload.progress;
       setStatus((prev) => ({
@@ -44,7 +45,7 @@ export function useScan() {
         void logEvent("warn", `监听 scan-progress 失败: ${String(err)}`);
       });
 
-    listen<ScanEventPayload>("scan-finished", (event) => {
+    listen<ScanEventPayload>(APP_EVENTS.scanFinished, (event) => {
       const payload = event.payload;
       if (payload.type === "finished" || payload.type === "cancelled") {
         setLastSummary(payload.summary);

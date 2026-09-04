@@ -6,7 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Terminal, X } from "lucide-react";
+import { Terminal, X } from "../theme/icons";
 import {
   addTag,
   getSuggestions,

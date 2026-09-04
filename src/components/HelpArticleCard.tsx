@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "../theme/icons";
 import { useTranslation } from "react-i18next";
 import type { HelpArticle } from "../lib/helpContent";
 import { HELP_ARTICLES } from "../lib/helpContent";

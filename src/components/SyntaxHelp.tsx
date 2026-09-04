@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle } from "../theme/icons";
 import { IconButton } from "./IconButton";
 import { SyntaxTable } from "./SyntaxTable";
 import { isComposing } from "../lib/ime";

@@ -10,7 +10,10 @@ use crate::commands::study as study_commands;
 use crate::commands::window as window_commands;
 use crate::core::archive::category_dir;
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
-use crate::core::events::StabilityParams;
+use crate::core::events::{
+    FileState, StabilityParams, EVENT_CLOSE_REQUESTED, EVENT_FILES_CHANGED, EVENT_PROJECT_OPEN,
+    EVENT_SCAN_FINISHED, EVENT_SCAN_PROGRESS, EVENT_STUDY_HOMEWORK_OPEN,
+};
 use crate::core::ignore::IgnoreMatcher;
 use crate::core::index::{IndexStore, ScanDiffStore};
 use crate::core::path::normalize_path;
@@ -103,10 +106,10 @@ fn open_project_from_args(app: &AppHandle, args: &[String]) {
 fn emit_startup_intent(app: &AppHandle, args: &[String]) {
     match startup_intent_from_args(args) {
         Some(StartupIntent::Project { path }) => {
-            let _ = app.emit("project-open", path);
+            let _ = app.emit(EVENT_PROJECT_OPEN, path);
         }
         Some(StartupIntent::Homework) => {
-            let _ = app.emit("study-homework-open", Option::<String>::None);
+            let _ = app.emit(EVENT_STUDY_HOMEWORK_OPEN, Option::<String>::None);
             log::info!("study: 启动参数打开未完成作业");
         }
         None => {}
@@ -122,10 +125,10 @@ impl ScanEventSink for TauriScanSink {
     fn on_event(&self, event: ScanEvent) {
         match &event {
             ScanEvent::Progress { .. } => {
-                let _ = self.app.emit("scan-progress", event);
+                let _ = self.app.emit(EVENT_SCAN_PROGRESS, event);
             }
             _ => {
-                let _ = self.app.emit("scan-finished", event);
+                let _ = self.app.emit(EVENT_SCAN_FINISHED, event);
             }
         }
     }
@@ -222,7 +225,7 @@ pub fn run() {
                         app.exit(0);
                     }
                     _ => {
-                        let _ = window.emit("close-requested", ());
+                        let _ = window.emit(EVENT_CLOSE_REQUESTED, ());
                     }
                 }
             }
@@ -358,19 +361,24 @@ pub fn run() {
                 ignore_matcher.clone(),
                 StabilityParams::default(),
                 move |records| {
-                    let _ = emit_handle.emit("files-changed", records.clone());
-                    let settings = storage::load_settings(&app_for_auto);
-                    if settings.auto_archive && !settings.archive_root.is_empty() {
-                        let service_state = app_for_auto.state::<Mutex<ArchiveService>>();
-                        let service_guard = service_state.lock();
-                        if let Ok(service) = service_guard {
-                            for record in records {
-                                if record.state == "indexed"
-                                    && category_dir(&record.labels) != "other"
-                                {
-                                    service.enqueue(record.path);
-                                }
-                            }
+                    let _ = emit_handle.emit(EVENT_FILES_CHANGED, records.clone());
+                    // 热路径零磁盘 IO：自动归档开关与根目录由 managed_state::refresh
+                    // 在设置变更时推送到 ArchiveService 缓存，这里只读内存状态。
+                    let Some(archive_state) = app_for_auto.try_state::<Mutex<ArchiveService>>()
+                    else {
+                        return;
+                    };
+                    let Ok(service) = archive_state.lock() else {
+                        return;
+                    };
+                    if !service.is_active() {
+                        return;
+                    }
+                    for record in records {
+                        if record.state == FileState::Indexed.as_str()
+                            && category_dir(&record.labels) != "other"
+                        {
+                            service.enqueue(record.path);
                         }
                     }
                 },

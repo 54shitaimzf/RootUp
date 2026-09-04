@@ -41,7 +41,7 @@ pub fn tray_icon_has_badge(due_count: usize) -> bool {
 mod tests {
     use super::*;
     use crate::core::study::seed_study_data;
-    use chrono::NaiveDate;
+    use chrono::{Local, NaiveDate};
 
     fn settings() -> Settings {
         Settings {
@@ -56,7 +56,8 @@ mod tests {
     #[test]
     fn model_reflects_settings_and_data() {
         let data = seed_study_data();
-        let today = NaiveDate::parse_from_str("2026-08-06", "%Y-%m-%d").unwrap();
+        // 种子作业的截止日期按运行日相对生成（如今天-2），判断基准须一致，避免日期漂移导致脆弱。
+        let today = Local::now().date_naive();
         let model = tray_menu_model(&data, &settings(), today);
         assert!(model.due_count <= REMINDER_MAX_ITEMS);
         assert!(model.auto_archive);

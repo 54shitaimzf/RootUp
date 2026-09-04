@@ -10,7 +10,7 @@ import {
   Minimize2,
   RefreshCw,
   RotateCcw,
-} from "lucide-react";
+} from "../theme/icons";
 import { useSettings } from "../hooks/useSettings";
 import type { ScanController } from "../hooks/useScan";
 import { isComposing } from "../lib/ime";

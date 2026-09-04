@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "../theme/icons";
 
 /**
  * 统一分段切换：用于页面视图切换与同层级的小选项切换。
