@@ -18,12 +18,12 @@ import { LabelIcon } from "./LabelIcon";
 export interface FilterBarProps {
   categories: string[];
   labels: string[];
-  selectedTypes: string[];
+  selectedCategories: string[];
   selectedLabels: string[];
   habits: FilterHabits;
   labelDefs?: Record<string, LabelDef>;
   onHabitUsed: (key: string) => void;
-  onTypesChange: (types: string[]) => void;
+  onCategoriesChange: (categories: string[]) => void;
   onLabelsChange: (labels: string[]) => void;
 }
 
@@ -143,12 +143,12 @@ function GroupRow({
 export function FilterBar({
   categories,
   labels,
-  selectedTypes,
+  selectedCategories,
   selectedLabels,
   habits,
   labelDefs = {},
   onHabitUsed,
-  onTypesChange,
+  onCategoriesChange,
   onLabelsChange,
 }: FilterBarProps) {
   const { t } = useTranslation();
@@ -176,7 +176,7 @@ export function FilterBar({
   }
   const snapshot = snapshotRef.current;
   const selectedKeys = [
-    ...selectedTypes.map((value) => `category:${value}`),
+    ...selectedCategories.map((value) => `category:${value}`),
     ...selectedLabels.map((value) => `label:${value}`),
   ];
   for (const kind of ["category", "label"] as const) {
@@ -203,7 +203,7 @@ export function FilterBar({
 
   const isActive = (item: ChipItem) =>
     item.kind === "category"
-      ? selectedTypes.includes(item.value)
+      ? selectedCategories.includes(item.value)
       : selectedLabels.includes(item.value);
 
   const displayName = (item: ChipItem) => {
@@ -216,7 +216,7 @@ export function FilterBar({
     onHabitUsed(item.key);
     if (item.kind === "category") {
       const next = active ? [] : [item.value];
-      onTypesChange(next);
+      onCategoriesChange(next);
       void logEvent(
         "info",
         `filter: 切换 kind=category key=${item.value} active=${next.length > 0}`,
@@ -276,9 +276,9 @@ export function FilterBar({
       <GroupRow label={t("filter.types")}>
         <Chip
           size="md"
-          variant={selectedTypes.length === 0 ? "active" : "neutral"}
+          variant={selectedCategories.length === 0 ? "active" : "neutral"}
           icon={<FilterIcon kind="all" />}
-          onClick={() => onTypesChange([])}
+          onClick={() => onCategoriesChange([])}
         >
           {t("filter.all")}
         </Chip>

@@ -13,7 +13,8 @@ import {
 import type { FilterHabits } from "./filterHabits";
 
 const keywords: Suggestion[] = [
-  { kind: "keyword", key: "keyword:type:", raw: "type:", token: "type:", display: "按类型筛选" },
+  { kind: "keyword", key: "keyword:cat:", raw: "cat:", token: "cat:", display: "按类别筛选" },
+  { kind: "keyword", key: "keyword:type:", raw: "type:", token: "type:", display: "按扩展名筛选" },
   { kind: "keyword", key: "keyword:label:", raw: "label:", token: "label:", display: "按标签筛选" },
   { kind: "keyword", key: "keyword:state:", raw: "state:", token: "state:", display: "按状态筛选" },
   { kind: "keyword", key: "keyword:size:", raw: "size:", token: "size:", display: "按大小筛选" },
@@ -22,9 +23,9 @@ const keywords: Suggestion[] = [
 ];
 
 const values: Suggestion[] = [
-  { kind: "category", key: "category:document", raw: "document", token: "type:document", display: "文档" },
-  { kind: "category", key: "category:image", raw: "image", token: "type:image", display: "图片" },
-  { kind: "category", key: "category:archive", raw: "archive", token: "type:archive", display: "压缩包" },
+  { kind: "category", key: "category:document", raw: "document", token: "cat:document", display: "文档" },
+  { kind: "category", key: "category:image", raw: "image", token: "cat:image", display: "图片" },
+  { kind: "category", key: "category:archive", raw: "archive", token: "cat:archive", display: "压缩包" },
   { kind: "state", key: "state:pending", raw: "pending", token: "state:pending", display: "确认中" },
   { kind: "state", key: "state:indexed", raw: "indexed", token: "state:indexed", display: "已索引" },
   { kind: "label", key: "label:高数", raw: "高数", token: "label:高数", display: "高数" },
@@ -41,14 +42,14 @@ const habits: FilterHabits = {
 
 const archive = values[2];
 const document = values[0];
-const keywordType = keywords[0];
+const keywordType = keywords[1];
 
 describe("tokenRangeAt", () => {
   it("定位光标所在 token 与边界", () => {
-    expect(tokenRangeAt("高数 type:doc", 3)).toEqual({
+    expect(tokenRangeAt("高数 cat:doc", 3)).toEqual({
       start: 3,
-      end: 11,
-      token: "type:doc",
+      end: 10,
+      token: "cat:doc",
     });
     expect(tokenRangeAt("a", 1)).toEqual({ start: 0, end: 1, token: "a" });
     expect(tokenRangeAt("高数 ", 3)).toEqual({ start: 3, end: 3, token: "" });
@@ -69,12 +70,12 @@ describe("getSuggestions", () => {
   it("末尾空格时关键词优先", () => {
     const result = getSuggestions("高数 ", candidates, habits, 8);
     expect(result.slice(0, 6).map((s) => s.raw)).toEqual([
+      "cat:",
       "type:",
       "label:",
       "state:",
       "size:",
       "before:",
-      "after:",
     ]);
   });
 
@@ -82,21 +83,28 @@ describe("getSuggestions", () => {
     expect(getSuggestions("typ", candidates, habits, 8).map((s) => s.raw)).toEqual([
       "type:",
     ]);
+    expect(getSuggestions("cat", candidates, habits, 8).map((s) => s.raw)).toEqual([
+      "cat:",
+    ]);
     expect(getSuggestions("s", candidates, habits, 8).map((s) => s.raw)).toEqual([
       "state:",
       "size:",
     ]);
   });
 
-  it("type: 前缀进入两段式第二段", () => {
-    const result = getSuggestions("type:", candidates, habits, 8);
+  it("cat: 前缀进入两段式第二段", () => {
+    const result = getSuggestions("cat:", candidates, habits, 8);
     expect(result.every((s) => s.kind === "category")).toBe(true);
   });
 
-  it("type:doc 补全 document", () => {
-    expect(getSuggestions("type:doc", candidates, habits, 8).map((s) => s.key)).toEqual([
+  it("cat:doc 补全 document", () => {
+    expect(getSuggestions("cat:doc", candidates, habits, 8).map((s) => s.key)).toEqual([
       "category:document",
     ]);
+  });
+
+  it("type: 是扩展名语义，不再补全类别值", () => {
+    expect(getSuggestions("type:doc", candidates, habits, 8)).toEqual([]);
   });
 
   it("前缀匹配优先于子串匹配", () => {
@@ -111,7 +119,7 @@ describe("getSuggestions", () => {
   });
 
   it("大小写不敏感、limit 生效、空候选安全", () => {
-    expect(getSuggestions("TYPE:Doc", candidates, habits, 8).map((s) => s.key)).toEqual([
+    expect(getSuggestions("CAT:Doc", candidates, habits, 8).map((s) => s.key)).toEqual([
       "category:document",
     ]);
     expect(getSuggestions("", candidates, habits, 1)).toHaveLength(1);
@@ -157,7 +165,7 @@ describe("resolveInsertion", () => {
       caret: 2,
       tag: { kind: "category", value: "archive" },
     });
-    expect(resolveInsertion("type:doc", 8, document)).toEqual({
+    expect(resolveInsertion("cat:doc", 8, document)).toEqual({
       text: "",
       caret: 0,
       tag: { kind: "category", value: "document" },
@@ -173,7 +181,7 @@ describe("resolveInsertion", () => {
   });
 
   it("光标感知：替换光标所在 token 而非末尾", () => {
-    expect(resolveInsertion("type:doc 笔记", 5, document)).toEqual({
+    expect(resolveInsertion("cat:doc 笔记", 5, document)).toEqual({
       text: "笔记",
       caret: 2,
       tag: { kind: "category", value: "document" },
@@ -182,31 +190,32 @@ describe("resolveInsertion", () => {
 });
 
 describe("标签操作", () => {
-  const empty: FilterTags = { types: [], states: [], labels: [] };
+  const empty: FilterTags = { categories: [], states: [], labels: [] };
 
   it("addTag 去重", () => {
     const once = addTag(empty, { kind: "category", value: "document" });
     expect(once.added).toBe(true);
+    expect(once.tags.categories).toEqual(["document"]);
     const twice = addTag(once.tags, { kind: "category", value: "document" });
     expect(twice.added).toBe(false);
   });
 
   it("removeTag 仅移除对应维度", () => {
     const tags: FilterTags = {
-      types: ["document"],
+      categories: ["document"],
       states: ["pending"],
       labels: ["高数"],
     };
     expect(removeTag(tags, { kind: "label", value: "高数" })).toEqual({
-      types: ["document"],
+      categories: ["document"],
       states: ["pending"],
       labels: [],
     });
   });
 
-  it("removeLastTag 按 types → states → labels 顺序移除最后一个", () => {
+  it("removeLastTag 按 categories → states → labels 顺序移除最后一个", () => {
     const tags: FilterTags = {
-      types: ["document"],
+      categories: ["document"],
       states: ["pending"],
       labels: ["高数"],
     };

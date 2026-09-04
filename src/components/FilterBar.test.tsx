@@ -25,11 +25,11 @@ describe("FilterBar", () => {
       <FilterBar
         categories={["document", "image"]}
         labels={[]}
-        selectedTypes={[]}
+        selectedCategories={[]}
         selectedLabels={[]}
         habits={habits}
         onHabitUsed={() => {}}
-        onTypesChange={() => {}}
+        onCategoriesChange={() => {}}
         onLabelsChange={() => {}}
       />,
     );
@@ -48,11 +48,11 @@ describe("FilterBar", () => {
       <FilterBar
         categories={["document", "image"]}
         labels={[]}
-        selectedTypes={["document"]}
+        selectedCategories={["document"]}
         selectedLabels={[]}
         habits={habits}
         onHabitUsed={() => {}}
-        onTypesChange={() => {}}
+        onCategoriesChange={() => {}}
         onLabelsChange={() => {}}
       />,
     );
@@ -63,23 +63,23 @@ describe("FilterBar", () => {
   });
 
   it("点击类别 chip 切换选中并记录习惯", () => {
-    const onTypesChange = vi.fn();
+    const onCategoriesChange = vi.fn();
     const onHabitUsed = vi.fn();
     render(
       <FilterBar
         categories={["document"]}
         labels={[]}
-        selectedTypes={[]}
+        selectedCategories={[]}
         selectedLabels={[]}
         habits={{}}
         onHabitUsed={onHabitUsed}
-        onTypesChange={onTypesChange}
+        onCategoriesChange={onCategoriesChange}
         onLabelsChange={() => {}}
       />,
     );
     fireEvent.click(screen.getByText(i18n.t("filter.document")));
     expect(onHabitUsed).toHaveBeenCalledWith("category:document");
-    expect(onTypesChange).toHaveBeenCalledWith(["document"]);
+    expect(onCategoriesChange).toHaveBeenCalledWith(["document"]);
   });
 
   it("点击标签 chip 追加/移除并记录习惯", () => {
@@ -89,11 +89,11 @@ describe("FilterBar", () => {
       <FilterBar
         categories={[]}
         labels={["高数"]}
-        selectedTypes={[]}
+        selectedCategories={[]}
         selectedLabels={["高数"]}
         habits={{}}
         onHabitUsed={onHabitUsed}
-        onTypesChange={() => {}}
+        onCategoriesChange={() => {}}
         onLabelsChange={onLabelsChange}
       />,
     );
@@ -107,11 +107,11 @@ describe("FilterBar", () => {
       <FilterBar
         categories={["document"]}
         labels={[]}
-        selectedTypes={[]}
+        selectedCategories={[]}
         selectedLabels={[]}
         habits={{}}
         onHabitUsed={() => {}}
-        onTypesChange={() => {}}
+        onCategoriesChange={() => {}}
         onLabelsChange={() => {}}
       />,
     );
@@ -123,14 +123,14 @@ describe("FilterBar", () => {
       <FilterBar
         categories={[]}
         labels={["course", "unknown"]}
-        selectedTypes={[]}
+        selectedCategories={[]}
         selectedLabels={[]}
         habits={{}}
         labelDefs={{
           course: { key: "course", name: "课程资料", icon: "book", color: "sky" },
         }}
         onHabitUsed={() => {}}
-        onTypesChange={() => {}}
+        onCategoriesChange={() => {}}
         onLabelsChange={() => {}}
       />,
     );

@@ -37,7 +37,7 @@ import { SyntaxHelp } from "./SyntaxHelp";
  */
 export function SearchAutocomplete({
   text,
-  types,
+  categories,
   states,
   labels,
   candidates,
@@ -52,7 +52,7 @@ export function SearchAutocomplete({
   limit = 8,
 }: {
   text: string;
-  types: string[];
+  categories: string[];
   states: string[];
   labels: string[];
   candidates: Suggestion[];
@@ -92,7 +92,7 @@ export function SearchAutocomplete({
     onInsert?.(suggestion);
     if (result.tag) {
       const { tags: next, added } = addTag(
-        { types, states, labels },
+        { categories, states, labels },
         result.tag,
       );
       if (added) {
@@ -105,15 +105,15 @@ export function SearchAutocomplete({
   };
 
   const handleTagRemove = (tag: TagValue) => {
-    onTagsChange(removeTag({ types, states, labels }, tag));
+    onTagsChange(removeTag({ categories, states, labels }, tag));
     onTagRemove?.(tag);
   };
 
   const handleBackspace = () => {
-    if (text !== "" || (types.length === 0 && states.length === 0 && labels.length === 0)) {
+    if (text !== "" || (categories.length === 0 && states.length === 0 && labels.length === 0)) {
       return;
     }
-    const { tags: next, removed } = removeLastTag({ types, states, labels });
+    const { tags: next, removed } = removeLastTag({ categories, states, labels });
     if (removed) {
       onTagsChange(next);
       onTagRemove?.(removed);
@@ -122,7 +122,7 @@ export function SearchAutocomplete({
 
   const handleClear = () => {
     onTextChange("");
-    onTagsChange({ types: [], states: [], labels: [] });
+    onTagsChange({ categories: [], states: [], labels: [] });
     void logEvent("info", "ui: 清空搜索");
     inputRef.current?.focus();
   };
@@ -161,7 +161,7 @@ export function SearchAutocomplete({
   };
 
   const tags: TagValue[] = [
-    ...types.map((value) => ({ kind: "category" as const, value })),
+    ...categories.map((value) => ({ kind: "category" as const, value })),
     ...states.map((value) => ({ kind: "state" as const, value })),
     ...labels.map((value) => ({ kind: "label" as const, value })),
   ];

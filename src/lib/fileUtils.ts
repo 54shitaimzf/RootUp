@@ -4,7 +4,8 @@ import type { FileRecord, FileState } from "./tauri";
 /** 筛选器组合参数（新手路径：点选 → 生成查询串） */
 export interface QueryParts {
   text?: string;
-  types?: string[];
+  /** 类别 key（产 cat: token；type: 是精确扩展名语义，勿混用） */
+  categories?: string[];
   states?: string[];
   labels?: string[];
 }
@@ -20,7 +21,9 @@ export function buildQuery(parts: QueryParts): string {
   const tokens: string[] = [];
   const text = parts.text?.trim();
   if (text) tokens.push(text);
-  for (const type of parts.types ?? []) tokens.push(`type:${type}`);
+  for (const category of parts.categories ?? []) {
+    tokens.push(`cat:${category}`);
+  }
   for (const state of parts.states ?? []) tokens.push(`state:${state}`);
   for (const label of parts.labels ?? []) tokens.push(`label:${label}`);
   // 自动补全插入的 token 与 chips 点选可能重复，按原文去重。

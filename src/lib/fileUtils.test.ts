@@ -60,42 +60,40 @@ describe("filterFiles", () => {
 });
 
 describe("buildQuery", () => {
-  it("重复 token 去重（自动补全与 chips 重叠）", () => {
+  it("类别产 cat: token，重复去重（自动补全与 chips 重叠）", () => {
     expect(
       buildQuery({
         text: "label:高数",
         labels: ["高数"],
-        types: ["document", "document"],
+        categories: ["document", "document"],
       }),
-    ).toBe("label:高数 type:document");
+    ).toBe("label:高数 cat:document");
   });
 
   it("保留首次出现的顺序", () => {
     expect(
-      buildQuery({ text: "笔记", types: ["image", "document"], states: ["indexed"] }),
-    ).toBe("笔记 type:image type:document state:indexed");
+      buildQuery({
+        text: "笔记",
+        categories: ["image", "document"],
+        states: ["indexed"],
+      }),
+    ).toBe("笔记 cat:image cat:document state:indexed");
   });
 
-  it("组合文本、类型、状态与标签", () => {
+  it("组合文本、类别、状态与标签", () => {
     expect(
       buildQuery({
         text: "高数",
-        types: ["pdf"],
+        categories: ["document"],
         states: ["pending"],
         labels: ["course"],
       }),
-    ).toBe("高数 type:pdf state:pending label:course");
+    ).toBe("高数 cat:document state:pending label:course");
   });
 
   it("空筛选器返回空串", () => {
     expect(buildQuery({})).toBe("");
     expect(buildQuery({ text: "  " })).toBe("");
-  });
-
-  it("多值保留顺序并去空白文本", () => {
-    expect(buildQuery({ types: ["pdf", "docx"], states: [] })).toBe(
-      "type:pdf type:docx",
-    );
   });
 });
 

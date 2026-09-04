@@ -431,6 +431,19 @@ impl IndexStore for SqliteIndexStore {
             conditions.push(format!("file_type IN ({})", placeholders.join(",")));
             params.extend(query.types.iter().map(|t| Value::Text(t.clone())));
         }
+        // 类别以标签形式存于 labels 列（cat: 语义，与 label: 同款匹配方式）
+        if !query.categories.is_empty() {
+            let ors: Vec<String> = (0..query.categories.len())
+                .map(|i| format!("',' || labels || ',' LIKE ?{}", params.len() + i + 1))
+                .collect();
+            conditions.push(format!("({})", ors.join(" OR ")));
+            params.extend(
+                query
+                    .categories
+                    .iter()
+                    .map(|t| Value::Text(t.clone())),
+            );
+        }
         if !query.labels.is_empty() {
             let ors: Vec<String> = (0..query.labels.len())
                 .map(|i| format!("',' || labels || ',' LIKE ?{}", params.len() + i + 1))

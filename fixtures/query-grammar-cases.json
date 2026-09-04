@@ -1,0 +1,24 @@
+{
+  "note": "搜索语法契约用例：真源语义在 Rust core/query.rs 的 parse_query（权威解释器）。前端只消费生成侧（buildQuery / 自动补全候选产出 token），不重复实现解析；本文件由双端测试分别断言各自职责。",
+  "cases": [
+    { "input": "cat:document", "categories": ["document"] },
+    { "input": "category:image cat:video", "categories": ["image", "video"] },
+    { "input": "cat:CODE", "categories": ["code"] },
+    {
+      "input": "cat:notafilecat",
+      "categories": [],
+      "words": ["cat:notafilecat"]
+    },
+    { "input": "type:pdf type:PDF", "types": ["pdf"] },
+    { "input": "label:a tag:b", "labels": ["a", "b"] },
+    { "input": "state:pending", "states": ["pending"] },
+    {
+      "input": "高数 type:pdf cat:document",
+      "words": ["高数"],
+      "types": ["pdf"],
+      "categories": ["document"]
+    },
+    { "input": "size:>10MB", "sizeMin": 10485760 },
+    { "input": "author:x", "words": ["author:x"] }
+  ]
+}

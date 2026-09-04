@@ -31,7 +31,7 @@ export interface InsertionResult {
 }
 
 export interface FilterTags {
-  types: string[];
+  categories: string[];
   states: string[];
   labels: string[];
 }
@@ -43,8 +43,13 @@ export function habitKeyForTag(tag: TagValue): string {
   return `label:${tag.value}`;
 }
 
-/** 语法关键词顺序（type → label → state → size → before → after）。 */
+/**
+ * 语法关键词顺序（cat → type → label → state → size → before → after）。
+ * cat: 类别（值=类别 key）；type: 精确扩展名——两者语义不同，禁止混用
+ * （契约见 fixtures/query-grammar-cases.json，权威解释器在后端 core/query.rs）。
+ */
 export const KEYWORD_PREFIXES = [
+  "cat:",
   "type:",
   "label:",
   "+label:",
@@ -55,13 +60,13 @@ export const KEYWORD_PREFIXES = [
 ] as const;
 
 const PREFIX_TO_KIND: Record<string, DiscreteKind> = {
-  "type:": "category",
+  "cat:": "category",
   "label:": "label",
   "state:": "state",
 };
 
 const KIND_PREFIX: Record<DiscreteKind, string> = {
-  category: "type:",
+  category: "cat:",
   state: "state:",
   label: "label:",
 };
@@ -240,7 +245,7 @@ export function addTag(
 ): { tags: FilterTags; added: boolean } {
   const list =
     tag.kind === "category"
-      ? tags.types
+      ? tags.categories
       : tag.kind === "state"
         ? tags.states
         : tags.labels;
@@ -251,7 +256,7 @@ export function addTag(
   return {
     tags:
       tag.kind === "category"
-        ? { ...tags, types: nextList }
+        ? { ...tags, categories: nextList }
         : tag.kind === "state"
           ? { ...tags, states: nextList }
           : { ...tags, labels: nextList },
@@ -262,7 +267,10 @@ export function addTag(
 /** 删除标签。 */
 export function removeTag(tags: FilterTags, tag: TagValue): FilterTags {
   if (tag.kind === "category") {
-    return { ...tags, types: tags.types.filter((value) => value !== tag.value) };
+    return {
+      ...tags,
+      categories: tags.categories.filter((value) => value !== tag.value),
+    };
   }
   if (tag.kind === "state") {
     return {
@@ -276,7 +284,7 @@ export function removeTag(tags: FilterTags, tag: TagValue): FilterTags {
   };
 }
 
-/** Backspace 语义：移除渲染顺序中的最后一个标签（types → states → labels）。 */
+/** Backspace 语义：移除渲染顺序中的最后一个标签（categories → states → labels）。 */
 export function removeLastTag(
   tags: FilterTags,
 ): { tags: FilterTags; removed: TagValue | null } {
@@ -294,10 +302,10 @@ export function removeLastTag(
       removed: { kind: "state", value },
     };
   }
-  if (tags.types.length > 0) {
-    const value = tags.types[tags.types.length - 1];
+  if (tags.categories.length > 0) {
+    const value = tags.categories[tags.categories.length - 1];
     return {
-      tags: { ...tags, types: tags.types.slice(0, -1) },
+      tags: { ...tags, categories: tags.categories.slice(0, -1) },
       removed: { kind: "category", value },
     };
   }

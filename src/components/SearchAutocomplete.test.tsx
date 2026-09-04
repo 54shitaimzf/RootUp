@@ -19,21 +19,21 @@ const CANDIDATES: Suggestion[] = [
     kind: "category",
     key: "category:archive",
     raw: "archive",
-    token: "type:archive",
+    token: "cat:archive",
     display: "压缩包",
   },
   {
     kind: "category",
     key: "category:document",
     raw: "document",
-    token: "type:document",
+    token: "cat:document",
     display: "文档",
   },
   {
     kind: "category",
     key: "category:data",
     raw: "data",
-    token: "type:data",
+    token: "cat:data",
     display: "数据",
   },
   {
@@ -56,7 +56,7 @@ interface Callbacks {
 
 function Harness({
   text = "",
-  types = [],
+  categories = [],
   states = [],
   labels = [],
   habits = {},
@@ -64,7 +64,7 @@ function Harness({
   callbacks = {},
 }: {
   text?: string;
-  types?: string[];
+  categories?: string[];
   states?: string[];
   labels?: string[];
   habits?: FilterHabits;
@@ -75,11 +75,11 @@ function Harness({
   callbacks?: Callbacks;
 }) {
   const [value, setValue] = useState(text);
-  const [tags, setTags] = useState<FilterTags>({ types, states, labels });
+  const [tags, setTags] = useState<FilterTags>({ categories, states, labels });
   return (
     <SearchAutocomplete
       text={value}
-      types={tags.types}
+      categories={tags.categories}
       states={tags.states}
       labels={tags.labels}
       candidates={CANDIDATES}
@@ -118,7 +118,7 @@ describe("SearchAutocomplete", () => {
     fireEvent.keyDown(input(), { key: "Tab" });
     expect(onTextChange).toHaveBeenCalledWith("");
     expect(onTagsChange).toHaveBeenCalledWith({
-      types: ["archive"],
+      categories: ["archive"],
       states: [],
       labels: [],
     });
@@ -133,7 +133,7 @@ describe("SearchAutocomplete", () => {
     fireEvent.change(input(), { target: { value: "a" } });
     fireEvent.keyDown(input(), { key: "Enter" });
     expect(onTagsChange).toHaveBeenCalledWith({
-      types: ["archive"],
+      categories: ["archive"],
       states: [],
       labels: [],
     });
@@ -155,7 +155,7 @@ describe("SearchAutocomplete", () => {
     expect(suggestionsButtons[1].className).toContain("bg-slate-100");
     await user.keyboard("{Enter}");
     expect(onTagsChange).toHaveBeenCalledWith({
-      types: ["data"],
+      categories: ["data"],
       states: [],
       labels: [],
     });
@@ -185,14 +185,14 @@ describe("SearchAutocomplete", () => {
     const onTagRemove = vi.fn();
     render(
       <Harness
-        types={["document"]}
+        categories={["document"]}
         callbacks={{ onTagsChange, onTagRemove }}
       />,
     );
     expect(screen.getByText("文档")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("移除该筛选"));
     expect(onTagsChange).toHaveBeenCalledWith({
-      types: [],
+      categories: [],
       states: [],
       labels: [],
     });
@@ -222,7 +222,7 @@ describe("SearchAutocomplete", () => {
     );
     fireEvent.keyDown(input(), { key: "Backspace" });
     expect(onTagsChange).toHaveBeenCalledWith({
-      types: [],
+      categories: [],
       states: [],
       labels: [],
     });
@@ -235,35 +235,35 @@ describe("SearchAutocomplete", () => {
     render(
       <Harness
         text="x"
-        types={["document"]}
+        categories={["document"]}
         callbacks={{ onTextChange, onTagsChange }}
       />,
     );
     fireEvent.click(screen.getByLabelText("清空搜索"));
     expect(onTextChange).toHaveBeenCalledWith("");
     expect(onTagsChange).toHaveBeenCalledWith({
-      types: [],
+      categories: [],
       states: [],
       labels: [],
     });
   });
 
   it("清空与帮助按钮与输入框同处一个 flex 容器，不再绝对定位", () => {
-    render(<Harness text="x" types={["document"]} />);
+    render(<Harness text="x" categories={["document"]} />);
     const box = input().parentElement as HTMLElement;
     expect(box.contains(screen.getByLabelText("清空搜索"))).toBe(true);
     expect(box.contains(screen.getByLabelText("搜索语法"))).toBe(true);
   });
 
   it("点击搜索容器空白处聚焦输入框", () => {
-    const { container } = render(<Harness types={["document"]} />);
+    const { container } = render(<Harness categories={["document"]} />);
     const wrapper = container.querySelector(".relative") as HTMLElement;
     fireEvent.click(wrapper);
     expect(document.activeElement).toBe(input());
   });
 
   it("有标签后输入仍显示下拉", () => {
-    render(<Harness types={["document"]} />);
+    render(<Harness categories={["document"]} />);
     fireEvent.focus(input());
     fireEvent.change(input(), { target: { value: "a" } });
     expect(screen.getByText("压缩包")).toBeInTheDocument();

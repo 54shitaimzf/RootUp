@@ -67,7 +67,7 @@ export function FilePage({
   const autoArchive = settings?.auto_archive ?? false;
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [types, setTypes] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -133,8 +133,8 @@ export function FilePage({
   );
 
   const queryString = useMemo(
-    () => buildQuery({ text: debouncedQuery, types, states, labels }),
-    [debouncedQuery, types, states, labels],
+    () => buildQuery({ text: debouncedQuery, categories: selectedCategories, states, labels }),
+    [debouncedQuery, selectedCategories, states, labels],
   );
 
   const autocompleteCandidates = useMemo(
@@ -247,7 +247,10 @@ export function FilePage({
   };
 
   const filterActive =
-    query.trim() !== "" || types.length > 0 || states.length > 0 || labels.length > 0;
+    query.trim() !== "" ||
+    selectedCategories.length > 0 ||
+    states.length > 0 ||
+    labels.length > 0;
   const unarchivedCount = items.filter((file) => file.state === "indexed").length;
 
   return (
@@ -260,7 +263,7 @@ export function FilePage({
 
       <SearchAutocomplete
         text={query}
-        types={types}
+        categories={selectedCategories}
         states={states}
         labels={labels}
         candidates={autocompleteCandidates}
@@ -272,7 +275,7 @@ export function FilePage({
           setOffset(0);
         }}
         onTagsChange={(tags) => {
-          setTypes(tags.types);
+          setSelectedCategories(tags.categories);
           setStates(tags.states);
           setLabels(tags.labels);
           setOffset(0);
@@ -303,10 +306,10 @@ export function FilePage({
         categories={categories}
         labels={orderedAvailableLabels}
         labelDefs={mergedLabelDefs}
-        selectedTypes={types}
+        selectedCategories={selectedCategories}
         selectedLabels={labels}
-        onTypesChange={(value) => {
-          setTypes(value);
+        onCategoriesChange={(value) => {
+          setSelectedCategories(value);
           setOffset(0);
         }}
         onLabelsChange={(value) => {

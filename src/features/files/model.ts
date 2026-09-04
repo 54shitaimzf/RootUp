@@ -72,6 +72,7 @@ export function canIdeOpen(fileType: string): boolean {
 
 /** 自动补全关键字的展示文案 key。 */
 export const KEYWORD_DISPLAY_KEY: Record<string, string> = {
+  "cat:": "files.acKeywordCategory",
   "type:": "files.acKeywordType",
   "label:": "files.acKeywordLabel",
   "+label:": "files.acKeywordLabelAll",
@@ -107,7 +108,7 @@ export function buildAutocompleteCandidates(opts: {
       kind: "category" as const,
       key: `category:${category}`,
       raw: category,
-      token: `type:${category}`,
+      token: `cat:${category}`,
       display: t(`filter.${category}`),
     })),
     ...FILTER_STATE_TOKENS.map((state) => ({

@@ -1,4 +1,10 @@
-//! 索引搜索语法：解析 `type:` / `label:` / `state:` / `size:` / `before:` / `after:` 与普通文本。
+//! 索引搜索语法：解析 `cat:` / `type:` / `label:` / `state:` / `size:` / `before:` / `after:` 与普通文本。
+//!
+//! 语义约定（真源为本解析器，`fixtures/query-grammar-cases.json` 双端锁用例）：
+//! - `cat:` / `category:` 类别筛选，值为 `Category::ALL` 的 key（类别以标签形式存于 labels 列）；
+//! - `type:` 精确扩展名匹配（小写），与类别无关——禁止把类别 key 塞进 `type:`
+//!   （历史 bug：chips 产出 `type:document` 导致分类筛选永远 0 结果）。
+use crate::core::classify::Category;
 use crate::core::events::FileState;
 use crate::core::index::FileRecord;
 use chrono::TimeZone;
@@ -10,6 +16,8 @@ use serde::Serialize;
 pub struct FileQuery {
     /// 普通文本 token（按 name/path LIKE 匹配，多个 token 全部命中）
     pub words: Vec<String>,
+    /// `cat:` / `category:` 类别 key（小写，∈ Category::ALL；以标签形式存于 labels 列）
+    pub categories: Vec<String>,
     /// `type:` 精确扩展名（小写）
     pub types: Vec<String>,
     /// `label:` / `tag:` 标签 key
@@ -40,6 +48,7 @@ impl Default for FileQuery {
     fn default() -> Self {
         Self {
             words: Vec::new(),
+            categories: Vec::new(),
             types: Vec::new(),
             labels: Vec::new(),
             labels_all: Vec::new(),
@@ -94,6 +103,10 @@ pub fn parse_query(input: &str) -> FileQuery {
     for (i, token) in tokens.iter().enumerate() {
         if let Some(value) = token.strip_prefix("+label:") {
             push_non_empty(&mut query.labels_all, value);
+        } else if let Some(value) = token.strip_prefix("category:") {
+            push_category(&mut query, value);
+        } else if let Some(value) = token.strip_prefix("cat:") {
+            push_category(&mut query, value);
         } else if let Some(value) = token.strip_prefix("type:") {
             push_non_empty(&mut query.types, &value.to_ascii_lowercase());
         } else if let Some(value) = token.strip_prefix("label:") {
@@ -168,6 +181,16 @@ fn push_state(query: &mut FileQuery, value: &str) {
         push_non_empty(&mut query.states, &lower);
     } else {
         query.words.push(format!("state:{value}"));
+    }
+}
+
+/// 类别 token：合法 key 进 categories，未知值回落普通文本（与 state: 语义一致）。
+fn push_category(query: &mut FileQuery, value: &str) {
+    let lower = value.to_ascii_lowercase();
+    if Category::ALL.iter().any(|c| c.key() == lower) {
+        push_non_empty(&mut query.categories, &lower);
+    } else {
+        query.words.push(format!("cat:{value}"));
     }
 }
 
@@ -255,6 +278,28 @@ fn parse_time(value: &str, end_of_day: bool) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grammar_fixture_cases() {
+        let raw = include_str!("../../../fixtures/query-grammar-cases.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/query-grammar-cases.json 应可解析");
+        for case in value["cases"].as_array().expect("cases 应为数组") {
+            let input = case["input"].as_str().expect("用例缺 input");
+            let q = parse_query(input);
+            let encoded = serde_json::to_value(&q).expect("FileQuery 应可序列化");
+            for (key, expected) in case.as_object().unwrap() {
+                if key == "input" {
+                    continue;
+                }
+                assert_eq!(
+                    encoded.get(key),
+                    Some(expected),
+                    "用例 {input:?} 字段 {key} 与契约不符"
+                );
+            }
+        }
+    }
 
     #[test]
     fn empty_input_is_default() {
