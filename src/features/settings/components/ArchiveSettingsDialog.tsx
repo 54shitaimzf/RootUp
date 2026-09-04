@@ -9,6 +9,7 @@ import { InlineNotice } from "../../../components/InlineNotice";
 import { Input } from "../../../components/Input";
 import { Modal } from "../../../components/Modal";
 import { SectionLabel } from "../../../components/SectionLabel";
+import { Tooltip } from "../../../components/Tooltip";
 
 /**
  * 归档设置弹窗：归档根目录、自动归档开关、最近归档（可撤销）。
@@ -134,9 +135,11 @@ export function ArchiveSettingsDialog({
                         : "settings.archiveKindFile",
                     )}
                   </span>
-                  <span className="hidden max-w-40 truncate font-mono text-[10px] text-muted sm:block">
-                    {batch.sampleDest}
-                  </span>
+                  <Tooltip content={batch.sampleDest} className="inline-block">
+                    <span className="hidden max-w-40 cursor-default truncate font-mono text-[10px] text-muted sm:block">
+                      {batch.sampleDest.split("/").pop() || batch.sampleDest}
+                    </span>
+                  </Tooltip>
                   {batch.undone ? (
                     <span className="shrink-0 text-muted">{t("settings.archiveUndone")}</span>
                   ) : (

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
   Copy,
@@ -51,6 +51,7 @@ import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
 import { useTheme } from "../theme/ThemeProvider";
 import { FormSection } from "../components/FormSection";
 import { DirectoryAdder } from "../components/DirectoryAdder";
+import { RevealLink } from "../components/RevealLink";
 import { Select } from "../components/Select";
 import { SettingsInfoDialog } from "../components/SettingsInfoDialog";
 import { IgnoreRulesDialog } from "../features/settings/components/IgnoreRulesDialog";
@@ -117,7 +118,7 @@ function Row({
   onEdit,
 }: {
   title: string;
-  summary: string;
+  summary: ReactNode;
   guideId: string;
   onInfo: (id: string) => void;
   onEdit: () => void;
@@ -637,12 +638,26 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         >
           <Row
             title={t("settings.archiveRow")}
-            summary={t("settings.archiveRowSummary", {
-              root: settings.archive_root.trim() || t("settings.archiveRootNone"),
-              auto: settings.auto_archive
-                ? t("settings.archiveAutoOn")
-                : t("settings.archiveAutoOff"),
-            })}
+            summary={
+              settings.archive_root.trim() ? (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <RevealLink
+                    label={t("files.archiveDestLabel")}
+                    path={settings.archive_root.trim()}
+                  />
+                  <span className="text-xs text-muted">
+                    ·{" "}
+                    {t("settings.archiveRowAuto", {
+                      auto: settings.auto_archive
+                        ? t("settings.archiveAutoOn")
+                        : t("settings.archiveAutoOff"),
+                    })}
+                  </span>
+                </span>
+              ) : (
+                t("settings.archiveRootNone")
+              )
+            }
             guideId="archive"
             onInfo={(id) =>
               setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)

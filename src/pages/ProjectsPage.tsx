@@ -11,6 +11,8 @@ import {
 } from "../theme/icons";
 import { useSettings } from "../hooks/useSettings";
 import { APP_EVENTS } from "../lib/events";
+import { joinArchivePath } from "../lib/fileUtils";
+import { RevealLink } from "../components/RevealLink";
 import type { PageKey } from "../lib/nav";
 import {
   addProjectDir,
@@ -411,10 +413,7 @@ export function ProjectsPage({
         title={t("projects.archiveConfirmTitle")}
         description={
           archiveTarget
-            ? t("projects.archiveConfirmDesc", {
-                name: archiveTarget.name,
-                dest: `${settings?.archive_root?.trim() ?? ""}/项目/${archiveTarget.name}`,
-              })
+            ? t("projects.archiveConfirmDesc", { name: archiveTarget.name })
             : ""
         }
         confirmLabel={t("projects.archiveConfirm")}
@@ -424,7 +423,21 @@ export function ProjectsPage({
           setArchiveTarget(null);
         }}
         onCancel={() => setArchiveTarget(null)}
-      />
+      >
+        {archiveTarget && settings?.archive_root?.trim() && (
+          <div className="mt-2">
+            <RevealLink
+              label={t("files.archiveDestLabel")}
+              path={settings.archive_root.trim()}
+              tooltipPath={joinArchivePath(
+                settings.archive_root.trim(),
+                "项目",
+                archiveTarget.name,
+              )}
+            />
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

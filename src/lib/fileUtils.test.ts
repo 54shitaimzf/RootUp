@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { FileRecord } from "./tauri";
 import {
+  archiveDestPath,
   buildQuery,
   fileStateMeta,
   filterFiles,
   formatFileSize,
   formatFileSizeParts,
   formatTimestamp,
+  joinArchivePath,
   loadMoreMerge,
   mergeFiles,
   parseLabels,
+  resolveArchiveDir,
   sortLabelsByPriority,
 } from "./fileUtils";
 
@@ -261,5 +264,33 @@ describe("formatTimestamp", () => {
   it("输出本地日期时间", () => {
     const out = formatTimestamp(new Date(2026, 0, 2, 3, 4).getTime());
     expect(out).toMatch(/^2026\/01\/02 03:04$/);
+  });
+});
+
+describe("归档目的地路径派生", () => {
+  it("resolveArchiveDir 按首个标签解析类别目录，未知回落 other", () => {
+    expect(resolveArchiveDir("document,code")).toBe("document");
+    expect(resolveArchiveDir("unknown-cat")).toBe("other");
+    expect(resolveArchiveDir("")).toBe("other");
+  });
+
+  it("joinArchivePath 剥除根尾部分隔符并以 / 连接", () => {
+    expect(joinArchivePath("C:/Arc", "document", "a.pdf")).toBe(
+      "C:/Arc/document/a.pdf",
+    );
+    expect(joinArchivePath("D:\\Arc\\", "document", "a.pdf")).toBe(
+      "D:/Arc/document/a.pdf",
+    );
+    expect(joinArchivePath("C:/Arc", "", "a.pdf")).toBe("C:/Arc/a.pdf");
+    expect(joinArchivePath("", "document", "a.pdf")).toBe("document/a.pdf");
+  });
+
+  it("archiveDestPath 产出单文件完整目标路径", () => {
+    expect(archiveDestPath("C:/Arc", "document,code", "a.pdf")).toBe(
+      "C:/Arc/document/a.pdf",
+    );
+    expect(archiveDestPath("C:/Arc/", "no-ext", "b.bin")).toBe(
+      "C:/Arc/other/b.bin",
+    );
   });
 });

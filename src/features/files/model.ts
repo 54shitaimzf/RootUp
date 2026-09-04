@@ -1,5 +1,4 @@
 import type { TFunction } from "i18next";
-import { resolveCategoryKey } from "../../lib/categoryDefs";
 import {
   fileStateMeta,
   formatFileSizeParts,
@@ -187,16 +186,4 @@ export function presentRow(
     sizeParts: formatFileSizeParts(file.size),
     canIdeOpen: canIdeOpen(file.file_type),
   };
-}
-
-/** 归档预览路径：归档根/<首个有效大类>/<文件名>，未知类别回落 other。 */
-export function archivePreview(
-  path: string,
-  labels: string,
-  archiveRoot: string,
-): string {
-  const name = path.split("/").pop() ?? path;
-  const first = labels.split(",")[0]?.trim() ?? "";
-  const dir = resolveCategoryKey(first);
-  return `${archiveRoot}/${dir}/${name}`;
 }

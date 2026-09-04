@@ -389,7 +389,7 @@ export default {
     openToolsHint: "Built-in coverage: code/projects use IDEs, Markdown→Typora/Obsidian, Notebook→Jupyter, MATLAB/Origin/Mathematica/Multisim/Proteus/CAD/SolidWorks/PS/AI/LaTeX auto-detected; Office & PDF use system defaults. Falls back to the system default when no tool is found.",
     openToolsSaved: "Open settings saved",
     archiveRow: "Archive",
-    archiveRowSummary: "Root: {{root}} · Auto archive: {{auto}}",
+    archiveRowAuto: "Auto archive: {{auto}}",
     archiveRootNone: "Not configured",
     archiveAutoOn: "On",
     archiveAutoOff: "Off",
@@ -397,7 +397,7 @@ export default {
     archiveRootLabel: "Archive root",
     archiveRootPlaceholder: "e.g. D:\\Archive",
     archiveRootHint:
-      "The archive root must be on the same drive as your files. Files go to “root/category/”, projects go to “root/Projects/”.",
+      "Your Library (the archive root) must be on the same drive as your files. Files go to “Library/category/”, projects go to “Library/Projects/”.",
     autoArchiveLabel: "Auto archive",
     autoArchiveHint:
       "When enabled, new files with a clear category (not “Other”) are archived automatically. You can undo at any time.",
@@ -492,13 +492,18 @@ export default {
     archiveConfirmTitle: "Confirm archive",
     archiveConfirm: "Archive {{count}} files",
     archiveConfirmSelectedDesc:
-      "Archive {{count}} files into {{root}}:\n{{preview}}\nYou can undo at any time.",
+      "Archive {{count}} files. You can undo at any time.",
     archiveConfirmFilteredDesc:
-      "Archive all {{count}} matching files into {{root}}. You can undo at any time.",
+      "Archive all {{count}} matching files. You can undo at any time.",
+    archiveDestLabel: "Library",
+    archivePreviewLabel: "Files to archive",
+    archiveShowAll: "View all {{count}} files",
+    archiveListTitle: "Files to archive ({{count}})",
+    back: "Back",
     archivedNotice: "Archived {{count}} files",
     undoArchive: "Undo",
     autoArchiveOn:
-      "Auto archive is on: new files are archived automatically. You can turn it off in Settings.",
+      "Auto archive is on: new files are archived into your Library automatically. You can turn it off in Settings.",
     syntaxHelpTitle: "Search syntax",
     syntaxHelpIntro: "The search box supports two ways, usable together:",
     syntaxHelpList: [
@@ -556,7 +561,7 @@ export default {
     archiveConfirmTitle: "Confirm archive",
     archiveConfirm: "Archive project",
     archiveConfirmDesc:
-      "Move project “{{name}}” entirely into {{dest}}. Related desktop shortcuts are updated automatically. You can undo at any time.",
+      "Move project “{{name}}” entirely into your Library. Related desktop shortcuts are updated automatically. You can undo at any time.",
     archivedNotice: "Archived {{count}} projects",
     ideHintTitle: "Code projects detected, but no IDE was found. Click to learn how to install one.",
     ideHintAction: "Learn how to install an IDE",

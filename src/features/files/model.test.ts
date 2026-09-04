@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import {
-  archivePreview,
   buildAutocompleteCandidates,
   canIdeOpen,
   presentRow,
@@ -115,19 +114,5 @@ describe("presentRow", () => {
     expect(row.sizeParts).toEqual({ value: "2.0", unit: "KB" });
     expect(row.canIdeOpen).toBe(false);
     expect(row.meta.labelKey).toBe("files.stateIndexed");
-  });
-});
-
-describe("archivePreview", () => {
-  it("按首个标签解析类别目录，未知回落 other", () => {
-    expect(archivePreview("C:/d/a.pdf", "document,code", "C:/Arc")).toBe(
-      "C:/Arc/document/a.pdf",
-    );
-    expect(archivePreview("C:/d/a.bin", "unknown-cat", "C:/Arc")).toBe(
-      "C:/Arc/other/a.bin",
-    );
-    expect(archivePreview("C:/d/no-ext", "", "C:/Arc")).toBe(
-      "C:/Arc/other/no-ext",
-    );
   });
 });

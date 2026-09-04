@@ -1,3 +1,4 @@
+import { resolveCategoryKey } from "./categoryDefs";
 import type { FileRecord, FileState } from "./tauri";
 
 /** 筛选器组合参数（新手路径：点选 → 生成查询串） */
@@ -143,4 +144,25 @@ export function formatTimestamp(ms: number): string {
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
     d.getHours(),
   )}:${pad(d.getMinutes())}`;
+}
+
+/** 归档目的地子目录：首个标签解析大类，未知回落 other（与后端分类一致）。 */
+export function resolveArchiveDir(labels: string): string {
+  const first = labels.split(",")[0]?.trim() ?? "";
+  return resolveCategoryKey(first);
+}
+
+/** 以 "/" 连接归档根与子段；根统一为 "/" 分隔并剥除尾部（与后端 normalize_path 一致）。 */
+export function joinArchivePath(root: string, ...segments: string[]): string {
+  const cleanRoot = root.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  return [cleanRoot, ...segments].filter(Boolean).join("/");
+}
+
+/** 单文件的完整目标路径（悬浮提示用）。 */
+export function archiveDestPath(
+  root: string,
+  labels: string,
+  name: string,
+): string {
+  return joinArchivePath(root, resolveArchiveDir(labels), name);
 }

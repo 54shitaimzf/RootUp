@@ -380,7 +380,7 @@ export default {
     openToolsHint: "内置工具覆盖：代码/项目走 IDE，Markdown→Typora/Obsidian，Notebook→Jupyter，MATLAB/Origin/Mathematica/Multisim/Proteus/CAD/SolidWorks/PS/AI/LaTeX 自动查找；Office 与 PDF 使用系统默认程序。找不到工具时自动回退系统默认打开。",
     openToolsSaved: "打开方式已保存",
     archiveRow: "归档设置",
-    archiveRowSummary: "归档根：{{root}} · 自动归档：{{auto}}",
+    archiveRowAuto: "自动归档：{{auto}}",
     archiveRootNone: "未配置",
     archiveAutoOn: "已开启",
     archiveAutoOff: "已关闭",
@@ -388,7 +388,7 @@ export default {
     archiveRootLabel: "归档根目录",
     archiveRootPlaceholder: "如：D:\\Archive",
     archiveRootHint:
-      "归档根与文件需在同一磁盘；单文件进入“归档根/大类/”，项目进入“归档根/项目/”。",
+      "档案库（即归档根）需与文件在同一磁盘；单文件进入“档案库/大类/”，项目进入“档案库/项目/”。",
     autoArchiveLabel: "自动归档",
     autoArchiveHint:
       "开启后，新出现且分类明确（非“其他”）的文件会自动归档，仍可随时撤销。",
@@ -481,13 +481,18 @@ export default {
     archiveConfirmTitle: "确认归档",
     archiveConfirm: "归档 {{count}} 个文件",
     archiveConfirmSelectedDesc:
-      "将归档 {{count}} 个文件到 {{root}}：\n{{preview}}\n归档后可随时撤销。",
+      "将归档 {{count}} 个文件，归档后可随时撤销。",
     archiveConfirmFilteredDesc:
-      "将归档当前筛选的全部 {{count}} 个文件到 {{root}}。归档后可随时撤销。",
+      "将归档当前筛选的全部 {{count}} 个文件，归档后可随时撤销。",
+    archiveDestLabel: "档案库",
+    archivePreviewLabel: "待归档文件",
+    archiveShowAll: "查看全部 {{count}} 个文件",
+    archiveListTitle: "待归档文件（{{count}}）",
+    back: "返回",
     archivedNotice: "已归档 {{count}} 个文件",
     undoArchive: "撤销",
     autoArchiveOn:
-      "自动归档已开启：新文件会自动归档到归档根，可在设置中关闭。",
+      "自动归档已开启：新文件会自动归档到档案库，可在设置中关闭。",
     syntaxHelpTitle: "搜索语法",
     syntaxHelpIntro: "搜索框支持两种方式，可同时使用：",
     syntaxHelpList: [
@@ -545,7 +550,7 @@ export default {
     archiveConfirmTitle: "确认归档项目",
     archiveConfirm: "归档项目",
     archiveConfirmDesc:
-      "将项目“{{name}}”整体移动到 {{dest}}，相关桌面快捷方式会自动更新。归档后可随时撤销。",
+      "将项目“{{name}}”整体移动到档案库，相关桌面快捷方式会自动更新。归档后可随时撤销。",
     archivedNotice: "已归档 {{count}} 个项目",
     ideHintTitle: "检测到代码项目，但未找到可用的 IDE。点此了解如何安装。",
     ideHintAction: "了解如何安装 IDE",
