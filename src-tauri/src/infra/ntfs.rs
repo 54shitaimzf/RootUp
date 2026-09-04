@@ -201,8 +201,8 @@ pub fn parse_usn_records(buf: &[u8]) -> Vec<UsnRecord> {
             break;
         }
         let mut name_units = Vec::with_capacity(name_len / 2);
-        for chunk in buf[name_start..name_start + name_len].chunks_exact(2) {
-            name_units.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+        for chunk in buf[name_start..name_start + name_len].as_chunks::<2>().0 {
+            name_units.push(u16::from_le_bytes(*chunk));
         }
         // FILETIME（1601 起 100ns）→ Unix 毫秒
         let modified_ms = (ft / 10_000) as i64 - 11_644_473_600_000i64;

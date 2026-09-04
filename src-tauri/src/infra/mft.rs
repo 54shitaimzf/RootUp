@@ -126,8 +126,8 @@ fn parse_file_name_value(value: &[u8]) -> Result<FileNameAttr, String> {
         .get(0x42..0x42 + name_len * 2)
         .ok_or_else(|| "FILE_NAME 名称越界".to_string())?;
     let mut units = Vec::with_capacity(name_len);
-    for chunk in name_bytes.chunks_exact(2) {
-        units.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+    for chunk in name_bytes.as_chunks::<2>().0 {
+        units.push(u16::from_le_bytes(*chunk));
     }
     Ok(FileNameAttr {
         // FILE_NAME 的父引用是打包的 MFT 引用（记录号 + 序号），只取记录号部分。
