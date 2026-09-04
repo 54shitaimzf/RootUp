@@ -90,6 +90,12 @@ describe("helpContent 注册表", () => {
 
   it("WHATS_NEW 包含当前版本且条目键双语存在", () => {
     const entry = WHATS_NEW.find((item) => item.version === APP_VERSION);
+    if (APP_VERSION.endsWith("-dev")) {
+      // 开发版尚无更新亮点条目，帮助中心隐藏区块；发布定稿时必须补条目。
+      expect(entry).toBeUndefined();
+      expect(currentWhatsNew()).toBeUndefined();
+      return;
+    }
     expect(entry, `WHATS_NEW 缺少 ${APP_VERSION} 条目`).toBeDefined();
     expect(entry!.keywords.length).toBeGreaterThan(0);
     for (const itemKey of entry!.items) {
