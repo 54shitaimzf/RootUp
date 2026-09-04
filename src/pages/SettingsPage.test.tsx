@@ -319,7 +319,7 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("添加监控目录后保存归档设置不丢目录（单一数据源回归）", async () => {
+  it("添加监控目录后保存归档设置只发增量补丁，不回写 watched_dirs（单一数据源回归）", async () => {
     renderPage();
     await screen.findByLabelText("语言");
     fireEvent.change(
@@ -339,12 +339,10 @@ describe("SettingsPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith(
-        expect.objectContaining({
-          archive_root: "C:/Archive",
-          watched_dirs: expect.arrayContaining(["C:/NewWatch"]),
-        }),
-      );
+      expect(updateSettings).toHaveBeenCalledWith({
+        archive_root: "C:/Archive",
+        auto_archive: false,
+      });
     });
   });
 
@@ -396,7 +394,8 @@ describe("SettingsPage", () => {
       within(dialog).getByRole("button", { name: "恢复默认设置" }),
     );
     await waitFor(() => expect(resetSettings).toHaveBeenCalledTimes(1));
-    expect(updateSettings).toHaveBeenCalled();
+    // reset 由后端持久化并返回新值，前端只同步内存、不再回写
+    expect(updateSettings).not.toHaveBeenCalled();
   });
 
   it("添加目录失败显示 dirError 且不显示 notice", async () => {

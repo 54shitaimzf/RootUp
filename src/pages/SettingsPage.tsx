@@ -38,7 +38,6 @@ import {
   type LabelDef,
   type Language,
   type RuleScheme,
-  type Settings,
   type ThemeMode,
 } from "../lib/tauri";
 import { SETTINGS_GUIDE, type SettingsGuideEntry } from "../lib/settingsGuide";
@@ -163,7 +162,8 @@ function Row({
 export function SettingsPage({ scan }: { scan: ScanController }) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
-  const { settings, update, replace } = useSettings();
+  const { settings, update, commit, mergeLocal, syncFromBackend } =
+    useSettings();
   const language = settings?.language ?? "zh-CN";
   // 监控目录单一数据源：直接派生自全局 settings，禁止持有平行副本
   // （否则任何 replace 全量写都会用旧快照静默丢掉运行期增删的目录）。
@@ -237,7 +237,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const handleAddDir = async (dir: string): Promise<string | null> => {
     try {
       const outcome = await addWatchedDir(dir);
-      update({
+      // 乐观回显（mergeLocal 永不持久化）：add_watched_dir 已在后端落盘，
+      // 权威列表经 settings-changed 事件回流刷新。
+      mergeLocal({
         watched_dirs: [...new Set([...(settings?.watched_dirs ?? []), outcome.dir])],
       });
       setNotice(outcome.message ?? t("settings.dirAdded"));
@@ -263,7 +265,8 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     setRemoveTarget(null);
     try {
       await removeWatchedDir(dir);
-      update({
+      // 乐观回显（同 handleAddDir）：以后端 settings-changed 刷新为准。
+      mergeLocal({
         watched_dirs: (settings?.watched_dirs ?? []).filter((d) => d !== dir),
       });
       setDirError(null);
@@ -293,17 +296,14 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     const preset = RULE_PRESETS.find((p) => p.id === id);
     const scheme = schemes.find((s) => s.id === id);
     if (!preset && !scheme) return;
-    let next: Settings;
-    if (preset) {
-      next = applyPreset(settings, preset);
-    } else {
-      next = {
-        ...settings,
-        ...cloneRules(scheme!),
-      };
-    }
+    const next = preset
+      ? applyPreset(settings, preset)
+      : { ...settings, ...cloneRules(scheme!) };
     try {
-      await replace(next);
+      await commit({
+        ignore_rules: next.ignore_rules,
+        classify_overrides: next.classify_overrides,
+      });
       setNotice(t("settings.schemeApplied"));
     } catch (err) {
       setNotice(null);
@@ -314,7 +314,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const handleReset = async () => {
     try {
       const reset = await resetSettings();
-      await replace(reset);
+      syncFromBackend(reset);
       setNotice(t("settings.resetDone"));
     } catch (err) {
       setRuleError(String(err));
@@ -322,21 +322,17 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   };
 
   const saveIgnoreRules = async (rules: IgnoreRules) => {
-    if (!settings) return;
-    await replace({ ...settings, ignore_rules: rules });
+    await commit({ ignore_rules: rules });
     setNotice(t("settings.rulesSavedRestart"));
   };
 
   const saveMapping = async (overrides: ClassifyRule[]) => {
-    if (!settings) return;
-    await replace({ ...settings, classify_overrides: overrides });
+    await commit({ classify_overrides: overrides });
     setNotice(t("settings.rulesSavedRestart"));
   };
 
   const saveOpenConfig = async (draft: OpenConfig) => {
-    if (!settings) return;
-    await replace({
-      ...settings,
+    await commit({
       preferred_ide: draft.preferredIde,
       custom_open_commands: draft.customOpenCommands,
     });
@@ -347,8 +343,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     archive_root: string;
     auto_archive: boolean;
   }) => {
-    if (!settings) return;
-    await replace({ ...settings, ...draft });
+    await commit({
+      archive_root: draft.archive_root,
+      auto_archive: draft.auto_archive,
+    });
     setNotice(t("settings.archiveSaved"));
   };
 
