@@ -3,7 +3,7 @@ use crate::core::index::IndexStore;
 use crate::core::reminder::ReminderKind;
 use crate::core::settings::{THEME_DARK, THEME_LIGHT, THEME_SYSTEM};
 use crate::core::tray_menu::{tray_icon_has_badge, tray_menu_model, TrayMenuModel};
-use crate::infra::managed_state;
+use crate::infra::settings_io;
 use crate::infra::storage;
 use crate::infra::study_store::{JsonStudyStore, StudyStore};
 use crate::infra::window::QuitFlag;
@@ -239,29 +239,26 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                     app.exit(0);
                 }
                 "auto-archive" => {
-                    let mut settings = storage::load_settings(app);
-                    settings.auto_archive = !settings.auto_archive;
-                    if let Err(e) = storage::save_settings(app, &settings) {
-                        log::warn!("tray: 切换自动归档失败: {e}");
-                    } else {
-                        let _ = managed_state::refresh(app);
-                        let _ = app.emit(crate::core::events::EVENT_SETTINGS_CHANGED, ());
-                        let _ = refresh_tray(app);
+                    match settings_io::modify_settings(app, &["auto_archive"], |settings| {
+                        settings.auto_archive = !settings.auto_archive;
+                        Ok(())
+                    }) {
+                        Ok(_) => {
+                            let _ = refresh_tray(app);
+                        }
+                        Err(e) => log::warn!("tray: 切换自动归档失败: {e}"),
                     }
                 }
                 _ if id.starts_with("theme:") => {
-                    let theme = id.trim_start_matches("theme:");
-                    let mut settings = storage::load_settings(app);
-                    settings.theme = theme.to_string();
-                    if !settings.is_valid() {
-                        log::warn!("tray: 非法主题 {theme}");
-                        return;
-                    }
-                    if let Err(e) = storage::save_settings(app, &settings) {
-                        log::warn!("tray: 保存主题失败: {e}");
-                    } else {
-                        let _ = app.emit(crate::core::events::EVENT_SETTINGS_CHANGED, ());
-                        let _ = refresh_tray(app);
+                    let theme = id.trim_start_matches("theme:").to_string();
+                    match settings_io::modify_settings(app, &["theme"], move |settings| {
+                        settings.theme = theme;
+                        Ok(())
+                    }) {
+                        Ok(_) => {
+                            let _ = refresh_tray(app);
+                        }
+                        Err(e) => log::warn!("tray: 切换主题失败: {e}"),
                     }
                 }
                 _ if id.starts_with("study-homework:") => {

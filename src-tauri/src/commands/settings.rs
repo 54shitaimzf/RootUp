@@ -1,8 +1,23 @@
-use crate::core::settings::{archive_root_conflicts, reset_to_default, Settings};
-use crate::infra::managed_state;
+use crate::core::settings::{reset_to_default, Settings, SettingsPatch};
+use crate::infra::settings_io;
 use crate::infra::storage;
 use crate::infra::tray;
 use tauri::AppHandle;
+
+/// 恢复默认时被重置的字段（watched_dirs / project_dirs 有意保留）。
+const RESET_DIRTY: &[&str] = &[
+    "theme",
+    "language",
+    "ignore_rules",
+    "classify_overrides",
+    "preferred_ide",
+    "custom_open_commands",
+    "archive_root",
+    "auto_archive",
+    "close_action",
+    "reminder_enabled",
+    "reminder_lead_days",
+];
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Settings {
@@ -16,36 +31,27 @@ pub fn get_settings(app: AppHandle) -> Settings {
     settings
 }
 
+/// 增量更新设置：`None` 字段保持不变，合并结果整体校验后经单入口原子落盘。
+/// watched_dirs / project_dirs 不在补丁内——必须走 add/remove 专用命令（防快照覆盖）。
 #[tauri::command]
-pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
-    let mut settings = settings;
-    settings.normalize();
-    if !settings.is_valid() {
-        return Err("无效的设置值".to_string());
-    }
-    if archive_root_conflicts(&settings) {
-        return Err("归档根目录不能与监控目录相同".to_string());
-    }
-    log::info!(
-        "settings: 更新 theme={} language={} rules={} overrides={}",
-        settings.theme,
-        settings.language,
-        settings.ignore_rules.extensions.len(),
-        settings.classify_overrides.len()
-    );
-    storage::save_settings(&app, &settings)?;
-    managed_state::refresh(&app)?;
+pub fn update_settings(app: AppHandle, patch: SettingsPatch) -> Result<(), String> {
+    let keys = patch.dirty_keys();
+    settings_io::modify_settings(&app, &keys, |settings| {
+        settings.apply_patch(patch);
+        Ok(())
+    })?;
     let _ = tray::refresh_tray(&app);
+    log::info!("settings: 增量更新 {:?}", keys);
     Ok(())
 }
 
-/// 恢复默认设置（保留监控目录），返回新设置供前端同步。
+/// 恢复默认设置（保留监控目录 / 项目目录），返回新设置供前端同步。
 #[tauri::command]
 pub fn reset_settings(app: AppHandle) -> Result<Settings, String> {
-    let current = storage::load_settings(&app);
-    let reset = reset_to_default(&current);
-    storage::save_settings(&app, &reset)?;
-    managed_state::refresh(&app)?;
+    let reset = settings_io::modify_settings(&app, RESET_DIRTY, |settings| {
+        *settings = reset_to_default(settings);
+        Ok(())
+    })?;
     let _ = tray::refresh_tray(&app);
     log::info!(
         "settings: 恢复默认（保留监控目录 {} 个）",

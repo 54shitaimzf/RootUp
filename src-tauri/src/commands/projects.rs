@@ -10,7 +10,7 @@ use crate::core::tools::{self, extension_of};
 use crate::infra::app_finder::{
     build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv, SystemRunner,
 };
-use crate::infra::managed_state;
+use crate::infra::settings_io;
 use crate::infra::shortcut;
 use crate::infra::storage;
 use crate::infra::time::now_millis;
@@ -117,17 +117,17 @@ pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
     if !Path::new(&dir).is_dir() {
         return Err(format!("目录不存在: {dir}"));
     }
-    let mut settings = storage::load_settings(&app);
-    if settings
-        .project_dirs
-        .iter()
-        .any(|d| path_key(d) == path_key(&dir))
-    {
-        return Err("该目录已在项目列表中".into());
-    }
-    settings.project_dirs.push(dir.clone());
-    storage::save_settings(&app, &settings)?;
-    managed_state::refresh(&app)?;
+    settings_io::modify_settings(&app, &["project_dirs"], |settings| {
+        if settings
+            .project_dirs
+            .iter()
+            .any(|d| path_key(d) == path_key(&dir))
+        {
+            return Err("该目录已在项目列表中".into());
+        }
+        settings.project_dirs.push(dir.clone());
+        Ok(())
+    })?;
     log::info!("project: 添加 {dir}");
     Ok(())
 }
@@ -135,12 +135,12 @@ pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
 #[tauri::command]
 pub fn remove_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
     let dir = normalize_path(&dir);
-    let mut settings = storage::load_settings(&app);
-    settings
-        .project_dirs
-        .retain(|d| path_key(d) != path_key(&dir));
-    storage::save_settings(&app, &settings)?;
-    managed_state::refresh(&app)?;
+    settings_io::modify_settings(&app, &["project_dirs"], |settings| {
+        settings
+            .project_dirs
+            .retain(|d| path_key(d) != path_key(&dir));
+        Ok(())
+    })?;
     log::info!("project: 移除 {dir}");
     Ok(())
 }

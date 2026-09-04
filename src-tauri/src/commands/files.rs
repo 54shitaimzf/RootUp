@@ -4,8 +4,8 @@ use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key, validate_dir_path};
 use crate::core::query::{parse_query, QueryPage};
 use crate::core::watched::{check_add, AddCheck};
-use crate::infra::managed_state;
 use crate::infra::scanner::{ScanService, ScanStatus};
+use crate::infra::settings_io;
 use crate::infra::storage;
 use crate::infra::watcher::WatchService;
 use serde::Serialize;
@@ -40,7 +40,7 @@ pub struct ClassifyDefaultEntry {
     pub category: String,
 }
 
-/// 添加监控目录：两向防重叠校验 → 持久化 → 启动监听 → 入队扫描。
+/// 添加监控目录：两向防重叠校验 → 单入口持久化（含升级覆盖）→ 启动监听 → 入队扫描。
 #[tauri::command]
 pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, String> {
     let dir = validate_dir_path(&dir)?;
@@ -48,43 +48,54 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
         return Err(format!("目录不存在: {dir}"));
     }
 
-    let mut settings = storage::load_settings(&app);
-    let message = match check_add(&dir, &settings.watched_dirs) {
+    // 无锁预检：重复与被覆盖直接短路，避免无谓写入。
+    let current = storage::load_settings(&app);
+    match check_add(&dir, &current.watched_dirs) {
         AddCheck::Duplicate => {
             return Ok(AddDirOutcome {
                 message: Some("目录已在监控中".into()),
-                dir: dir.clone(),
+                dir,
             });
         }
         AddCheck::CoveredBy(parent) => {
             return Err(format!("该目录已被 {parent} 覆盖，无需重复添加"));
         }
-        AddCheck::WillCover(children) => {
-            for child in &children {
-                if let Ok(service) = app.state::<Mutex<WatchService>>().lock() {
-                    if let Err(e) = service.remove_dir(child) {
-                        log::warn!("watch: 移除被覆盖目录 {child} 失败: {e}");
-                    }
-                }
-                if let Ok(scanner) = app.state::<Mutex<ScanService>>().lock() {
-                    scanner.remove_dir(child);
-                }
-                log::info!("watch: 升级覆盖 {child} -> {dir}");
-            }
-            settings
-                .watched_dirs
-                .retain(|d| !children.iter().any(|c| path_key(c) == path_key(d)));
-            Some(format!(
-                "已监控 {dir}，升级覆盖 {} 个原目录",
-                children.len()
-            ))
-        }
-        AddCheck::Ok => None,
-    };
+        AddCheck::WillCover(_) | AddCheck::Ok => {}
+    }
 
-    settings.watched_dirs.push(dir.clone());
-    storage::save_settings(&app, &settings)?;
-    managed_state::refresh(&app)?;
+    let mut message: Option<String> = None;
+    settings_io::modify_settings(&app, &["watched_dirs"], |settings| {
+        // 锁内复检，避免并发写入导致的 TOCTOU。
+        match check_add(&dir, &settings.watched_dirs) {
+            AddCheck::Duplicate => return Err("目录已在监控中".into()),
+            AddCheck::CoveredBy(parent) => {
+                return Err(format!("该目录已被 {parent} 覆盖，无需重复添加"));
+            }
+            AddCheck::WillCover(children) => {
+                for child in &children {
+                    if let Ok(service) = app.state::<Mutex<WatchService>>().lock() {
+                        if let Err(e) = service.remove_dir(child) {
+                            log::warn!("watch: 移除被覆盖目录 {child} 失败: {e}");
+                        }
+                    }
+                    if let Ok(scanner) = app.state::<Mutex<ScanService>>().lock() {
+                        scanner.remove_dir(child);
+                    }
+                    log::info!("watch: 升级覆盖 {child} -> {dir}");
+                }
+                settings
+                    .watched_dirs
+                    .retain(|d| !children.iter().any(|c| path_key(c) == path_key(d)));
+                message = Some(format!(
+                    "已监控 {dir}，升级覆盖 {} 个原目录",
+                    children.len()
+                ));
+            }
+            AddCheck::Ok => {}
+        }
+        settings.watched_dirs.push(dir.clone());
+        Ok(())
+    })?;
 
     let service = app.state::<Mutex<WatchService>>();
     service.lock().map_err(|e| e.to_string())?.add_dir(&dir)?;
@@ -98,16 +109,16 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
     Ok(AddDirOutcome { message, dir })
 }
 
-/// 移除监控目录：先更新设置，再取消监听与扫描队列。
+/// 移除监控目录：单入口更新设置（并广播），再取消监听与扫描队列、清理索引。
 #[tauri::command]
 pub fn remove_watched_dir(app: AppHandle, dir: String) -> Result<(), String> {
     let dir = normalize_path(&dir);
-    let mut settings = storage::load_settings(&app);
-    settings
-        .watched_dirs
-        .retain(|d| path_key(d) != path_key(&dir));
-    storage::save_settings(&app, &settings)?;
-    managed_state::refresh(&app)?;
+    settings_io::modify_settings(&app, &["watched_dirs"], |settings| {
+        settings
+            .watched_dirs
+            .retain(|d| path_key(d) != path_key(&dir));
+        Ok(())
+    })?;
 
     let service = app.state::<Mutex<WatchService>>();
     if let Ok(service) = service.lock() {

@@ -158,7 +158,7 @@ pub fn run() {
             archive_commands::undo_archive,
             archive_commands::list_archive_batches,
             settings_commands::get_settings,
-            settings_commands::set_settings,
+            settings_commands::update_settings,
             settings_commands::reset_settings,
             study_commands::get_study_data,
             study_commands::save_study_data,
@@ -297,7 +297,8 @@ pub fn run() {
             log::info!("startup: 学业数据 ms={}", t0.elapsed().as_millis());
             let t0 = Instant::now();
 
-            // 监控目录：启动自愈（规范化 + 防重叠修正），修正结果写回设置
+            // 监控目录：启动自愈（规范化 + 防重叠修正），修正结果写回设置。
+            // 此处直写 storage：装配期 managed_state 未就绪，不能走 settings_io 单入口（会 refresh/emit）。
             let mut settings = storage::load_settings(app.handle());
             let (fixed_dirs, fixes) = dedupe_watched(&settings.watched_dirs);
             if !fixes.is_empty() {

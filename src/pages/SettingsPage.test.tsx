@@ -50,7 +50,7 @@ vi.mock("../lib/tauri", () => ({
     auto_archive: false,
   },
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  updateSettings: vi.fn(),
   addWatchedDir: vi.fn(),
   removeWatchedDir: vi.fn(),
   countUnderRoot: vi.fn(),
@@ -89,7 +89,7 @@ import {
   listWatchedDirs,
   watchedDirHealth,
   resetSettings,
-  saveSettings,
+  updateSettings,
   undoArchive,
 } from "../lib/tauri";
 
@@ -138,7 +138,7 @@ describe("SettingsPage", () => {
     vi.clearAllMocks();
     window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     vi.mocked(getSettings).mockResolvedValue(SETTINGS);
-    vi.mocked(saveSettings).mockResolvedValue(undefined);
+    vi.mocked(updateSettings).mockResolvedValue(undefined);
     vi.mocked(listWatchedDirs).mockResolvedValue([]);
     vi.mocked(watchedDirHealth).mockResolvedValue([]);
     vi.mocked(getLogDir).mockResolvedValue("C:/logs");
@@ -178,7 +178,7 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByLabelText("语言"));
     fireEvent.click(screen.getByRole("option", { name: /English/ }));
     await waitFor(() =>
-      expect(saveSettings).toHaveBeenCalledWith(
+      expect(updateSettings).toHaveBeenCalledWith(
         expect.objectContaining({ language: "en" }),
       ),
     );
@@ -191,7 +191,7 @@ describe("SettingsPage", () => {
     expect(leadSelect).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox"));
     await waitFor(() =>
-      expect(saveSettings).toHaveBeenCalledWith(
+      expect(updateSettings).toHaveBeenCalledWith(
         expect.objectContaining({ reminder_enabled: true }),
       ),
     );
@@ -310,7 +310,7 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "开启自动归档" }));
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => {
-      expect(saveSettings).toHaveBeenCalledWith(
+      expect(updateSettings).toHaveBeenCalledWith(
         expect.objectContaining({
           archive_root: "C:/Archive",
           auto_archive: true,
@@ -339,7 +339,7 @@ describe("SettingsPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => {
-      expect(saveSettings).toHaveBeenCalledWith(
+      expect(updateSettings).toHaveBeenCalledWith(
         expect.objectContaining({
           archive_root: "C:/Archive",
           watched_dirs: expect.arrayContaining(["C:/NewWatch"]),
@@ -396,7 +396,7 @@ describe("SettingsPage", () => {
       within(dialog).getByRole("button", { name: "恢复默认设置" }),
     );
     await waitFor(() => expect(resetSettings).toHaveBeenCalledTimes(1));
-    expect(saveSettings).toHaveBeenCalled();
+    expect(updateSettings).toHaveBeenCalled();
   });
 
   it("添加目录失败显示 dirError 且不显示 notice", async () => {

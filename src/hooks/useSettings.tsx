@@ -12,7 +12,7 @@ import { APP_EVENTS } from "../lib/events";
 import {
   defaultSettings,
   getSettings,
-  saveSettings,
+  updateSettings,
   type Settings,
 } from "../lib/tauri";
 
@@ -91,7 +91,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       saveTimerRef.current = null;
       const snapshot = latestRef.current;
       if (snapshot) {
-        void saveSettings(snapshot).catch(() => {});
+        void updateSettings(snapshot).catch(() => {});
       }
     }, SETTINGS_SAVE_DEBOUNCE_MS);
   }, []);
@@ -103,7 +103,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     latestRef.current = next;
     setSettings(next);
-    return saveSettings(next);
+    return updateSettings(next);
   }, []);
 
   useEffect(() => {

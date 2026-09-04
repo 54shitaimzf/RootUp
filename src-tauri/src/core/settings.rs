@@ -245,6 +245,88 @@ pub fn archive_root_conflicts(settings: &Settings) -> bool {
             .any(|d| path_key(d) == path_key(&settings.archive_root))
 }
 
+/// 设置增量补丁：`None` 字段保持不变（前端 JSON 序列化时 undefined 字段被省略）。
+///
+/// 有意不含 `watched_dirs` / `project_dirs`：这两项必须走
+/// `add_watched_dir` / `remove_watched_dir` / `add_project_dir` 等专用命令，
+/// 禁止前端用快照整表回写（历史 bug：旧快照覆盖导致监控目录静默丢失）。
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct SettingsPatch {
+    pub theme: Option<String>,
+    pub language: Option<String>,
+    pub ignore_rules: Option<IgnoreRules>,
+    pub classify_overrides: Option<Vec<ClassifyRule>>,
+    pub preferred_ide: Option<String>,
+    pub custom_open_commands: Option<Vec<CustomOpenCommand>>,
+    pub archive_root: Option<String>,
+    pub auto_archive: Option<bool>,
+    pub close_action: Option<String>,
+    pub reminder_enabled: Option<bool>,
+    pub reminder_lead_days: Option<u32>,
+}
+
+impl SettingsPatch {
+    /// 变更字段名列表（serde 字段名，供 settings-changed 载荷与日志）。
+    pub fn dirty_keys(&self) -> Vec<&'static str> {
+        [
+            (self.theme.is_some(), "theme"),
+            (self.language.is_some(), "language"),
+            (self.ignore_rules.is_some(), "ignore_rules"),
+            (self.classify_overrides.is_some(), "classify_overrides"),
+            (self.preferred_ide.is_some(), "preferred_ide"),
+            (self.custom_open_commands.is_some(), "custom_open_commands"),
+            (self.archive_root.is_some(), "archive_root"),
+            (self.auto_archive.is_some(), "auto_archive"),
+            (self.close_action.is_some(), "close_action"),
+            (self.reminder_enabled.is_some(), "reminder_enabled"),
+            (self.reminder_lead_days.is_some(), "reminder_lead_days"),
+        ]
+        .into_iter()
+        .filter(|(dirty, _)| *dirty)
+        .map(|(_, key)| key)
+        .collect()
+    }
+}
+
+impl Settings {
+    /// 应用增量补丁：仅覆盖 `Some` 字段。
+    pub fn apply_patch(&mut self, patch: SettingsPatch) {
+        if let Some(value) = patch.theme {
+            self.theme = value;
+        }
+        if let Some(value) = patch.language {
+            self.language = value;
+        }
+        if let Some(value) = patch.ignore_rules {
+            self.ignore_rules = value;
+        }
+        if let Some(value) = patch.classify_overrides {
+            self.classify_overrides = value;
+        }
+        if let Some(value) = patch.preferred_ide {
+            self.preferred_ide = value;
+        }
+        if let Some(value) = patch.custom_open_commands {
+            self.custom_open_commands = value;
+        }
+        if let Some(value) = patch.archive_root {
+            self.archive_root = value;
+        }
+        if let Some(value) = patch.auto_archive {
+            self.auto_archive = value;
+        }
+        if let Some(value) = patch.close_action {
+            self.close_action = value;
+        }
+        if let Some(value) = patch.reminder_enabled {
+            self.reminder_enabled = value;
+        }
+        if let Some(value) = patch.reminder_lead_days {
+            self.reminder_lead_days = value;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,6 +514,56 @@ mod tests {
         };
         assert!(!archive_root_conflicts(&settings));
         assert!(!archive_root_conflicts(&Settings::default()));
+    }
+
+    #[test]
+    fn patch_merge_none_untouched_some_override() {
+        let mut settings = Settings {
+            theme: THEME_DARK.into(),
+            language: LANG_EN.into(),
+            watched_dirs: vec!["C:/Watch".into()],
+            archive_root: "C:/Arc".into(),
+            ..Default::default()
+        };
+        settings.apply_patch(SettingsPatch {
+            theme: Some(THEME_LIGHT.into()),
+            auto_archive: Some(true),
+            ..Default::default()
+        });
+        assert_eq!(settings.theme, THEME_LIGHT);
+        assert!(settings.auto_archive);
+        // None 字段不动
+        assert_eq!(settings.language, LANG_EN);
+        assert_eq!(settings.watched_dirs, vec!["C:/Watch"]);
+        assert_eq!(settings.archive_root, "C:/Arc");
+        assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn patch_dirty_keys_lists_only_changed_fields() {
+        let patch = SettingsPatch {
+            theme: Some(THEME_DARK.into()),
+            reminder_lead_days: Some(7),
+            ..Default::default()
+        };
+        assert_eq!(patch.dirty_keys(), vec!["theme", "reminder_lead_days"]);
+        assert!(SettingsPatch::default().dirty_keys().is_empty());
+    }
+
+    #[test]
+    fn patch_conflict_checked_on_merged_result() {
+        // 补丁把归档根改到与监控目录相同：合并后才可判定冲突
+        let mut settings = Settings {
+            watched_dirs: vec!["C:/Watch".into()],
+            archive_root: "C:/Arc".into(),
+            ..Default::default()
+        };
+        assert!(!archive_root_conflicts(&settings));
+        settings.apply_patch(SettingsPatch {
+            archive_root: Some("c:/watch".into()),
+            ..Default::default()
+        });
+        assert!(archive_root_conflicts(&settings));
     }
 
     #[test]

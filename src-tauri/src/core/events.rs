@@ -27,6 +27,14 @@ pub fn all_app_events() -> [&'static str; 7] {
     ]
 }
 
+/// settings-changed 载荷：本次变更的设置字段名（serde 字段名，如 "watched_dirs"）。
+/// 由 infra/settings_io 单入口在每次成功写设置后发出（命令 / 托盘 / 归档 journal 统一）；
+/// 前端收到后整包刷新设置。
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SettingsChangedEvent {
+    pub keys: Vec<String>,
+}
+
 /// 归一化后的事件类型（由平台事件转换而来）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileEventKind {

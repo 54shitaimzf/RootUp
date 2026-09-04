@@ -20,7 +20,7 @@ vi.mock("../lib/tauri", () => ({
     auto_archive: false,
   },
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  updateSettings: vi.fn(),
   archiveProject: vi.fn(),
   undoArchive: vi.fn(),
   listProjects: vi.fn(),
@@ -70,7 +70,7 @@ import {
   openProject,
   removeProjectDir,
   resolveDirTarget,
-  saveSettings,
+  updateSettings,
   undoArchive,
 } from "../lib/tauri";
 import { listen } from "@tauri-apps/api/event";
@@ -105,7 +105,7 @@ describe("ProjectsPage", () => {
       reminder_enabled: false,
       reminder_lead_days: 3,
     });
-    vi.mocked(saveSettings).mockResolvedValue(undefined);
+    vi.mocked(updateSettings).mockResolvedValue(undefined);
     vi.mocked(listProjects).mockResolvedValue([
       {
         path: "C:/proj/rust-app",

@@ -22,7 +22,7 @@ vi.mock("../lib/tauri", () => ({
     auto_archive: false,
   },
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  updateSettings: vi.fn(),
   getStudyData: vi.fn(async () => ({
     version: 1,
     semesters: [],

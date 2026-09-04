@@ -12,6 +12,7 @@ pub mod mft;
 pub mod ntfs;
 pub mod scanner;
 pub mod scheme_store;
+pub mod settings_io;
 pub mod shortcut;
 pub mod startup;
 pub mod storage;

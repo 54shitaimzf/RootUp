@@ -5,7 +5,7 @@ import {
   SettingsProvider,
   useSettings,
 } from "./useSettings";
-import { getSettings, saveSettings, type Settings } from "../lib/tauri";
+import { getSettings, updateSettings, type Settings } from "../lib/tauri";
 
 const { defaultSettings } = vi.hoisted(() => ({
   defaultSettings: {
@@ -28,7 +28,7 @@ const { defaultSettings } = vi.hoisted(() => ({
 
 vi.mock("../lib/tauri", () => ({
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  updateSettings: vi.fn(),
   defaultSettings,
 }));
 
@@ -54,7 +54,7 @@ describe("useSettings 保存语义", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.mocked(getSettings).mockResolvedValue(defaultSettings);
-    vi.mocked(saveSettings).mockResolvedValue(undefined);
+    vi.mocked(updateSettings).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -74,13 +74,13 @@ describe("useSettings 保存语义", () => {
 
     fireEvent.click(screen.getByText("dark"));
     fireEvent.click(screen.getByText("en"));
-    expect(saveSettings).not.toHaveBeenCalled();
+    expect(updateSettings).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(SETTINGS_SAVE_DEBOUNCE_MS);
     });
-    expect(saveSettings).toHaveBeenCalledTimes(1);
-    expect(saveSettings).toHaveBeenCalledWith(
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ theme: "dark", language: "en" }),
     );
   });
@@ -97,14 +97,14 @@ describe("useSettings 保存语义", () => {
 
     fireEvent.click(screen.getByText("dark"));
     fireEvent.click(screen.getByText("light"));
-    expect(saveSettings).toHaveBeenCalledTimes(1);
-    expect(saveSettings).toHaveBeenCalledWith(
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ theme: "light" }),
     );
 
     await act(async () => {
       vi.advanceTimersByTime(SETTINGS_SAVE_DEBOUNCE_MS);
     });
-    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledTimes(1);
   });
 });

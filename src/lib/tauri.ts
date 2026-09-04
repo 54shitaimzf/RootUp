@@ -262,8 +262,12 @@ export function getSettings(): Promise<Settings> {
   return invoke<Settings>("get_settings");
 }
 
-export function saveSettings(settings: Settings): Promise<void> {
-  return invoke<void>("set_settings", { settings });
+/**
+ * 增量更新设置：只传变更字段（JSON 序列化时 undefined 字段被省略，后端保持不变）。
+ * watched_dirs / project_dirs 不可经此修改——必须走 addWatchedDir / removeWatchedDir 等专用命令。
+ */
+export function updateSettings(patch: Partial<Settings>): Promise<void> {
+  return invoke<void>("update_settings", { patch });
 }
 
 /** 恢复默认设置（保留监控目录），返回新设置 */

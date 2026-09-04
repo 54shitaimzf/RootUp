@@ -13,6 +13,7 @@ use crate::infra::archive_engine::{
     undo_one_file, ProjectJournal, ProjectLinkEffect, ProjectSideEffects,
 };
 use crate::infra::shortcut;
+use crate::infra::settings_io;
 use crate::infra::storage;
 use crate::infra::time::now_millis;
 use std::path::{Path, PathBuf};
@@ -98,10 +99,9 @@ pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome,
 pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, String> {
     let path = normalize_path(&path);
     let root = require_root(&app)?;
-    let mut settings = storage::load_settings(&app);
-    let settings_backup = settings.clone();
     let detector = FeatureDetector;
-    let projects = discover_projects(&settings.watched_dirs, &settings.project_dirs, &detector);
+    let snapshot = storage::load_settings(&app);
+    let projects = discover_projects(&snapshot.watched_dirs, &snapshot.project_dirs, &detector);
     let info = projects
         .iter()
         .find(|p| path_key(&p.path) == path_key(&path))
@@ -139,7 +139,11 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
     std::fs::rename(dir, &dest).map_err(|e| move_error(&path, e))?;
     let dest_str = normalize_path(&dest.to_string_lossy());
     let batch_id = next_batch_id();
-    settings.project_dirs = settings
+    // 移动成功后重读最新设置再做 project_dirs 重映射，缩小与其他写入者的竞态窗口；
+    // 写入经单入口（save_locked），journal 失败时仍以 backup 尽力回滚。
+    let mut latest = storage::load_settings(&app);
+    let settings_backup = latest.clone();
+    latest.project_dirs = latest
         .project_dirs
         .iter()
         .map(|d| {
@@ -151,7 +155,7 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
         })
         .collect();
     let effects = ProjectSideEffects {
-        settings,
+        settings: latest,
         settings_backup,
         links,
         kind: info.kind,
@@ -241,8 +245,6 @@ fn undo_project(
     if !Path::new(&op.dest).is_dir() {
         return Err(format!("归档目标已不存在: {}", op.dest));
     }
-    let mut settings = storage::load_settings(app);
-    let settings_backup = settings.clone();
     let kind = FeatureDetector
         .detect(Path::new(&op.dest))
         .unwrap_or(ProjectKind::Generic);
@@ -259,7 +261,10 @@ fn undo_project(
         })
         .collect();
     std::fs::rename(&op.dest, &op.source).map_err(|e| move_error(&op.dest, e))?;
-    settings.project_dirs = settings
+    // 移回成功后重读最新设置再做 project_dirs 重映射，写入经单入口（save_locked）。
+    let mut latest = storage::load_settings(app);
+    let settings_backup = latest.clone();
+    latest.project_dirs = latest
         .project_dirs
         .iter()
         .map(|d| {
@@ -271,7 +276,7 @@ fn undo_project(
         })
         .collect();
     let effects = ProjectSideEffects {
-        settings,
+        settings: latest,
         settings_backup,
         links,
         kind,
@@ -302,7 +307,8 @@ struct TauriProjectJournal<'a> {
 
 impl ProjectJournal for TauriProjectJournal<'_> {
     fn save_settings(&self, settings: &Settings) -> Result<(), String> {
-        storage::save_settings(self.app, settings)
+        // 单入口：互斥落盘 + 缓存刷新 + settings-changed 广播
+        settings_io::save_locked(self.app, settings, &["project_dirs"])
     }
 
     fn rewrite_shortcut(
