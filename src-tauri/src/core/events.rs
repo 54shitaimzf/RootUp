@@ -13,7 +13,8 @@ pub const EVENT_CLOSE_REQUESTED: &str = "close-requested";
 pub const EVENT_PROJECT_OPEN: &str = "project-open";
 pub const EVENT_STUDY_HOMEWORK_OPEN: &str = "study-homework-open";
 
-/// 全部应用级事件名（fixture 一致性测试与门禁枚举用）。
+/// 全部应用级事件名（fixture 一致性测试枚举用）。
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn all_app_events() -> [&'static str; 7] {
     [
         EVENT_SCAN_PROGRESS,
