@@ -12,8 +12,10 @@ import {
   loadMoreMerge,
   mergeFiles,
   parseLabels,
+  pathBasename,
   resolveArchiveDir,
   sortLabelsByPriority,
+  splitPathError,
 } from "./fileUtils";
 
 function rec(
@@ -292,5 +294,39 @@ describe("归档目的地路径派生", () => {
     expect(archiveDestPath("C:/Arc/", "no-ext", "b.bin")).toBe(
       "C:/Arc/other/b.bin",
     );
+  });
+});
+
+describe("splitPathError", () => {
+  it("拆分「路径: 原因」形态（move_error）", () => {
+    expect(
+      splitPathError("D:/x/a.pdf: 跨磁盘归档暂不支持，请把归档根放在同一磁盘"),
+    ).toEqual({
+      path: "D:/x/a.pdf",
+      reason: "跨磁盘归档暂不支持，请把归档根放在同一磁盘",
+    });
+    expect(splitPathError("C:\\y\\b.docx: 文件可能被占用，请关闭相关程序后重试")).toEqual({
+      path: "C:\\y\\b.docx",
+      reason: "文件可能被占用，请关闭相关程序后重试",
+    });
+  });
+
+  it("原因在前或无路径时不误拆", () => {
+    expect(splitPathError("文件不在索引中: D:/x/a.pdf")).toEqual({
+      path: null,
+      reason: "文件不在索引中: D:/x/a.pdf",
+    });
+    expect(splitPathError("请先在设置中配置归档根目录")).toEqual({
+      path: null,
+      reason: "请先在设置中配置归档根目录",
+    });
+  });
+});
+
+describe("pathBasename", () => {
+  it("取末段并兼容两种分隔符", () => {
+    expect(pathBasename("D:/Arc/document/a.pdf")).toBe("a.pdf");
+    expect(pathBasename("D:\\Arc\\document\\b.docx")).toBe("b.docx");
+    expect(pathBasename("name-only.txt")).toBe("name-only.txt");
   });
 });

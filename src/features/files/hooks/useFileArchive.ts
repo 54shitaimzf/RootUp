@@ -4,6 +4,7 @@ import {
   archiveFiltered,
   logEvent,
   undoArchive,
+  type ArchiveFailure,
   type FileRecord,
 } from "../../../lib/tauri";
 
@@ -11,6 +12,27 @@ import {
 export interface ArchiveTarget {
   mode: "selected" | "filtered";
   count: number;
+}
+
+/** 归档失败摘要：archived > 0 为部分失败（警示色），否则全部失败（错误色）。 */
+export interface ArchiveFailureSummary {
+  archived: number;
+  failed: number;
+  firstPath: string;
+  firstError: string;
+}
+
+function failureSummary(
+  archived: number,
+  failed: ArchiveFailure[],
+): ArchiveFailureSummary | null {
+  if (failed.length === 0) return null;
+  return {
+    archived,
+    failed: failed.length,
+    firstPath: failed[0].path,
+    firstError: failed[0].error,
+  };
 }
 
 /**
@@ -32,11 +54,13 @@ export function useFileArchive(
     count: number;
   } | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveFailure, setArchiveFailure] =
+    useState<ArchiveFailureSummary | null>(null);
 
   const finishBatch = useCallback(
-    (archived: number, firstError: string | null, batchId: number | null | undefined) => {
-      setArchiveNotice({ batchId: batchId ?? 0, count: archived });
-      setArchiveError(firstError);
+    (archived: number, failed: ArchiveFailure[], batchId: number | null | undefined) => {
+      setArchiveNotice(archived > 0 ? { batchId: batchId ?? 0, count: archived } : null);
+      setArchiveFailure(failureSummary(archived, failed));
       setSelected(new Set());
       setBatchMode(false);
       refreshList();
@@ -48,8 +72,10 @@ export function useFileArchive(
     async (path: string) => {
       try {
         const outcome = await archiveFiles([path]);
-        setArchiveNotice({ batchId: outcome.batchId ?? 0, count: outcome.archived });
-        setArchiveError(null);
+        setArchiveNotice(
+          outcome.archived > 0 ? { batchId: outcome.batchId ?? 0, count: outcome.archived } : null,
+        );
+        setArchiveFailure(failureSummary(outcome.archived, outcome.failed));
         refreshList();
         void logEvent("info", `ui: 归档文件 path=${path}`);
       } catch (err) {
@@ -66,7 +92,7 @@ export function useFileArchive(
       .map((file) => file.path);
     try {
       const outcome = await archiveFiles(paths);
-      finishBatch(outcome.archived, outcome.failed[0]?.error ?? null, outcome.batchId);
+      finishBatch(outcome.archived, outcome.failed, outcome.batchId);
       void logEvent("info", `ui: 归档所选 count=${outcome.archived}`);
     } catch (err) {
       setArchiveError(String(err));
@@ -76,7 +102,7 @@ export function useFileArchive(
   const handleArchiveFiltered = useCallback(async () => {
     try {
       const outcome = await archiveFiltered(queryString);
-      finishBatch(outcome.archived, outcome.failed[0]?.error ?? null, outcome.batchId);
+      finishBatch(outcome.archived, outcome.failed, outcome.batchId);
       void logEvent("info", `ui: 归档筛选 count=${outcome.archived}`);
     } catch (err) {
       setArchiveError(String(err));
@@ -88,7 +114,7 @@ export function useFileArchive(
       try {
         const outcome = await undoArchive(batchId);
         setArchiveNotice(null);
-        setArchiveError(outcome.failed[0]?.error ?? null);
+        setArchiveFailure(failureSummary(outcome.archived, outcome.failed));
         refreshList();
         void logEvent("info", `ui: 撤销归档 batch=${batchId}`);
       } catch (err) {
@@ -141,6 +167,7 @@ export function useFileArchive(
   );
   const dismissNotice = useCallback(() => setArchiveNotice(null), []);
   const dismissError = useCallback(() => setArchiveError(null), []);
+  const dismissFailure = useCallback(() => setArchiveFailure(null), []);
   const closeArchiveTarget = useCallback(() => setArchiveTarget(null), []);
 
   return {
@@ -149,6 +176,7 @@ export function useFileArchive(
     archiveTarget,
     archiveNotice,
     archiveError,
+    archiveFailure,
     enterBatchMode,
     toggleSelect,
     cancelSelection,
@@ -160,5 +188,6 @@ export function useFileArchive(
     handleUndoArchive,
     dismissNotice,
     dismissError,
+    dismissFailure,
   };
 }

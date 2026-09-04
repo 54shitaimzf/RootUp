@@ -25,7 +25,6 @@ import {
   listClassifyDefaults,
   listLabelDefs,
   listSchemes,
-  listWatchedDirs,
   watchedDirHealth,
   type WatchedDirHealth,
   listCommonDirs,
@@ -166,7 +165,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const { theme, setTheme } = useTheme();
   const { settings, update, replace } = useSettings();
   const language = settings?.language ?? "zh-CN";
-  const [watchedDirs, setWatchedDirs] = useState<string[]>([]);
+  // 监控目录单一数据源：直接派生自全局 settings，禁止持有平行副本
+  // （否则任何 replace 全量写都会用旧快照静默丢掉运行期增删的目录）。
+  const watchedDirs = settings?.watched_dirs ?? [];
   const [missingDirs, setMissingDirs] = useState<Set<string>>(new Set());
   const [dirError, setDirError] = useState<string | null>(null);
   const [ruleError, setRuleError] = useState<string | null>(null);
@@ -195,9 +196,6 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [infoEntry, setInfoEntry] = useState<SettingsGuideEntry | null>(null);
 
   useEffect(() => {
-    listWatchedDirs()
-      .then(setWatchedDirs)
-      .catch(() => setWatchedDirs([]));
     watchedDirHealth()
       .then((health: WatchedDirHealth[]) =>
         setMissingDirs(
@@ -239,7 +237,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const handleAddDir = async (dir: string): Promise<string | null> => {
     try {
       const outcome = await addWatchedDir(dir);
-      setWatchedDirs((prev) => [...new Set([...prev, outcome.dir])]);
+      update({
+        watched_dirs: [...new Set([...(settings?.watched_dirs ?? []), outcome.dir])],
+      });
       setNotice(outcome.message ?? t("settings.dirAdded"));
       return null;
     } catch (err) {
@@ -263,7 +263,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     setRemoveTarget(null);
     try {
       await removeWatchedDir(dir);
-      setWatchedDirs((prev) => prev.filter((d) => d !== dir));
+      update({
+        watched_dirs: (settings?.watched_dirs ?? []).filter((d) => d !== dir),
+      });
       setDirError(null);
     } catch (err) {
       setDirError(String(err));

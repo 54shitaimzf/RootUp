@@ -327,6 +327,8 @@ export function FilePage({
         onDismissNotice={archive.dismissNotice}
         archiveError={archive.archiveError}
         onDismissError={archive.dismissError}
+        archiveFailure={archive.archiveFailure}
+        onDismissFailure={archive.dismissFailure}
       />
 
       <FileToolbar

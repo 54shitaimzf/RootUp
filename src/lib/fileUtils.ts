@@ -166,3 +166,27 @@ export function archiveDestPath(
 ): string {
   return joinArchivePath(root, resolveArchiveDir(labels), name);
 }
+
+/**
+ * 拆分「路径: 原因」形态的错误文本（后端 move_error 等）：
+ * 首个 ": " 之前含路径分隔符即视为路径，其余整体作为原因。
+ */
+export function splitPathError(message: string): {
+  path: string | null;
+  reason: string;
+} {
+  const idx = message.indexOf(": ");
+  if (idx > 0) {
+    const prefix = message.slice(0, idx);
+    if (prefix.includes("/") || prefix.includes("\\")) {
+      return { path: prefix, reason: message.slice(idx + 2) };
+    }
+  }
+  return { path: null, reason: message };
+}
+
+/** 路径的末段（兼容 / 与 \），用于紧凑展示。 */
+export function pathBasename(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.split("/").pop() || path;
+}

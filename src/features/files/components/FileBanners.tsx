@@ -1,7 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
+import { Tooltip } from "../../../components/Tooltip";
+import { pathBasename, splitPathError } from "../../../lib/fileUtils";
 import type { ScanController } from "../../../hooks/useScan";
+import type { ArchiveFailureSummary } from "../hooks/useFileArchive";
 
 export interface FileBannersProps {
   scan: ScanController;
@@ -16,6 +19,8 @@ export interface FileBannersProps {
   onDismissNotice: () => void;
   archiveError: string | null;
   onDismissError: () => void;
+  archiveFailure: ArchiveFailureSummary | null;
+  onDismissFailure: () => void;
 }
 
 /** 文件页横幅区：扫描中 / 扫描失败 / 新变更 / 操作错误 / 自动归档提示 / 归档成功与失败。 */
@@ -31,12 +36,15 @@ export function FileBanners({
   onDismissNotice,
   archiveError,
   onDismissError,
+  archiveFailure,
+  onDismissFailure,
 }: FileBannersProps) {
   const { t } = useTranslation();
   const scanning = scan.status?.active ?? false;
   const scanDir = scan.status?.dir ?? "";
   const scanProcessed = scan.status?.processed ?? 0;
   const scanDiscovered = scan.status?.discovered ?? 0;
+  const failureDetail = archiveFailure ? splitPathError(archiveFailure.firstError) : null;
   return (
     <>
       {scanning && (
@@ -111,6 +119,41 @@ export function FileBanners({
       {archiveError && (
         <Banner variant="error" className="mt-4" onClose={onDismissError}>
           <span className="block truncate">{archiveError}</span>
+        </Banner>
+      )}
+      {archiveFailure && failureDetail && (
+        <Banner
+          variant={archiveFailure.archived > 0 ? "warn" : "error"}
+          className="mt-4"
+          onClose={onDismissFailure}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">
+              {archiveFailure.archived > 0
+                ? t("files.archivePartialFail", { failed: archiveFailure.failed })
+                : t("files.archiveAllFail", { failed: archiveFailure.failed })}
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs">
+              {failureDetail.path && (
+                <Tooltip
+                  content={failureDetail.path}
+                  className="inline-block min-w-0 max-w-full"
+                >
+                  <span className="cursor-default truncate font-mono">
+                    {pathBasename(failureDetail.path)}
+                  </span>
+                </Tooltip>
+              )}
+              <span className={failureDetail.path ? "shrink-0" : "min-w-0"}>
+                {failureDetail.reason}
+              </span>
+            </div>
+            {archiveFailure.failed > 1 && (
+              <div className="mt-0.5 text-xs">
+                {t("files.archiveFailMore", { count: archiveFailure.failed - 1 })}
+              </div>
+            )}
+          </div>
         </Banner>
       )}
     </>

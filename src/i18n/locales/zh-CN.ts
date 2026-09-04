@@ -494,6 +494,9 @@ export default {
     archiveListTitle: "待归档文件（{{count}}）",
     back: "返回",
     archivedNotice: "已归档 {{count}} 个文件",
+    archivePartialFail: "另有 {{failed}} 个文件归档失败",
+    archiveAllFail: "归档失败：{{failed}} 个文件未能移动",
+    archiveFailMore: "另有 {{count}} 个文件同样失败",
     undoArchive: "撤销",
     autoArchiveOn:
       "自动归档已开启：新文件会自动归档到档案库，可在设置中关闭。",

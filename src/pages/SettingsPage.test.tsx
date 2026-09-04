@@ -246,7 +246,10 @@ describe("SettingsPage", () => {
   });
 
   it("移除目录先取数再确认，确认后调用移除", async () => {
-    vi.mocked(listWatchedDirs).mockResolvedValue(["C:/Watch"]);
+    vi.mocked(getSettings).mockResolvedValue({
+      ...SETTINGS,
+      watched_dirs: ["C:/Watch"],
+    });
     vi.mocked(countUnderRoot).mockResolvedValue(3);
     renderPage();
     const removeButtons = await screen.findAllByRole("button", {
@@ -262,7 +265,10 @@ describe("SettingsPage", () => {
   });
 
   it("取消移除不调用移除命令", async () => {
-    vi.mocked(listWatchedDirs).mockResolvedValue(["C:/Watch"]);
+    vi.mocked(getSettings).mockResolvedValue({
+      ...SETTINGS,
+      watched_dirs: ["C:/Watch"],
+    });
     renderPage();
     const removeButtons = await screen.findAllByRole("button", {
       name: "移除",
@@ -308,6 +314,35 @@ describe("SettingsPage", () => {
         expect.objectContaining({
           archive_root: "C:/Archive",
           auto_archive: true,
+        }),
+      );
+    });
+  });
+
+  it("添加监控目录后保存归档设置不丢目录（单一数据源回归）", async () => {
+    renderPage();
+    await screen.findByLabelText("语言");
+    fireEvent.change(
+      screen.getByPlaceholderText("输入目录路径，如 D:\\Downloads"),
+      { target: { value: "C:/NewWatch" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "添加" }));
+    await waitFor(() =>
+      expect(addWatchedDir).toHaveBeenCalledWith("C:/NewWatch"),
+    );
+    const archiveRow = (await screen.findByText("归档设置")).closest(
+      '[role="button"]',
+    ) as HTMLElement;
+    fireEvent.click(within(archiveRow).getByRole("button", { name: "编辑" }));
+    fireEvent.change(screen.getByPlaceholderText("如：D:\\Archive"), {
+      target: { value: "C:/Archive" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          archive_root: "C:/Archive",
+          watched_dirs: expect.arrayContaining(["C:/NewWatch"]),
         }),
       );
     });

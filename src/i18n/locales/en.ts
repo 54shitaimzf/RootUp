@@ -505,6 +505,9 @@ export default {
     archiveListTitle: "Files to archive ({{count}})",
     back: "Back",
     archivedNotice: "Archived {{count}} files",
+    archivePartialFail: "{{failed}} file(s) failed to archive",
+    archiveAllFail: "Archive failed: {{failed}} file(s) could not be moved",
+    archiveFailMore: "{{count}} more file(s) failed",
     undoArchive: "Undo",
     autoArchiveOn:
       "Auto archive is on: new files are archived into your Library automatically. You can turn it off in Settings.",
