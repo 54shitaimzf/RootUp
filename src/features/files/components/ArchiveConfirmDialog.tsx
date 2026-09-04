@@ -41,10 +41,13 @@ export function ArchiveConfirmDialog({
     setShowAll(false);
   }, [target]);
   const selectedFiles = items.filter((file) => selected.has(file.path));
+  const unknownCount = (target?.count ?? 0) <= 0;
   const description = target
     ? target.mode === "selected"
       ? t("files.archiveConfirmSelectedDesc", { count: target.count })
-      : t("files.archiveConfirmFilteredDesc", { count: target.count })
+      : unknownCount
+        ? t("files.archiveConfirmFilteredDescNoCount")
+        : t("files.archiveConfirmFilteredDesc", { count: target.count })
     : "";
   const fileRow = (file: FileRecord) => (
     <Tooltip
@@ -67,9 +70,13 @@ export function ArchiveConfirmDialog({
       }
       description={description}
       width={showAll ? "max-w-md" : "max-w-sm"}
-      confirmLabel={t("files.archiveConfirm", {
-        count: target?.count ?? 0,
-      })}
+      confirmLabel={
+        unknownCount
+          ? t("files.archiveConfirmNoCount")
+          : t("files.archiveConfirm", {
+              count: target?.count ?? 0,
+            })
+      }
       danger
       onConfirm={onConfirm}
       onCancel={onCancel}

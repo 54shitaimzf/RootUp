@@ -111,6 +111,17 @@ describe("ArchiveConfirmDialog", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("筛选模式计数未知（total=-1 钳为 0）时使用无计数文案", () => {
+    renderDialog({ target: { mode: "filtered", count: 0 } });
+    expect(
+      screen.getByText("将归档当前筛选的全部文件，归档后可随时撤销。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "归档文件" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/-1/)).not.toBeInTheDocument();
+  });
+
   it("点击档案库在资源管理器定位归档根", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "档案库 (C:/Arc)" }));

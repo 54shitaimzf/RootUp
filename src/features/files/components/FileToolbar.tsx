@@ -54,9 +54,14 @@ export function FileToolbar({
           icon={Archive}
           onClick={onArchiveFiltered}
         >
-          {t("files.archiveFiltered", {
-            count: filteredCount > archiveBatchLimit ? `${archiveBatchLimit}+` : filteredCount,
-          })}
+          {filteredCount > 0
+            ? t("files.archiveFiltered", {
+                count:
+                  filteredCount > archiveBatchLimit
+                    ? `${archiveBatchLimit}+`
+                    : filteredCount,
+              })
+            : t("files.archiveFilteredPlain")}
         </Button>
       )}
       {batchMode && (

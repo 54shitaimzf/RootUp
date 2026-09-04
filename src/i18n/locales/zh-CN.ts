@@ -484,6 +484,10 @@ export default {
       "将归档 {{count}} 个文件，归档后可随时撤销。",
     archiveConfirmFilteredDesc:
       "将归档当前筛选的全部 {{count}} 个文件，归档后可随时撤销。",
+    archiveConfirmFilteredDescNoCount:
+      "将归档当前筛选的全部文件，归档后可随时撤销。",
+    archiveConfirmNoCount: "归档文件",
+    archiveFilteredPlain: "归档当前筛选",
     archiveDestLabel: "档案库",
     archivePreviewLabel: "待归档文件",
     archiveShowAll: "查看全部 {{count}} 个文件",

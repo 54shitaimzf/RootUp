@@ -132,7 +132,11 @@ export function useFileArchive(
   );
   const openArchiveFiltered = useCallback(
     (total: number, limit: number) =>
-      setArchiveTarget({ mode: "filtered", count: Math.min(total, limit) }),
+      // total=-1 为后端 COUNT 治理哨兵（筛选态不计总数），钳为 0 表示未知。
+      setArchiveTarget({
+        mode: "filtered",
+        count: Math.max(0, Math.min(total, limit)),
+      }),
     [],
   );
   const dismissNotice = useCallback(() => setArchiveNotice(null), []);

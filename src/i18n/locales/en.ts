@@ -495,6 +495,10 @@ export default {
       "Archive {{count}} files. You can undo at any time.",
     archiveConfirmFilteredDesc:
       "Archive all {{count}} matching files. You can undo at any time.",
+    archiveConfirmFilteredDescNoCount:
+      "Archive all matching files. You can undo at any time.",
+    archiveConfirmNoCount: "Archive files",
+    archiveFilteredPlain: "Archive current results",
     archiveDestLabel: "Library",
     archivePreviewLabel: "Files to archive",
     archiveShowAll: "View all {{count}} files",
