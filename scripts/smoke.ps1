@@ -175,7 +175,7 @@ Start-Sleep -Milliseconds 500
 $DbPath = Join-Path $AppData "rootup.db"
 $Sqlite3 = (Get-Command sqlite3 -ErrorAction SilentlyContinue).Source
 if ($Sqlite3 -and (Test-Path -LiteralPath $DbPath)) {
-    $CleanSql = "UPDATE files SET state='deleted', deleted_at={0} WHERE path LIKE '%rootup_smoke_%' AND state != 'deleted';" -f ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
+    $CleanSql = "UPDATE units SET state='deleted', deleted_at={0} WHERE path LIKE '%rootup_smoke_%' AND state != 'deleted';" -f ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
     $CleanSql | & $Sqlite3 $DbPath 2>$null
     Write-Result "冒烟残留索引已标记删除" $true "smoke 临时目录记录标记 deleted，避免幽灵文件"
 } else {
