@@ -515,7 +515,8 @@ export default {
     syntaxHelpTitle: "Search syntax",
     syntaxHelpIntro: "The search box supports two ways, usable together:",
     syntaxHelpList: [
-      { key: "type", desc: "filter by file type, e.g. type:pdf" },
+      { key: "type", desc: "filter by exact file extension, e.g. type:pdf" },
+      { key: "cat", desc: "filter by category (documents, images, videos…), e.g. cat:document; the category chips use this" },
       { key: "label", desc: "filter by label; multiple labels match any, e.g. label:math label:physics" },
       { key: "+label / AND", desc: "filter by labels that must all match, e.g. label:math +label:physics" },
       { key: "state", desc: "filter by state, e.g. state:pending or state:indexed" },
@@ -651,7 +652,7 @@ export default {
       summary: "Find files quickly with search and filters, then archive or open them.",
       steps: [
         "Type a file name, path, or search syntax in the Files search box.",
-        "Use the filter chips below the box to narrow by type, label, or state.",
+        "Use the filter chips below the box to narrow by category, label, or state.",
         "Click a column header to sort by name, type, size, modified time, or label.",
         "Open a file with Smart open, or select files and archive them.",
       ],
@@ -698,8 +699,9 @@ export default {
     },
     searchTips: {
       title: "Search syntax tips",
-      summary: "Combine type, label, size, and other conditions to narrow results quickly.",
+      summary: "Combine category, extension, label, and size conditions to narrow results quickly.",
       steps: [
+        "Tap a category chip below the box, or type cat:document, to browse by category.",
         "Type type:pdf to show only PDF files.",
         "Type label:math label:physics to show files matching either label.",
         "To require multiple labels at once, use +label: or AND, e.g. label:math +label:physics.",

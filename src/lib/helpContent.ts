@@ -108,7 +108,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     titleKey: "helpTasks.searchTips.title",
     summaryKey: "helpTasks.searchTips.summary",
     stepsKey: "helpTasks.searchTips.steps",
-    keywords: ["搜索语法", "type", "label", "size", "before", "after", "筛选", "语法", "search", "syntax"],
+    keywords: ["搜索语法", "type", "cat", "label", "size", "before", "after", "筛选", "分类", "语法", "search", "syntax", "category"],
     related: ["tasks.files"],
   },
   {
@@ -235,7 +235,7 @@ export const HELP_SEARCH_SOURCES: HelpSearchSource[] = [
     tab: "syntax",
     titleKey: "help.sectionSyntax",
     summaryKey: "files.syntaxHelpIntro",
-    keywords: ["搜索", "语法", "筛选", "type", "label", "state", "size", "before", "after", "and", "+label", "search", "syntax", "filter"],
+    keywords: ["搜索", "语法", "筛选", "分类", "type", "cat", "label", "state", "size", "before", "after", "and", "+label", "search", "syntax", "filter", "category"],
   },
   ...WHATS_NEW.flatMap((entry) =>
     entry.items.map((itemKey) => ({

@@ -504,7 +504,8 @@ export default {
     syntaxHelpTitle: "搜索语法",
     syntaxHelpIntro: "搜索框支持两种方式，可同时使用：",
     syntaxHelpList: [
-      { key: "type", desc: "按文件类型筛选，如 type:pdf" },
+      { key: "type", desc: "按扩展名精确筛选，如 type:pdf" },
+      { key: "cat", desc: "按分类筛选（文档 / 图片 / 视频等），如 cat:document；筛选条的分类按钮用的就是它" },
       { key: "label", desc: "按标签筛选；多个标签任一命中即显示，如 label:高数 label:物理" },
       { key: "+label / AND", desc: "按标签筛选且需同时满足，如 label:高数 +label:物理" },
       { key: "state", desc: "按状态筛选，如 state:pending（确认中）、state:indexed（已索引）" },
@@ -640,7 +641,7 @@ export default {
       summary: "用搜索框和筛选快速找到文件，再决定归档或打开。",
       steps: [
         "在文件页搜索框输入文件名、路径或搜索语法。",
-        "点击输入框下方的筛选条件，按类型、标签或状态缩小范围。",
+        "点击输入框下方的筛选条件，按分类、标签或状态缩小范围。",
         "点击列标题，按名称、类型、大小、修改时间或标签排序。",
         "用“智能打开”打开文件，或选中文件后归档。",
       ],
@@ -687,8 +688,9 @@ export default {
     },
     searchTips: {
       title: "搜索语法技巧",
-      summary: "用 type、label、size 等条件组合，快速缩小搜索范围。",
+      summary: "用分类、扩展名、标签、大小等条件组合，快速缩小搜索范围。",
       steps: [
+        "点击筛选条的分类按钮，或输入 cat:document，按分类查找文件。",
         "输入 type:pdf，只显示 PDF 文件。",
         "输入 label:高数 label:物理，显示命中任一标签的文件。",
         "需要多个标签同时命中时，用 +label: 或 AND，例如 label:高数 +label:物理。",
