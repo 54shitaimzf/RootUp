@@ -117,14 +117,34 @@ pages → features / components / hooks → lib(API) → Tauri commands → core
 
 ```
 前端 lib/tauri.ts → invoke → commands/settings.rs（校验）
+                    → infra/settings_io.rs（写入单入口：互斥 load→mutate→validate→save→refresh→emit）
                     → infra/storage.rs（tauri-plugin-store，settings.json）
                     → core/settings.rs（模型与默认值）
 ```
 
+### 写入单入口与边界口诀（0.8.7 单一来源治理）
+
+- **边界口诀**：状态所有权与业务规则归后端唯一源；交互与展示归前端；跨端常量与规则用
+  `fixtures/` 契约锁死；前端禁止解析后端错误文本、禁止持有后端状态副本、禁止整对象覆盖写。
+- **写入单入口**：对 settings.json 的一切修改（命令 / 托盘 / 归档 journal）必须经
+  `infra/settings_io.rs`（`modify_settings` / `save_locked`）——互斥串行化，写后统一
+  `managed_state::refresh` 并广播 `settings-changed`（载荷 `{ keys: [变更字段名] }`）。
+  直接调 `storage::save_settings` 仅限启动装配期（managed_state 未就绪，须注明原因）。
+- **增量补丁**：`update_settings(SettingsPatch)` 只接受变更字段；`watched_dirs` /
+  `project_dirs` 有意不在补丁内——必须走 add/remove 专用命令（防旧快照整表覆盖，
+  历史 bug：保存归档设置曾静默抹掉监控目录）。前端经 `useSettings` 的 `update` /
+  `commit`（只发补丁）、`mergeLocal`（纯本地回显，永不持久化）、`syncFromBackend`
+  （后端已持久化后的内存同步）操作；设置事件刷新前先冲刷挂起补丁，防覆盖未落盘修改。
+- **搜索语法单一来源**：权威解释器为 `core/query.rs::parse_query`（`cat:` 类别 /
+  `type:` 精确扩展名，语义互斥不得混用），前端只负责生成 token；用例锁在
+  `fixtures/query-grammar-cases.json`。同类契约还有归档目标（archive-dest-cases）、
+  生效分类映射（classify-effective-cases）、学业周次（study-week-cases）、
+  跨语言常量（app-contracts.json），均为双端各自断言。
+
 ### 版本化与向前兼容
 
 - `CURRENT_VERSION` 为配置版本（当前 3，v2 起含 archive_root/auto_archive，v3 起含 close_action/reminder_enabled/reminder_lead_days）；新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`；结构性升级在 `Settings::migrate()` 中按版本号逐级迁移。旧版本配置文件永远可被新版本读取（未知字段容忍 + 缺省字段取默认）。
-- **写入盖章**：`Settings::normalize()` 将 `version` 恒置为 `CURRENT_VERSION`；`set_settings` 必须先 normalize 再校验/保存，前端不参与版本持久化。
+- **写入盖章**：`Settings::normalize()` 将 `version` 恒置为 `CURRENT_VERSION`；设置写入单入口（`infra/settings_io.rs`）在保存前统一 normalize + 校验，前端不参与版本持久化。
 - **数据版本与应用版本解耦**：`Settings.version`（配置 schema）与数据库 schema 版本独立演进；应用版本升级不代表数据格式必然变化。
 
 ### 语言三处约定
@@ -146,7 +166,7 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 ### 模板与自定义方案
 
-三套内置模板（默认/编程开发/素材创作）为前端常量（`src/lib/presets.ts`）；自定义方案是「忽略规则 + 分类覆盖」的命名快照，经 `core/schemes.rs` 校验、`infra/scheme_store.rs` 原子写入独立文件 `schemes.json`（损坏备份 `schemes.corrupt-<时间戳>.bak`，重置设置不删除方案），命令层 `commands/schemes.rs` 提供 `list/save/rename/delete`。「应用方案」在前端读取方案内容后走现有 `set_settings`，后端不拆分写路径。
+三套内置模板（默认/编程开发/素材创作）为前端常量（`src/lib/presets.ts`）；自定义方案是「忽略规则 + 分类覆盖」的命名快照，经 `core/schemes.rs` 校验、`infra/scheme_store.rs` 原子写入独立文件 `schemes.json`（损坏备份 `schemes.corrupt-<时间戳>.bak`，重置设置不删除方案），命令层 `commands/schemes.rs` 提供 `list/save/rename/delete`。「应用方案」在前端读取方案内容后经 `useSettings.commit` 走 `update_settings` 增量补丁（v0.8.8 计划改为后端 `apply_scheme(id)` 原子命令）。
 
 ### 设置页交互
 
@@ -194,7 +214,7 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 ### 监听热路径与设置缓存推送
 
-监听回调（`files-changed` 批次广播 + 自动归档入队）**零磁盘 IO**：自动归档开关与归档根不重读 settings.json，而是由 `infra::managed_state::refresh` 在全部设置写路径（`set_settings` / `reset_settings` / 托盘切换 / 启动装配）后推送到 `ArchiveService` 缓存（`update(root, enabled)`），回调内只读内存状态（`try_state` + `is_active()`）。约定：任何新增的「设置驱动后台行为」沿用同一模式——写路径推送缓存，热路径读缓存；不得在监听/扫描回调里调用 `storage::load_settings`。副作用说明：settings.json 为应用私有文件，外部手改不会在下一批次「顺带生效」，需经应用内设置或重启。
+监听回调（`files-changed` 批次广播 + 自动归档入队）**零磁盘 IO**：自动归档开关与归档根不重读 settings.json，而是由 `infra::managed_state::refresh` 在全部设置写路径（`infra/settings_io.rs` 单入口：`update_settings` / `reset_settings` / 托盘切换 / 监控与项目目录增删 / 归档 journal；启动装配例外）后推送到 `ArchiveService` 缓存（`update(root, enabled)`），回调内只读内存状态（`try_state` + `is_active()`）。约定：任何新增的「设置驱动后台行为」沿用同一模式——写路径推送缓存，热路径读缓存；不得在监听/扫描回调里调用 `storage::load_settings`。副作用说明：settings.json 为应用私有文件，外部手改不会在下一批次「顺带生效」，需经应用内设置或重启。
 
 ### 事件协议
 
