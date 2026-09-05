@@ -581,7 +581,11 @@ mod tests {
             let range = case["range"].as_str().unwrap();
             let valid = case["valid"].as_bool().unwrap();
             let parsed = parse_week_range(range);
-            assert_eq!(parsed.is_some(), valid, "range={range:?} 有效性应与契约一致");
+            assert_eq!(
+                parsed.is_some(),
+                valid,
+                "range={range:?} 有效性应与契约一致"
+            );
             if let Some(weeks) = parsed {
                 let mut actual: Vec<u32> = weeks.into_iter().collect();
                 actual.sort_unstable();
@@ -594,7 +598,10 @@ mod tests {
                 assert_eq!(actual, expected, "range={range:?} 周次集合应与契约一致");
             }
         }
-        for case in value["overlapCases"].as_array().expect("overlapCases 应为数组") {
+        for case in value["overlapCases"]
+            .as_array()
+            .expect("overlapCases 应为数组")
+        {
             let opt = |v: &serde_json::Value| v.as_str().map(|s| s.to_string());
             let overlap = weeks_overlap(
                 case["ruleA"].as_str().unwrap(),

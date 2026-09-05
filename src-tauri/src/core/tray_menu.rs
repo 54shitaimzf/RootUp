@@ -10,8 +10,6 @@ pub struct TrayMenuModel {
     pub due_count: usize,
     /// 排序后的提醒作业（逾期优先，上限 8）。
     pub items: Vec<ReminderItem>,
-    /// 自动归档开关当前态（菜单勾选）。
-    pub auto_archive: bool,
     /// 主题当前态（system/light/dark）。
     pub theme: String,
 }
@@ -27,7 +25,6 @@ pub fn tray_menu_model(data: &StudyData, settings: &Settings, today: NaiveDate) 
     TrayMenuModel {
         due_count: items.len(),
         items,
-        auto_archive: settings.auto_archive,
         theme: settings.theme.clone(),
     }
 }
@@ -47,7 +44,6 @@ mod tests {
         Settings {
             reminder_enabled: true,
             reminder_lead_days: 3,
-            auto_archive: true,
             theme: "dark".into(),
             ..Default::default()
         }
@@ -60,7 +56,6 @@ mod tests {
         let today = Local::now().date_naive();
         let model = tray_menu_model(&data, &settings(), today);
         assert!(model.due_count <= REMINDER_MAX_ITEMS);
-        assert!(model.auto_archive);
         assert_eq!(model.theme, "dark");
         // 种子数据含逾期待办（h-demo-1），提醒开启时应至少 1 项
         assert!(model.due_count >= 1);

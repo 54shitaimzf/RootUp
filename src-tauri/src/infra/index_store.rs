@@ -437,12 +437,7 @@ impl IndexStore for SqliteIndexStore {
                 .map(|i| format!("',' || labels || ',' LIKE ?{}", params.len() + i + 1))
                 .collect();
             conditions.push(format!("({})", ors.join(" OR ")));
-            params.extend(
-                query
-                    .categories
-                    .iter()
-                    .map(|t| Value::Text(t.clone())),
-            );
+            params.extend(query.categories.iter().map(|t| Value::Text(t.clone())));
         }
         if !query.labels.is_empty() {
             let ors: Vec<String> = (0..query.labels.len())

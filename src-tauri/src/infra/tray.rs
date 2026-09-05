@@ -23,7 +23,6 @@ struct TrayLabels {
     open: String,
     study: String,
     no_due: String,
-    auto_archive: String,
     theme: String,
     theme_system: String,
     theme_light: String,
@@ -38,7 +37,6 @@ fn tray_labels(language: &str) -> TrayLabels {
             open: "Open RootUp".into(),
             study: "Study · Open homework".into(),
             no_due: "No homework due soon".into(),
-            auto_archive: "Auto-archive new files".into(),
             theme: "Theme".into(),
             theme_system: "Follow system".into(),
             theme_light: "Light".into(),
@@ -51,7 +49,6 @@ fn tray_labels(language: &str) -> TrayLabels {
             open: "打开 RootUp".into(),
             study: "学业 · 打开作业".into(),
             no_due: "暂无临期作业".into(),
-            auto_archive: "自动归档新文件".into(),
             theme: "主题".into(),
             theme_system: "跟随系统".into(),
             theme_light: "浅色".into(),
@@ -82,14 +79,6 @@ fn build_menu(
         &labels.quit,
         true,
         Some(tauri::image::Image::from_bytes(TRAY_MENU_ICON_QUIT)?),
-        None::<&str>,
-    )?;
-    let auto_archive = CheckMenuItem::with_id(
-        app,
-        "auto-archive",
-        &labels.auto_archive,
-        true,
-        model.auto_archive,
         None::<&str>,
     )?;
 
@@ -165,15 +154,8 @@ fn build_menu(
         vec![&theme_system, &theme_light, &theme_dark];
     let theme = Submenu::with_items(app, &labels.theme, true, &theme_refs)?;
 
-    let items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = vec![
-        &open,
-        &study,
-        &separator,
-        &auto_archive,
-        &theme,
-        &separator,
-        &quit,
-    ];
+    let items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> =
+        vec![&open, &study, &separator, &theme, &separator, &quit];
     Menu::with_items(app, &items)
 }
 
@@ -239,15 +221,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                     app.exit(0);
                 }
                 "auto-archive" => {
-                    match settings_io::modify_settings(app, &["auto_archive"], |settings| {
-                        settings.auto_archive = !settings.auto_archive;
-                        Ok(())
-                    }) {
-                        Ok(_) => {
-                            let _ = refresh_tray(app);
-                        }
-                        Err(e) => log::warn!("tray: 切换自动归档失败: {e}"),
-                    }
+                    // 自动归档菜单项已移除（设置弹窗内二次确认后才能开启），
+                    // 保留分支兜底旧菜单缓存，行为改为唤起设置。
+                    let _ = crate::infra::window::ensure_main_window(app);
                 }
                 _ if id.starts_with("theme:") => {
                     let theme = id.trim_start_matches("theme:").to_string();

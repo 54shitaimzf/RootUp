@@ -714,7 +714,9 @@ mod tests {
         let raw = include_str!("../../../fixtures/app-contracts.json");
         let value: serde_json::Value =
             serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
-        let fixture = value["preferredIde"].as_array().expect("preferredIde 应为数组");
+        let fixture = value["preferredIde"]
+            .as_array()
+            .expect("preferredIde 应为数组");
         assert_eq!(fixture.len(), PREFERRED_IDE_VALUES.len());
         for value in PREFERRED_IDE_VALUES {
             assert!(

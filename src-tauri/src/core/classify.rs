@@ -334,7 +334,10 @@ mod tests {
             .iter()
             .map(|v| v.as_str().expect("类别应为字符串").to_string())
             .collect();
-        assert_eq!(actual, expected, "fixture categories 应与 Category::ALL 一致");
+        assert_eq!(
+            actual, expected,
+            "fixture categories 应与 Category::ALL 一致"
+        );
     }
 
     #[test]
@@ -359,7 +362,10 @@ mod tests {
             })
             .collect();
         let classifier = ExtensionClassifier::with_overrides(&overrides);
-        for case in value["expectations"].as_array().expect("expectations 应为数组") {
+        for case in value["expectations"]
+            .as_array()
+            .expect("expectations 应为数组")
+        {
             let ext = case["ext"].as_str().unwrap();
             let expected = case["category"].as_str();
             assert_eq!(
