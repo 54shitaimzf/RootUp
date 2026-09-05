@@ -142,6 +142,33 @@ describe("useSettings 保存语义", () => {
     expect(screen.getByTestId("theme")).toHaveTextContent("light");
   });
 
+  it("flush 失败回填挂起补丁，下次事件冲刷重试", async () => {
+    vi.mocked(updateSettings).mockRejectedValueOnce(new Error("write failed"));
+    await renderProbe();
+
+    fireEvent.click(screen.getByText("dark"));
+    await act(async () => {
+      vi.advanceTimersByTime(SETTINGS_SAVE_DEBOUNCE_MS);
+    });
+    // 首次落盘失败：已记日志，补丁回填待重试
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(logEvent).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("设置防抖落盘失败"),
+    );
+
+    // 触发一次新变更并到期：flush 把回填的旧补丁与新字段合并重发
+    fireEvent.click(screen.getByText("en"));
+    await act(async () => {
+      vi.advanceTimersByTime(SETTINGS_SAVE_DEBOUNCE_MS);
+    });
+    expect(updateSettings).toHaveBeenCalledTimes(2);
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      theme: "dark",
+      language: "en",
+    });
+  });
+
   it("settings-changed 先冲刷挂起补丁再拉取真源，不丢未落盘修改", async () => {
     vi.useRealTimers();
     await renderProbe();

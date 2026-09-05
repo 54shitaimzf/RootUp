@@ -209,6 +209,11 @@ export interface FileRecord {
 /** 与 Rust 侧 core::query::QueryPage 对应 */
 export interface QueryPage {
   items: FileRecord[];
+  /**
+   * 精确总数仅在「首页 + 无筛选」查询时返回；其余为 -1 哨兵
+   * （后端 COUNT 治理），前端须以 items.length / nextCursor 判断可加载数。
+   * 0.8.8 将以显式 totalKnown / hasMore 字段替代哨兵。
+   */
   total: number;
   /** keyset 下一页游标；无更多数据为 null */
   nextCursor: string | null;
@@ -272,9 +277,12 @@ export function getSettings(): Promise<Settings> {
 
 /**
  * 增量更新设置：只传变更字段（JSON 序列化时 undefined 字段被省略，后端保持不变）。
- * watched_dirs / project_dirs 不可经此修改——必须走 addWatchedDir / removeWatchedDir 等专用命令。
+ * watched_dirs / project_dirs / version 不可经此修改（类型层已禁止）——
+ * 目录必须走 addWatchedDir / removeWatchedDir 等专用命令，version 由后端盖章。
  */
-export function updateSettings(patch: Partial<Settings>): Promise<void> {
+export function updateSettings(
+  patch: Partial<Omit<Settings, "watched_dirs" | "project_dirs" | "version">>,
+): Promise<void> {
   return invoke<void>("update_settings", { patch });
 }
 

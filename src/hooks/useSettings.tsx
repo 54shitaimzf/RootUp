@@ -68,7 +68,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  /** 冲刷挂起补丁：累积的变更字段一次性发往后端；失败记日志、不回滚乐观态。 */
+  /** 冲刷挂起补丁：累积的变更字段一次性发往后端；失败回填待重试并记日志，不回滚乐观态。 */
   const flush = useCallback(async () => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -80,6 +80,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     try {
       await updateSettings(patch);
     } catch (err) {
+      // 回填挂起补丁：保留下次事件冲刷 / commit 吸收的重试机会，避免与后端静默分叉
+      pendingPatchRef.current = { ...(pendingPatchRef.current ?? {}), ...patch };
       void logEvent("warn", `ui: 设置防抖落盘失败 ${String(err)}`);
     }
   }, []);

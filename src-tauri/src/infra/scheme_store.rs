@@ -48,10 +48,10 @@ impl SchemeStore for JsonSchemeStore {
     fn save(&self, scheme: RuleScheme) -> Result<(), String> {
         let mut schemes = self.load();
         if schemes.iter().any(|s| s.name == scheme.name) {
-            return Err("方案名称已存在".to_string());
+            return Err("scheme.duplicate|方案名称已存在".to_string());
         }
         if schemes.len() >= MAX_SCHEMES {
-            return Err(format!("自定义方案已达上限（{MAX_SCHEMES} 个）"));
+            return Err(format!("scheme.limit|自定义方案已达上限（{MAX_SCHEMES} 个）"));
         }
         schemes.push(scheme);
         self.write_atomic(&schemes)
@@ -60,10 +60,10 @@ impl SchemeStore for JsonSchemeStore {
     fn rename(&self, id: &str, name: &str) -> Result<(), String> {
         let schemes = self.load();
         if !schemes.iter().any(|s| s.id == id) {
-            return Err("方案不存在".to_string());
+            return Err("scheme.not_found|方案不存在".to_string());
         }
         if schemes.iter().any(|s| s.id != id && s.name == name) {
-            return Err("方案名称已存在".to_string());
+            return Err("scheme.duplicate|方案名称已存在".to_string());
         }
         let mut updated: Vec<RuleScheme> = schemes
             .into_iter()
@@ -149,11 +149,11 @@ mod tests {
         let store = JsonSchemeStore::new(dir.join("schemes.json"));
         store.save(scheme("s1", "同名")).unwrap();
         let err = store.save(scheme("s2", "同名")).unwrap_err();
-        assert!(err.contains("已存在"));
+        assert!(err.starts_with("scheme.duplicate|"), "结构化错误码前缀: {err}");
         // 重命名到同名同样拒绝
         store.save(scheme("s2", "另一名")).unwrap();
         let err = store.rename("s2", "同名").unwrap_err();
-        assert!(err.contains("已存在"));
+        assert!(err.starts_with("scheme.duplicate|"), "结构化错误码前缀: {err}");
         // 自身改名不受影响
         store.rename("s2", "二").unwrap();
         assert!(store.list().iter().any(|s| s.id == "s2" && s.name == "二"));

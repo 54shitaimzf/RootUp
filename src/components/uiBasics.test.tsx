@@ -85,7 +85,9 @@ describe("共享基础组件", () => {
   it("SyntaxTable 渲染语法行", () => {
     render(<SyntaxTable />);
     expect(screen.getByText("type")).toBeInTheDocument();
-    expect(screen.getByText(/按文件类型筛选/)).toBeInTheDocument();
+    expect(screen.getByText(/按扩展名精确筛选/)).toBeInTheDocument();
+    expect(screen.getByText("cat")).toBeInTheDocument();
+    expect(screen.getByText(/按分类筛选/)).toBeInTheDocument();
   });
 
   it("Field 渲染标签与提示", () => {

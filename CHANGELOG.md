@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 0.8.7 架构小修（缺口收口与错误码最小切片）
+
+- 架构核查（五提交治理后复查）发现的 4 个残留缺口收口：前端 `updateSettings` 参数类型收窄为 `Partial<Omit<Settings, "watched_dirs" | "project_dirs" | "version">>`（编译期拦截不可写字段，与后端 `SettingsPatch` 白名单对称）；`useSettings` flush 失败回填挂起补丁（乐观态不再与后端静默分叉，下次事件冲刷 / commit 吸收时重试，附测试）；`schemes.rs` 模块注释中已删除的 `set_settings` 引用改为 `update_settings`；`QueryPage.total=-1` 哨兵语义补入前端类型注释（0.8.8 以 `totalKnown`/`hasMore` 替代）。
+- 错误码注册表最小切片落地：`scheme_store` 需要前端分支处理的错误改 `code|message` 结构化前缀（`scheme.duplicate` / `scheme.limit` / `scheme.not_found`）；新增 `lib/errors.ts`（`errorCode` / `errorMessage`，code 形状校验防误判）并测试；`SchemeDialog` 的错误文案子串匹配（`includes("已存在")`——违反「前端禁止解析后端文本」边界口诀）退役，改按 code 映射 i18n、无 code 透传 message。
+- 清理本地工具产物目录（`.mimosa/`、`src-tauri/.mimosa/`、`scripts/smoke-summary.log`，均已被 .gitignore 覆盖，不入库）。
+
 ### 0.8.7 帮助文档补漏（cat: 语法同步）
 
 - 补齐 `cat:` 迁移时遗漏的帮助入口：搜索语法表（文件页「?」弹层与帮助中心「搜索语法」专区共用的单一来源）新增 `cat` 条目，`type` 条目措辞钉死为「按扩展名精确筛选」（消除「文件类型」歧义旧词——正是当初语义错位的源头）；任务指南「搜索语法技巧」文章补分类筛选示例并调整摘要；「搜索与整理文件」文章「按类型筛选」统一为「按分类」；帮助搜索关键词补 cat / 分类 / category（中英双语同步，i18n 成对与文案质量门禁全绿）。

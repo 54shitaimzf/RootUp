@@ -1,7 +1,8 @@
 //! 规则方案命令：列表 / 保存 / 重命名 / 删除。
 //!
-//! “应用方案”在前端完成：读取方案内容后走 `set_settings`，
+//! “应用方案”在前端完成：读取方案内容后走 `update_settings` 增量命令，
 //! 后端不提供专门命令，避免与设置写入路径分叉。
+//! 需要前端分支处理的错误以 `code|message` 前缀返回（错误码注册表最小切片）。
 use crate::core::schemes::{valid_name, RuleScheme};
 use crate::core::settings::{ClassifyRule, IgnoreRules};
 use crate::infra::scheme_store::{JsonSchemeStore, SchemeStore};

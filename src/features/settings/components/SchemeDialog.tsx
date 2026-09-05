@@ -17,6 +17,7 @@ import { Input } from "../../../components/Input";
 import { Modal } from "../../../components/Modal";
 import { SectionLabel } from "../../../components/SectionLabel";
 import { isComposing } from "../../../lib/ime";
+import { errorCode, errorMessage } from "../../../lib/errors";
 
 const MAX_NAME_LEN = 40;
 
@@ -51,10 +52,10 @@ export function SchemeDialog({
   }, [open]);
 
   const friendlyError = (err: unknown) => {
-    const raw = String(err);
-    if (raw.includes("已存在")) return t("settings.schemeNameExists");
-    if (raw.includes("上限")) return t("settings.schemeLimit");
-    return raw;
+    const code = errorCode(err);
+    if (code === "scheme.duplicate") return t("settings.schemeNameExists");
+    if (code === "scheme.limit") return t("settings.schemeLimit");
+    return errorMessage(err);
   };
 
   const save = async () => {
