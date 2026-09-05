@@ -1,11 +1,12 @@
 import { resolveCategoryVisual } from "../lib/categoryDefs";
-import { Tag } from "../theme/icons";
+import { Box, FileText, FolderKanban, Tag } from "../theme/icons";
 import { AllBadgeIcon } from "./AllBadgeIcon";
 
 export type FilterIconKind =
   | "category"
   | "state"
   | "label"
+  | "unitKind"
   | "all"
   | "allStates";
 
@@ -42,6 +43,12 @@ export function FilterIcon({
   }
   if (kind === "label") {
     return <Tag aria-hidden="true" className="size-3.5 shrink-0" />;
+  }
+  if (kind === "unitKind") {
+    // 单元类型：文件=页、项目=看板、软件=方块（Box）
+    if (value === "project") return <FolderKanban aria-hidden="true" className="size-3.5 shrink-0" />;
+    if (value === "software") return <Box aria-hidden="true" className="size-3.5 shrink-0" />;
+    return <FileText aria-hidden="true" className="size-3.5 shrink-0" />;
   }
   if (kind === "all") {
     return <AllBadgeIcon className="size-[18px] shrink-0" />;

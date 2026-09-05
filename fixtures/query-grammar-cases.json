@@ -10,6 +10,13 @@
       "words": ["cat:notafilecat"]
     },
     { "input": "type:pdf type:PDF", "types": ["pdf"] },
+    { "input": "kind:project", "kinds": ["project"] },
+    { "input": "kind:SOFTWARE kind:file", "kinds": ["software", "file"] },
+    {
+      "input": "kind:planet",
+      "kinds": [],
+      "words": ["kind:planet"]
+    },
     { "input": "label:a tag:b", "labels": ["a", "b"] },
     { "input": "state:pending", "states": ["pending"] },
     {

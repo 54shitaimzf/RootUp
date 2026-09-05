@@ -23,6 +23,8 @@ export interface Course {
   color: LabelColorKey;
   /** 后端生成的稳定课程标签键（course-<id>），前端只读展示。 */
   labelKey?: string;
+  /** 课程别名：项目名/路径按课程名或别名匹配（0.8.7 阶段二课程挂钩）。 */
+  aliases?: string[];
 }
 
 export type CourseDraft = Omit<Course, "id">;

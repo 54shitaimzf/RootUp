@@ -433,6 +433,16 @@ export function recommendedArchiveRoots(): Promise<string[]> {
   return invoke<string[]>("recommended_archive_roots");
 }
 
+/** 课程概览：相关文件（课程标签命中）与相关项目（课程名/别名命中）。 */
+export interface CourseOverview {
+  files: FileRecord[];
+  projects: FileRecord[];
+}
+
+export function courseOverview(courseId: string): Promise<CourseOverview> {
+  return invoke<CourseOverview>("course_overview", { courseId });
+}
+
 /** 内置扩展名映射表（只读，单一来源在后端） */
 export function listClassifyDefaults(): Promise<ClassifyDefaultEntry[]> {
   return invoke<ClassifyDefaultEntry[]>("list_classify_defaults");

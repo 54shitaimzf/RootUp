@@ -1,6 +1,11 @@
 import { topSuggestions, type FilterHabits } from "./filterHabits";
 
-export type SuggestionKind = "category" | "state" | "label" | "keyword";
+export type SuggestionKind =
+  | "category"
+  | "state"
+  | "label"
+  | "unitKind"
+  | "keyword";
 
 /** 一条可插入搜索框的补全建议。 */
 export interface Suggestion {
@@ -15,8 +20,8 @@ export interface Suggestion {
   display: string;
 }
 
-/** 可转为标签的离散建议类型。 */
-export type DiscreteKind = "category" | "state" | "label";
+/** 可转为标签的离散建议类型（unitKind = 文件/项目/软件单元类型）。 */
+export type DiscreteKind = "category" | "state" | "label" | "unitKind";
 
 export interface TagValue {
   kind: DiscreteKind;
@@ -40,17 +45,19 @@ export interface FilterTags {
 export function habitKeyForTag(tag: TagValue): string {
   if (tag.kind === "category") return `category:${tag.value}`;
   if (tag.kind === "state") return `state:${tag.value}`;
+  if (tag.kind === "unitKind") return `kind:${tag.value}`;
   return `label:${tag.value}`;
 }
 
 /**
- * 语法关键词顺序（cat → type → label → state → size → before → after）。
- * cat: 类别（值=类别 key）；type: 精确扩展名——两者语义不同，禁止混用
- * （契约见 fixtures/query-grammar-cases.json，权威解释器在后端 core/query.rs）。
+ * 语法关键词顺序（cat → type → kind → label → state → size → before → after）。
+ * cat: 类别（值=类别 key）；type: 精确扩展名；kind: 单元类型（file/project/software）——
+ * 三者语义不同，禁止混用（契约见 fixtures/query-grammar-cases.json，权威解释器在后端 core/query.rs）。
  */
 export const KEYWORD_PREFIXES = [
   "cat:",
   "type:",
+  "kind:",
   "label:",
   "+label:",
   "state:",
@@ -61,12 +68,14 @@ export const KEYWORD_PREFIXES = [
 
 const PREFIX_TO_KIND: Record<string, DiscreteKind> = {
   "cat:": "category",
+  "kind:": "unitKind",
   "label:": "label",
   "state:": "state",
 };
 
 const KIND_PREFIX: Record<DiscreteKind, string> = {
   category: "cat:",
+  unitKind: "kind:",
   state: "state:",
   label: "label:",
 };

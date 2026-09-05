@@ -74,6 +74,7 @@ export function canIdeOpen(fileType: string): boolean {
 export const KEYWORD_DISPLAY_KEY: Record<string, string> = {
   "cat:": "files.acKeywordCategory",
   "type:": "files.acKeywordType",
+  "kind:": "files.acKeywordKind",
   "label:": "files.acKeywordLabel",
   "+label:": "files.acKeywordLabelAll",
   "state:": "files.acKeywordState",
@@ -81,6 +82,9 @@ export const KEYWORD_DISPLAY_KEY: Record<string, string> = {
   "before:": "files.acKeywordBefore",
   "after:": "files.acKeywordAfter",
 };
+
+/** kind: 维度的固定值候选（与后端 UnitKind 一致）。 */
+const UNIT_KIND_TOKENS = ["file", "project", "software"] as const;
 
 /** 标签展示所需的最小注册表形态（自定义标签 ∪ 课程标签）。 */
 export type LabelDefLike = { key: string; name: string; icon: string; color: string };
@@ -110,6 +114,13 @@ export function buildAutocompleteCandidates(opts: {
       raw: category,
       token: `cat:${category}`,
       display: t(`filter.${category}`),
+    })),
+    ...UNIT_KIND_TOKENS.map((unitKind) => ({
+      kind: "unitKind" as const,
+      key: `unitKind:${unitKind}`,
+      raw: unitKind,
+      token: `kind:${unitKind}`,
+      display: t(`filter.${unitKind === "file" ? "file" : unitKind}`),
     })),
     ...FILTER_STATE_TOKENS.map((state) => ({
       kind: "state" as const,
