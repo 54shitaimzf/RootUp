@@ -10,6 +10,7 @@ use crate::core::tools::{self, extension_of};
 use crate::infra::app_finder::{
     build_open_args, detect_installed_tools, find_app, CommandRunner, SystemAppEnv, SystemRunner,
 };
+use crate::infra::project_sync::schedule_project_sync;
 use crate::infra::settings_io;
 use crate::infra::shortcut;
 use crate::infra::storage;
@@ -129,6 +130,7 @@ pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
         Ok(())
     })?;
     log::info!("project: 添加 {dir}");
+    schedule_project_sync(&app);
     Ok(())
 }
 
@@ -142,6 +144,7 @@ pub fn remove_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
         Ok(())
     })?;
     log::info!("project: 移除 {dir}");
+    schedule_project_sync(&app);
     Ok(())
 }
 

@@ -57,6 +57,14 @@ pub fn start_deferred_services(app: &AppHandle) -> Result<(), String> {
             }
         })
         .ok();
+    // 项目单元同步：后台执行（units 的派生数据，失败不影响功能）
+    let sync_app = app.clone();
+    std::thread::Builder::new()
+        .name("rootup-project-sync".into())
+        .spawn(move || {
+            crate::infra::project_sync::schedule_project_sync(&sync_app);
+        })
+        .ok();
     log::info!(
         "startup: 延迟服务已启动 ms={}",
         started.elapsed().as_millis()

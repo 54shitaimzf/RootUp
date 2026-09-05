@@ -4,6 +4,7 @@ use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key, validate_dir_path};
 use crate::core::query::{parse_query, QueryPage};
 use crate::core::watched::{check_add, AddCheck};
+use crate::infra::project_sync::schedule_project_sync;
 use crate::infra::scanner::{ScanService, ScanStatus};
 use crate::infra::settings_io;
 use crate::infra::storage;
@@ -106,6 +107,8 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
         .map_err(|e| e.to_string())?
         .enqueue(dir.clone());
     log::info!("watch: 添加 {dir}");
+    // 监控目录变化会影响自动项目发现：后台同步项目单元
+    schedule_project_sync(&app);
     Ok(AddDirOutcome { message, dir })
 }
 
@@ -136,6 +139,7 @@ pub fn remove_watched_dir(app: AppHandle, dir: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .mark_under_roots_deleted(std::slice::from_ref(&dir))?;
     log::info!("watch: 移除 {dir} 清理索引 count={removed}");
+    schedule_project_sync(&app);
     Ok(())
 }
 
