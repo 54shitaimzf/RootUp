@@ -157,6 +157,8 @@ pub fn run() {
             archive_commands::archive_project,
             archive_commands::undo_archive,
             archive_commands::list_archive_batches,
+            archive_commands::assess_archive_root,
+            archive_commands::recommended_archive_roots,
             settings_commands::get_settings,
             settings_commands::update_settings,
             settings_commands::reset_settings,

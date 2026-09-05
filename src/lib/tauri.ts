@@ -417,6 +417,22 @@ export function listArchiveBatches(limit: number): Promise<ArchiveBatch[]> {
   return invoke<ArchiveBatch[]>("list_archive_batches", { limit });
 }
 
+/** 归档根安全评估结果：level 决定展示与交互强度，reason 映射 i18n。 */
+export interface ArchiveAssessment {
+  level: "safe" | "warn" | "blocked";
+  reason: string | null;
+}
+
+/** 归档根安全评估（只读）：规则真源在后端 core/archive_guard。 */
+export function assessArchiveRoot(path: string): Promise<ArchiveAssessment> {
+  return invoke<ArchiveAssessment>("assess_archive_root", { path });
+}
+
+/** 推荐归档位置候选（用户核心目录下的专用子目录）。 */
+export function recommendedArchiveRoots(): Promise<string[]> {
+  return invoke<string[]>("recommended_archive_roots");
+}
+
 /** 内置扩展名映射表（只读，单一来源在后端） */
 export function listClassifyDefaults(): Promise<ClassifyDefaultEntry[]> {
   return invoke<ClassifyDefaultEntry[]>("list_classify_defaults");

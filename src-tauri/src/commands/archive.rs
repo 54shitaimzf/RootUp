@@ -3,6 +3,8 @@ use crate::core::archive::{
     move_error, target_collides, unique_dest, ArchiveBatch, ArchiveFailure, ArchiveMove, ArchiveOp,
     ArchiveOutcome, MAX_BATCH_FILES, PROJECT_ARCHIVE_DIR,
 };
+use crate::core::archive_guard::assess_archive_root as assess_archive_root_inner;
+use crate::core::archive_guard::ArchiveAssessment;
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector, ProjectKind};
@@ -12,8 +14,8 @@ use crate::infra::archive_engine::{
     apply_project_journal, archive_files as engine_archive_files, next_batch_id, remap_target,
     undo_one_file, ProjectJournal, ProjectLinkEffect, ProjectSideEffects,
 };
-use crate::infra::shortcut;
 use crate::infra::settings_io;
+use crate::infra::shortcut;
 use crate::infra::storage;
 use crate::infra::time::now_millis;
 use std::path::{Path, PathBuf};
@@ -361,4 +363,26 @@ pub fn list_archive_batches(app: AppHandle, limit: i64) -> Result<Vec<ArchiveBat
         .lock()
         .map_err(|e| e.to_string())?
         .list_archive_batches(limit)
+}
+
+/// 归档根安全评估（只读）：前端在选择 / 输入归档位置时即时展示风险分级。
+/// 规则真源在 `core/archive_guard`，此处不做任何判定逻辑。
+#[tauri::command]
+pub fn assess_archive_root(path: String) -> Result<ArchiveAssessment, String> {
+    Ok(assess_archive_root_inner(&path))
+}
+
+/// 推荐归档位置候选（只读）：用户核心目录下的专用子目录，天然通过安全评估。
+/// 文档目录可能被系统重定向，存在性由前端展示层提示，此处不校验。
+#[tauri::command]
+pub fn recommended_archive_roots() -> Result<Vec<String>, String> {
+    let profile = std::env::var("USERPROFILE").unwrap_or_default();
+    if profile.is_empty() {
+        return Ok(Vec::new());
+    }
+    let candidates = [
+        format!("{profile}/Documents/RootUp 档案库"),
+        format!("{profile}/RootUpArchive"),
+    ];
+    Ok(candidates.into_iter().map(|p| normalize_path(&p)).collect())
 }

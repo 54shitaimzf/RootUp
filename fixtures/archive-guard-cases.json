@@ -1,0 +1,17 @@
+{
+  "comment": "归档根安全评估契约：Rust core/archive_guard.rs 为规则真源（逐用例断言 level+reason）；前端只消费 assess_archive_root 命令结果，测试用同一矩阵 mock 三种等级的展示行为。路径统一 / 分隔、大小写不敏感。",
+  "cases": [
+    { "input": "C:/Windows/Temp", "level": "blocked", "reason": "protected_tree" },
+    { "input": "D:/Program Files/App", "level": "blocked", "reason": "protected_tree" },
+    { "input": "C:/ProgramData", "level": "blocked", "reason": "protected_tree" },
+    { "input": "C:/Users/Admin/AppData/Roaming", "level": "blocked", "reason": "appdata_tree" },
+    { "input": "C:/Users/Admin/AppData/Local/Temp", "level": "blocked", "reason": "appdata_tree" },
+    { "input": "D:/", "level": "blocked", "reason": "drive_root" },
+    { "input": "C:/Users/Admin", "level": "warn", "reason": "user_profile" },
+    { "input": "C:/Users/Admin/Desktop", "level": "warn", "reason": "user_core_dir" },
+    { "input": "C:/Users/Admin/Downloads", "level": "warn", "reason": "user_core_dir" },
+    { "input": "C:/Users/Admin/Documents/RootUp 档案库", "level": "safe", "reason": null },
+    { "input": "D:/RootUpArchive", "level": "safe", "reason": null },
+    { "input": "", "level": "safe", "reason": null }
+  ]
+}

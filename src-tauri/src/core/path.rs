@@ -135,7 +135,8 @@ pub fn validate_dir_path(input: &str) -> Result<String, String> {
     Ok(normalized)
 }
 
-fn is_drive_root(path: &str) -> bool {
+/// 盘根判定（`C:/`、`/`）。监控目录与归档根校验共用。
+pub fn is_drive_root(path: &str) -> bool {
     path == "/" || (path.len() == 3 && path.as_bytes()[1] == b':' && path.ends_with('/'))
 }
 

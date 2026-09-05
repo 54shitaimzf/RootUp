@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod archive_guard;
 pub mod classify;
 pub mod delta;
 pub mod events;
