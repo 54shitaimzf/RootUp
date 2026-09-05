@@ -236,8 +236,9 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 ### 数据库与批量
 
-- `ScanParams.batch_size` 默认 2000；`upsert_many` 多行 VALUES（子批 1000）+ 冲突更新（first_seen 不覆盖）；FTS 未启用时表存在性只检查一次；扫描日志含 `db_ms`，MFT 阶段含 `read_ms / parse_ms / resolve_ms`。
-- SQLite 迁移阶梯 v1–v7 集中在 `infra/index_store.rs::migrate`；USN 状态持久化于 `usn_state`（schema v5，按卷一行）。
+- `ScanParams.batch_size` 默认 2000；`upsert_many` 多行 VALUES（子批 1000，9 参数/行含 kind）+ 冲突更新（first_seen 不覆盖）；FTS 未启用时表存在性只检查一次；扫描日志含 `db_ms`，MFT 阶段含 `read_ms / parse_ms / resolve_ms`。
+- SQLite 迁移阶梯 v1–v8 集中在 `infra/index_store.rs::migrate`；v8（0.8.7 阶段二）把 `files` 表升级为统一单元表 `units`：`kind: file | project | software`（存量记录迁移后恒为 file）+ `project_kind` 扩展列（software 列留 0.8.8），索引重建为 `idx_units_state / idx_units_modified`，FTS 表同步改名 `units_fts`；USN 状态持久化于 `usn_state`（schema v5）。
+- **项目单元派生同步**：`infra/project_sync.rs` 把 `discover_projects` 结果 upsert 为 `kind=project` 单元、失效项标记 deleted——发现逻辑（core/project.rs）是唯一真源，units 只作查询派生层；同步时机为启动延迟服务与监控 / 项目目录变更后（均后台执行）。
 - walkdir 微优化：跳过集与时间戳在枚举开始时快照一次（不再逐目录加锁/取时钟），忽略规则与符号链接语义不变。
 
 ### USN 启动补账
@@ -258,7 +259,7 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 ## 查询、分页与索引形态
 
-- **搜索语法**：`parse_query` 解析 `type:` / `label:`（别名 `tag:`）/ `state:`（别名 `status:`）/ `size:>/<N~M`（B/KB/MB/GB）/ `before:` / `after:`（毫秒时间戳或 `YYYY-MM-DD` 本地时区）；非法值与未知前缀回落为普通文本；同维度 OR、跨维度 AND。
+- **搜索语法**：`parse_query` 解析 `type:`（精确扩展名）/ `cat:`（别名 `category:`，类别 key 按标签匹配）/ `kind:`（单元类型 file/project/software，0.8.7 阶段二）/ `label:`（别名 `tag:`）/ `state:`（别名 `status:`）/ `size:>/<N~M`（B/KB/MB/GB）/ `before:` / `after:`（毫秒时间戳或 `YYYY-MM-DD` 本地时区）；非法值与未知前缀回落为普通文本；同维度 OR、跨维度 AND。语法真源在 `core/query.rs`，前端只生成 token 不解释（生成侧契约 `fixtures/query-grammar-cases.json` 双端同跑）。
 - **显式 AND 语法**：`+label:v` 与 `label:a AND label:b`（AND 大小写不敏感、仅相邻标签生效、孤立 AND 回落普通文本）解析进 `labels_all`，SQL 逐条 LIKE 且 AND 连接；同维度默认 OR 语义不变。解析契约见 `core/query.rs` 单测。
 - **排序白名单在命令层**：`sort_by`（name/type/size/modified/labels）与 `sort_dir`（asc/desc）由 `commands/files.rs` 白名单校验（非法值直接报错，不回落文本），不在 `parse_query` 内解析。排序恒为 `ORDER BY <白名单列> <dir>, id DESC`。
 - **查询分页**：`FileQuery.cursor`（不透明 keyset 游标，JSON `[排序值, id]`）优先于 OFFSET；`QueryPage.next_cursor` 表示还有下一页（多取一行探测）；游标类型必须与排序列一致，否则查询被拒。
@@ -275,7 +276,9 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 - **重命名语义**：`RenamedFrom` 对 indexed/archived 记录视为旧路径删除（`next_state` 迁移到 deleted）；pending 记录仅移除待确认项。rename 配对迁移属于 `DeltaSource` 职责。
 - **命令**：`archive_files`（手动/批量共用引擎）、`archive_filtered`（后端重查，仅 indexed、上限 200）、`archive_project`（整目录移动 + `project_dirs` 更新 + `shortcuts` 表登记项重建 `.lnk`）、`undo_archive`、`list_archive_batches`；日志前缀 `archive:` / `unit:` / `shortcut:`。
 - **自动归档**：`ArchiveService` 有界后台队列；监听器新稳定文件入库时，若 `auto_archive` 开启且分类明确（非 other）则入队；自动批次同样可撤销。
-- **前端**：文件页行内归档 + 批量模式（复选）/ 筛选结果归档（危险色确认弹窗）、成功横幅带撤销、自动归档常驻提示条（可关闭本次）；项目页归档确认；设置页「归档设置」弹窗（根目录、开关、最近归档）。
+- **归档根安全评估（archive_guard，0.8.7 归档安全强化）**：`core/archive_guard.rs::assess_archive_root` 为规则真源——系统目录树（Windows / Program Files / ProgramData）、软件存盘区（AppData 三分支整树）与盘根为 **blocked**；用户根与桌面 / 文档 / 下载等核心目录本身为 **warn**；其余及上述目录的子目录为 **safe**（推荐形态）。判定矩阵契约 `fixtures/archive-guard-cases.json`；前端只消费 `assess_archive_root` 命令结果做展示分级，不复算规则。写入拦截在 `settings_io` 校验链：**仅当本次 dirty 含 `archive_root`** 时拒绝 blocked 新值（结构化错误码 `archive_guard.blocked|<reason>`）——存量违规配置不锁死其他字段写入。`recommended_archive_roots` 命令给出用户目录下专用子目录候选（首启向导与设置弹窗共用）。
+- **自动归档交互纪律**：托盘菜单**不提供**自动归档开关（消除零确认入口）；开启只允许在设置弹窗内经危险确认完成（关闭方向直接生效）。
+- **前端**：文件页行内归档 + 批量模式（复选）/ 筛选结果归档（危险色确认弹窗）、成功横幅带撤销、自动归档常驻提示条（可关闭本次，warn 色）；项目页归档确认；设置页「归档设置」弹窗（根目录实时评估告警 + 推荐位置、开关带确认、最近归档）；首启向导第③步「选择归档位置」必须四选一（推荐候选 / 浏览 / 暂不启用）才能继续。
 - **清理原语与对账预留**：移除监控目录即调用 `mark_under_roots_deleted`（作为 v0.8.8 分类变更日志的「删除事件」来源）；启动归档对账挂载在 `app.rs setup` 紧随 `refresh_managed_state`；`local_file` 临时文件统一 `*.json.tmp` 供启动清理；`archive_ops` 的 source/dest/undone_at 结构即对账依据（v0.8.8 实现，约定已固化）。
 
 ## 文件页搜索与筛选

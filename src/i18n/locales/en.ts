@@ -819,6 +819,10 @@ export default {
     v086Item2: "Scanning is much faster: about 4x on a real 70k-file desktop and up to 12x on large synthetic folders",
     v086Item3: "Lighter app: pages load on demand, so first load and the installer are smaller",
     v086Item4: "The scanner picks the fastest path by folder size and falls back automatically if anything fails",
+    v087Item1: "A safer Library: system and app folders can no longer be used as the archive location, with live guidance and suggested spots",
+    v087Item2: "Auto archive with confidence: enabling now asks for confirmation, and the tray no longer toggles it",
+    v087Item3: "New view switcher on the Files page: All / Files / Projects / Software, plus kind: search syntax",
+    v087Item4: "Course details now show related files and projects, and courses support aliases",
   },
   helpSearch: {
     placeholder: "Search help: archive, schedule, IDE…",
