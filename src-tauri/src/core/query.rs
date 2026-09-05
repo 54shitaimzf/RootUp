@@ -20,6 +20,8 @@ pub struct FileQuery {
     pub categories: Vec<String>,
     /// `type:` 精确扩展名（小写）
     pub types: Vec<String>,
+    /// `kind:` 单元类型（file / project / software，小写）
+    pub kinds: Vec<String>,
     /// `label:` / `tag:` 标签 key
     pub labels: Vec<String>,
     /// 显式 AND 标签组：`+label:` 与 `label:a AND label:b` 语法；与 labels（OR）同时满足
@@ -50,6 +52,7 @@ impl Default for FileQuery {
             words: Vec::new(),
             categories: Vec::new(),
             types: Vec::new(),
+            kinds: Vec::new(),
             labels: Vec::new(),
             labels_all: Vec::new(),
             states: Vec::new(),
@@ -109,6 +112,8 @@ pub fn parse_query(input: &str) -> FileQuery {
             push_category(&mut query, value);
         } else if let Some(value) = token.strip_prefix("type:") {
             push_non_empty(&mut query.types, &value.to_ascii_lowercase());
+        } else if let Some(value) = token.strip_prefix("kind:") {
+            push_kind(&mut query, value);
         } else if let Some(value) = token.strip_prefix("label:") {
             if and_required[i] {
                 push_non_empty(&mut query.labels_all, value);
@@ -191,6 +196,16 @@ fn push_category(query: &mut FileQuery, value: &str) {
         push_non_empty(&mut query.categories, &lower);
     } else {
         query.words.push(format!("cat:{value}"));
+    }
+}
+
+/// 合法单元类型（与 core/index.rs UnitKind 一致）；未知值回落为普通文本。
+fn push_kind(query: &mut FileQuery, value: &str) {
+    let lower = value.to_ascii_lowercase();
+    if matches!(lower.as_str(), "file" | "project" | "software") {
+        push_non_empty(&mut query.kinds, &lower);
+    } else {
+        query.words.push(format!("kind:{value}"));
     }
 }
 

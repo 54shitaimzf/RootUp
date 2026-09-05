@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### 0.8.7 归档安全与自动归档强化（功能）
+
+- **归档根安全评估**（`core/archive_guard.rs`，规则真源）：三级判定——系统目录树（Windows / Program Files / ProgramData）与软件存盘区（AppData 三分支整树）及盘根为 **blocked**（后端直接拒绝）；用户根与桌面 / 文档 / 下载等核心目录本身为 **warn**（前端二次确认）；其余及上述目录的**子目录**为 safe（「文档下新建专用子目录」即推荐形态）。判定矩阵入 `fixtures/archive-guard-cases.json`。
+- 拦截策略：`settings_io` 单入口仅在本次显式修改 `archive_root` 时执行 blocked 拒绝（结构化错误码 `archive_guard.blocked|<reason>`）——存量违规配置（如盘根）不锁死其他设置字段的写入，用户主动换位置时才被拦下并引导。
+- 归档设置弹窗：输入 / 浏览后防抖实时评估并分级告警（blocked 禁用保存、warn 弹危险确认）；新增「推荐位置」候选（后端 `recommended_archive_roots`，用户目录下专用子目录）；后端拦截错误以结构化码兜底。
+- **自动归档严肃化**：开启方向需危险确认弹层（后果说明：新文件自动移入档案库、跨盘/占用失败保留原位），关闭方向直接生效；开启态按钮 amber 化 + 警示图标；设置页归档行「已开启」改 amber 徽章；文件页自动归档横幅升为 warn 色。
+- **托盘移除自动归档菜单项**：开关只保留在设置弹窗内（带确认），消除「单击托盘即开启、零确认」的危险入口；旧菜单缓存点击兜底唤起主窗口。
+- **首启向导 3→4 步**：新增第③步「选择归档位置」——推荐候选 + 原生浏览 + 实时安全评估 + 「暂不启用归档」四选一，**必须做出选择才能进入下一步**；选择经增量设置命令落盘。localStorage 标记升级 v2，已完成 v1 的老用户不强制重跑。
+
+### 0.8.7 阶段二（units 统一索引）
+
+- **schema v8**：`files` 表迁移为统一单元表 `units`（`kind: file | project | software` + `project_kind` 扩展列），索引重建为 `idx_units_*`，FTS 表同步改名；迁移含数据保全测试（标签 / 归档墓碑 / 旧表移除 / 新列可写）。
+- **`kind:` 搜索语法**：合法值 file / project / software（未知回落普通文本，同 `cat:` 模式）；契约用例入 `fixtures/query-grammar-cases.json`；前端自动补全新增「按内容类型」关键词与三个值候选。
+- **项目单元入库**：新增 `infra/project_sync.rs` 把 `discover_projects` 发现结果派生写入 units（kind=project），移除的项目单元标记 deleted；发现逻辑仍是唯一真源，units 只作查询派生层。同步时机：启动延迟服务（后台）与监控 / 项目目录变更后。
+- **课程挂钩**：`Course` 增别名字段（serde default 兼容旧数据），课程编辑表单增别名输入（逗号分隔）；新命令 `course_overview` 返回相关文件（课程标签命中）与相关项目（项目名 / 路径按课程名或别名命中）；课程详情弹层展示「相关文件与项目」。
+- **文件页四视图**：全部 / 文件 / 项目 / 软件 tabs（`kind:` token 注入查询，前端只生成不解释）；默认「文件」视图保持既有行为零回归，软件视图为阶段三预留（数据就绪即显）。
+
 ### 0.8.7 架构小修（缺口收口与错误码最小切片）
 
 - 架构核查（五提交治理后复查）发现的 4 个残留缺口收口：前端 `updateSettings` 参数类型收窄为 `Partial<Omit<Settings, "watched_dirs" | "project_dirs" | "version">>`（编译期拦截不可写字段，与后端 `SettingsPatch` 白名单对称）；`useSettings` flush 失败回填挂起补丁（乐观态不再与后端静默分叉，下次事件冲刷 / commit 吸收时重试，附测试）；`schemes.rs` 模块注释中已删除的 `set_settings` 引用改为 `update_settings`；`QueryPage.total=-1` 哨兵语义补入前端类型注释（0.8.8 以 `totalKnown`/`hasMore` 替代）。

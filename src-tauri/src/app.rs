@@ -166,6 +166,7 @@ pub fn run() {
             study_commands::save_study_data,
             study_commands::study_store_exists,
             study_commands::reapply_study_labels,
+            study_commands::course_overview,
             schemes_commands::list_schemes,
             schemes_commands::save_scheme,
             schemes_commands::rename_scheme,

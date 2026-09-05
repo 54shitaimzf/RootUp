@@ -35,6 +35,9 @@ pub struct Course {
     pub color: String,
     #[serde(default)]
     pub label_key: String,
+    /// 课程别名（0.8.7 阶段二）：项目名/路径按课程名或别名匹配；旧数据自动兼容为空。
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -321,6 +324,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "sky".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-2".into(),
@@ -334,6 +338,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "violet".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-3".into(),
@@ -347,6 +352,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "emerald".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-4".into(),
@@ -360,6 +366,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "cyan".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-5".into(),
@@ -373,6 +380,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "amber".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-6".into(),
@@ -386,6 +394,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "rose".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-7".into(),
@@ -399,6 +408,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: None,
             color: "lime".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-8".into(),
@@ -412,6 +422,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: Some("1-2".into()),
             color: "slate".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-9".into(),
@@ -425,6 +436,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: Some("3-4".into()),
             color: "blue".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
         Course {
             id: "c-demo-10".into(),
@@ -438,6 +450,7 @@ pub fn scenario_courses() -> Vec<Course> {
             week_range: Some("5-6".into()),
             color: "teal".into(),
             label_key: String::new(),
+            aliases: vec![],
         },
     ]
 }
@@ -633,6 +646,7 @@ mod tests {
             week_range: None,
             color: "slate".into(),
             label_key: String::new(),
+            aliases: vec![],
         });
         ensure_label_keys(&mut data);
         assert!(validate_study_data(&data).is_err());

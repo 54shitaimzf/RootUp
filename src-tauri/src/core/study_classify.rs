@@ -222,6 +222,7 @@ mod tests {
                     week_range: None,
                     color: "blue".into(),
                     label_key: "course-overlap-1".into(),
+                    aliases: vec![],
                 },
                 Course {
                     id: "c-overlap-2".into(),
@@ -235,6 +236,7 @@ mod tests {
                     week_range: None,
                     color: "green".into(),
                     label_key: "course-overlap-2".into(),
+                    aliases: vec![],
                 },
                 Course {
                     id: "c-overlap-3".into(),
@@ -248,6 +250,7 @@ mod tests {
                     week_range: None,
                     color: "red".into(),
                     label_key: "course-overlap-3".into(),
+                    aliases: vec![],
                 },
             ],
         );
@@ -309,6 +312,7 @@ mod tests {
                 week_range: None,
                 color: "#f59e0b".into(),
                 label_key: "course-math-dup".into(),
+                aliases: vec![],
             }],
         );
 

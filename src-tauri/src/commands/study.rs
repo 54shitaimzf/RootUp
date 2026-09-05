@@ -1,5 +1,6 @@
 //! 学业数据命令：加载/保存/存在性/定向重分类。
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
+use crate::core::index::FileRecord;
 use crate::core::index::IndexStore;
 use crate::core::study::{ensure_label_keys, validate_study_data, StudyData};
 use crate::core::study_classify::{reapply_labels, SharedStudyClassifier, StudyClassifier};
@@ -79,4 +80,64 @@ pub fn save_study_data(app: AppHandle, mut data: StudyData) -> Result<StudyData,
 #[tauri::command]
 pub fn reapply_study_labels(app: AppHandle) -> Result<i64, String> {
     reapply(&app)
+}
+
+/// 课程概览（0.8.7 阶段二课程挂钩）：相关文件（课程标签命中）+ 相关项目
+/// （项目名/路径按课程名或别名命中，大小写不敏感）。均为只读查询。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CourseOverview {
+    pub files: Vec<FileRecord>,
+    pub projects: Vec<FileRecord>,
+}
+
+#[tauri::command]
+pub fn course_overview(app: AppHandle, course_id: String) -> Result<CourseOverview, String> {
+    use crate::core::query::parse_query;
+
+    let data = store(&app)?.load();
+    let course = data
+        .courses_by_semester
+        .values()
+        .flatten()
+        .find(|c| c.id == course_id)
+        .ok_or_else(|| format!("课程不存在: {course_id}"))?
+        .clone();
+
+    let store = app.state::<Arc<Mutex<dyn IndexStore>>>().inner().clone();
+    let store = store.lock().map_err(|e| e.to_string())?;
+
+    // 相关文件：课程标签（course-<label_key>）命中的已索引文件
+    let mut files_query = parse_query(&format!("label:{} state:indexed", course.label_key));
+    files_query.need_total = false;
+    files_query.limit = 200;
+    let files = store.query(&files_query)?.items;
+
+    // 相关项目：kind=project 单元，name/path 命中课程名或任一别名（逐关键词 OR，合并去重）
+    let mut keywords: Vec<String> = Vec::new();
+    let course_name = course.name.trim().to_string();
+    if !course_name.is_empty() {
+        keywords.push(course_name);
+    }
+    for alias in &course.aliases {
+        let alias = alias.trim().to_string();
+        if !alias.is_empty() {
+            keywords.push(alias);
+        }
+    }
+    let mut projects: Vec<FileRecord> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = Default::default();
+    for keyword in keywords {
+        let mut q = parse_query("kind:project state:indexed");
+        q.words = vec![keyword];
+        q.need_total = false;
+        q.limit = 100;
+        for record in store.query(&q)?.items {
+            if seen.insert(record.path.clone()) {
+                projects.push(record);
+            }
+        }
+    }
+
+    Ok(CourseOverview { files, projects })
 }

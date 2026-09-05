@@ -503,6 +503,15 @@ impl IndexStore for SqliteIndexStore {
             conditions.push(format!("state IN ({})", placeholders.join(",")));
             params.extend(query.states.iter().map(|s| Value::Text(s.clone())));
         }
+        // kind: 单元类型过滤（file/project/software）；未指定时不限定——
+        // 存量查询（默认全部）行为不变，project/software 单元同样出现在默认列表中
+        if !query.kinds.is_empty() {
+            let placeholders: Vec<String> = (0..query.kinds.len())
+                .map(|i| format!("?{}", params.len() + i + 1))
+                .collect();
+            conditions.push(format!("kind IN ({})", placeholders.join(",")));
+            params.extend(query.kinds.iter().map(|k| Value::Text(k.clone())));
+        }
         if let Some(min) = query.size_min {
             conditions.push(format!("size >= ?{}", params.len() + 1));
             params.push(Value::Integer(min));

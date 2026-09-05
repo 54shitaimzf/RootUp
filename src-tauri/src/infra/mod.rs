@@ -10,6 +10,7 @@ pub mod logging;
 pub mod managed_state;
 pub mod mft;
 pub mod ntfs;
+pub mod project_sync;
 pub mod scanner;
 pub mod scheme_store;
 pub mod settings_io;
