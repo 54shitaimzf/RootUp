@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Pencil, Trash2 } from "../../../theme/icons";
 import { Button } from "../../../components/Button";
@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { DialogFooter } from "../../../components/DialogFooter";
 import { Modal } from "../../../components/Modal";
 import { LABEL_COLORS } from "../../../lib/labelDefs";
+import { courseOverview, type CourseOverview } from "../../../lib/tauri";
 import {
   formatClockRange,
   homeworkStatusTone,
@@ -54,6 +55,17 @@ export function CourseDetailDialog({
   const { t, i18n } = useTranslation();
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [overview, setOverview] = useState<CourseOverview | null>(null);
+  useEffect(() => {
+    if (!open || !course) {
+      setOverview(null);
+      return;
+    }
+    // 课程挂钩（0.8.7 阶段二）：相关文件/项目为只读查询，失败静默（不影响详情主体）
+    courseOverview(course.id)
+      .then(setOverview)
+      .catch(() => setOverview(null));
+  }, [open, course?.id]);
   if (!course) return null;
 
   const weekText =
@@ -123,6 +135,45 @@ export function CourseDetailDialog({
             </div>
           ))}
         </dl>
+        {overview && (overview.files.length > 0 || overview.projects.length > 0) && (
+          <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <h4 className="text-sm font-semibold text-secondary">
+              {t("study.courseRelated")}
+            </h4>
+            {overview.projects.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-muted">{t("filter.project")}</p>
+                <ul className="mt-1 space-y-1">
+                  {overview.projects.slice(0, 5).map((project) => (
+                    <li
+                      key={project.id}
+                      title={project.path}
+                      className="truncate rounded-md bg-slate-50 px-3 py-1.5 text-xs text-secondary dark:bg-slate-800"
+                    >
+                      {project.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {overview.files.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-muted">{t("filter.file")}</p>
+                <ul className="mt-1 space-y-1">
+                  {overview.files.slice(0, 5).map((file) => (
+                    <li
+                      key={file.id}
+                      title={file.path}
+                      className="truncate rounded-md bg-slate-50 px-3 py-1.5 text-xs text-secondary dark:bg-slate-800"
+                    >
+                      {file.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800">
           <h4 className="text-sm font-semibold text-secondary">
             {t("study.courseHomework")}

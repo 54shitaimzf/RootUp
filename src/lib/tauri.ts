@@ -204,6 +204,11 @@ export interface FileRecord {
   first_seen: number;
   modified: number;
   state: FileState;
+  /**
+   * 统一单元类型（0.8.7 阶段二）：file / project / software。
+   * 可选兼容旧序列化；缺省按 file 处理（resolveUnitKind）。
+   */
+  kind?: "file" | "project" | "software";
 }
 
 /** 与 Rust 侧 core::query::QueryPage 对应 */

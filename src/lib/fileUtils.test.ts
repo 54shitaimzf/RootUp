@@ -61,6 +61,12 @@ describe("filterFiles", () => {
 });
 
 describe("buildQuery", () => {
+  it("kind 产 kind: token，all 视图不产（四视图契约）", () => {
+    expect(buildQuery({ kind: "project" })).toBe("kind:project");
+    expect(buildQuery({ text: "笔记", kind: "file" })).toBe("笔记 kind:file");
+    expect(buildQuery({ text: "笔记", kind: undefined })).toBe("笔记");
+  });
+
   it("类别产 cat: token，重复去重（自动补全与 chips 重叠）", () => {
     expect(
       buildQuery({

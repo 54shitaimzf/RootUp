@@ -80,6 +80,10 @@ export function FilePage({
   const [showLoadingBar, setShowLoadingBar] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [autoHintHidden, setAutoHintHidden] = useState(false);
+  /** 四视图（0.8.7 阶段二）：默认「文件」保持既有行为零回归；kind 注入 kind: token。 */
+  const [view, setView] = useState<"all" | "file" | "project" | "software">(
+    "file",
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -133,8 +137,15 @@ export function FilePage({
   );
 
   const queryString = useMemo(
-    () => buildQuery({ text: debouncedQuery, categories: selectedCategories, states, labels }),
-    [debouncedQuery, selectedCategories, states, labels],
+    () =>
+      buildQuery({
+        text: debouncedQuery,
+        kind: view === "all" ? undefined : view,
+        categories: selectedCategories,
+        states,
+        labels,
+      }),
+    [debouncedQuery, view, selectedCategories, states, labels],
   );
 
   const autocompleteCandidates = useMemo(
@@ -260,6 +271,42 @@ export function FilePage({
         description={t("pages.files.description")}
         actions={<PageHelpButton target="tasks.files" />}
       />
+
+      {/* 四视图切换：全部 / 文件 / 项目 / 软件（kind: 语法，见 model.ts 视图 token） */}
+      <div
+        role="tablist"
+        aria-label={t("files.viewSwitchLabel")}
+        className="mb-2 flex gap-1.5"
+      >
+        {(["all", "file", "project", "software"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={view === value}
+            onClick={() => {
+              setView(value);
+              setOffset(0);
+              void logEvent("info", `ui: 文件页视图 ${value}`);
+            }}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              view === value
+                ? "bg-brand-700 text-white dark:bg-brand-500"
+                : "bg-slate-100 text-secondary hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+            }`}
+          >
+            {t(
+              value === "all"
+                ? "filter.all"
+                : value === "file"
+                  ? "filter.file"
+                  : value === "project"
+                    ? "filter.project"
+                    : "filter.software",
+            )}
+          </button>
+        ))}
+      </div>
 
       <SearchAutocomplete
         text={query}

@@ -4,6 +4,8 @@ import type { FileRecord, FileState } from "./tauri";
 /** 筛选器组合参数（新手路径：点选 → 生成查询串） */
 export interface QueryParts {
   text?: string;
+  /** 单元类型（产 kind: token；四视图切换用，all 视图不产） */
+  kind?: "file" | "project" | "software";
   /** 类别 key（产 cat: token；type: 是精确扩展名语义，勿混用） */
   categories?: string[];
   states?: string[];
@@ -21,6 +23,7 @@ export function buildQuery(parts: QueryParts): string {
   const tokens: string[] = [];
   const text = parts.text?.trim();
   if (text) tokens.push(text);
+  if (parts.kind) tokens.push(`kind:${parts.kind}`);
   for (const category of parts.categories ?? []) {
     tokens.push(`cat:${category}`);
   }

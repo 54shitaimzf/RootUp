@@ -47,6 +47,8 @@ interface FormState {
   weekRule: WeekRule;
   weekRange: string;
   color: LabelColorKey | "auto";
+  /** 别名（逗号分隔）：项目名/路径按课程名或别名匹配 */
+  aliases: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -59,6 +61,7 @@ const EMPTY_FORM: FormState = {
   weekRule: "all",
   weekRange: "",
   color: "auto",
+  aliases: "",
 };
 
 export function CourseFormDialog({
@@ -106,6 +109,7 @@ export function CourseFormDialog({
         weekRule: initial.weekRule,
         weekRange: initial.weekRange ?? "",
         color: initial.color,
+        aliases: (initial.aliases ?? []).join(", "),
       });
     } else {
       setForm(EMPTY_FORM);
@@ -234,6 +238,10 @@ export function CourseFormDialog({
         form.color === "auto"
           ? autoAssignCourseColor(existingColors, reservedColors)
           : form.color,
+      aliases: form.aliases
+        .split(/[,，]/)
+        .map((alias) => alias.trim())
+        .filter(Boolean),
     });
     onClose();
   };
@@ -315,6 +323,21 @@ export function CourseFormDialog({
                     setForm({ ...form, location: event.target.value })
                   }
                   placeholder={t("study.locationPlaceholder")}
+                />
+              </Field>
+              <Field
+                label={t("study.aliases")}
+                htmlFor="course-aliases"
+                hint={t("study.aliasesHint")}
+              >
+                <Input
+                  id="course-aliases"
+                  size="sm"
+                  value={form.aliases}
+                  onChange={(event) =>
+                    setForm({ ...form, aliases: event.target.value })
+                  }
+                  placeholder={t("study.aliasesPlaceholder")}
                 />
               </Field>
             </div>
