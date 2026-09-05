@@ -15,9 +15,19 @@ vi.mock("../lib/tauri", () => ({
   listDetectedTools: vi.fn(),
   openUrl: vi.fn(),
   logEvent: vi.fn(),
+  assessArchiveRoot: vi.fn(),
+  recommendedArchiveRoots: vi.fn(),
+  updateSettings: vi.fn(),
+  openDirectoryDialog: vi.fn(),
 }));
 
 import { listDetectedTools, openUrl } from "../lib/tauri";
+
+import {
+  assessArchiveRoot,
+  recommendedArchiveRoots,
+  updateSettings,
+} from "../lib/tauri";
 
 function Trigger({ target }: { target?: string }) {
   const { openHelp } = useHelpCenter();
@@ -42,6 +52,12 @@ describe("HelpCenter", () => {
     window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     vi.mocked(listDetectedTools).mockResolvedValue(["vscode", "typora"]);
     vi.mocked(openUrl).mockResolvedValue(undefined);
+    vi.mocked(recommendedArchiveRoots).mockResolvedValue([]);
+    vi.mocked(assessArchiveRoot).mockResolvedValue({
+      level: "safe",
+      reason: null,
+    });
+    vi.mocked(updateSettings).mockResolvedValue(undefined);
   });
 
   it("主动入口打开帮助中心并显示新手分组", () => {
@@ -79,12 +95,23 @@ describe("HelpCenter", () => {
     expect(await screen.findByText("当前检测到：vscode、typora")).toBeInTheDocument();
   });
 
-  it("未标记首次引导时自动打开欢迎弹窗并可标记完成", () => {
+  it("未标记首次引导时自动打开向导：归档位置步必须选择，走完才标记完成", () => {
     window.localStorage.removeItem(ONBOARDING_STORAGE_KEY);
     renderCenter();
+    const dialog = () =>
+      screen.getByRole("dialog", { name: "欢迎使用 RootUp" });
+    expect(dialog()).toBeInTheDocument();
+    // 第 1、2 步为介绍，直接下一步
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    // 第 3 步（归档位置）：未选择时下一步不前进，提示必选
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     expect(
-      screen.getByRole("dialog", { name: "欢迎使用 RootUp" }),
+      screen.getByText(/请先选择一个归档位置/),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "暂不启用归档" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    // 第 4 步结束 → 标记完成
     fireEvent.click(screen.getByRole("button", { name: "开始使用" }));
     expect(isOnboardingDone()).toBe(true);
   });

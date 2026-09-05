@@ -68,6 +68,8 @@ vi.mock("../lib/tauri", () => ({
   undoArchive: vi.fn(),
   listWatchedDirs: vi.fn(),
   watchedDirHealth: vi.fn(),
+  assessArchiveRoot: vi.fn(),
+  recommendedArchiveRoots: vi.fn(),
   logEvent: vi.fn(),
 }));
 
@@ -91,6 +93,8 @@ import {
   resetSettings,
   updateSettings,
   undoArchive,
+  assessArchiveRoot,
+  recommendedArchiveRoots,
 } from "../lib/tauri";
 
 const SETTINGS: Settings = {
@@ -149,6 +153,11 @@ describe("SettingsPage", () => {
     vi.mocked(listArchiveBatches).mockResolvedValue([]);
     vi.mocked(listCommonDirs).mockResolvedValue([]);
     vi.mocked(countUnderRoot).mockResolvedValue(0);
+    vi.mocked(assessArchiveRoot).mockResolvedValue({
+      level: "safe",
+      reason: null,
+    });
+    vi.mocked(recommendedArchiveRoots).mockResolvedValue([]);
     vi.mocked(resolveDirTarget).mockImplementation(async (path) => path);
     vi.mocked(openDirectoryDialog).mockResolvedValue(null);
     vi.mocked(removeWatchedDir).mockResolvedValue(undefined);
@@ -309,6 +318,8 @@ describe("SettingsPage", () => {
       target: { value: "C:/Archive" },
     });
     fireEvent.click(screen.getByRole("button", { name: "开启自动归档" }));
+    // 开启方向需确认后果
+    fireEvent.click(screen.getByRole("button", { name: "仍要开启" }));
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith(

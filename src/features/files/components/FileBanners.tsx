@@ -94,7 +94,8 @@ export function FileBanners({
       )}
 
       {autoArchiveHintVisible && (
-        <Banner variant="info" className="mt-4" onClose={onDismissAutoHint}>
+        // 自动归档开启是高风险状态：warn 色提醒新文件会被自动移动
+        <Banner variant="warn" className="mt-4" onClose={onDismissAutoHint}>
           {t("files.autoArchiveOn")}
         </Banner>
       )}
