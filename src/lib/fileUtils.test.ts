@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import archiveDestCases from "../../fixtures/archive-dest-cases.json";
 import type { FileRecord } from "./tauri";
 import {
   archiveDestPath,
@@ -292,6 +293,12 @@ describe("归档目的地路径派生", () => {
     expect(archiveDestPath("C:/Arc/", "no-ext", "b.bin")).toBe(
       "C:/Arc/other/b.bin",
     );
+  });
+
+  it("archiveDestPath 与后端 dest 契约一致（archive-dest-cases.json）", () => {
+    for (const c of archiveDestCases.cases) {
+      expect(archiveDestPath(c.root, c.labels, c.name)).toBe(c.dest);
+    }
   });
 });
 

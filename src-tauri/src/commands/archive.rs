@@ -1,6 +1,6 @@
 //! 归档命令：手动/筛选批量/项目归档、撤销、最近归档列表。
 use crate::core::archive::{
-    move_error, target_collides, unique_dest, ArchiveBatch, ArchiveFailure, ArchiveOp,
+    move_error, target_collides, unique_dest, ArchiveBatch, ArchiveFailure, ArchiveMove, ArchiveOp,
     ArchiveOutcome, MAX_BATCH_FILES, PROJECT_ARCHIVE_DIR,
 };
 use crate::core::index::IndexStore;
@@ -185,6 +185,10 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
         batch_id: Some(batch_id),
         archived: 1,
         failed: Vec::new(),
+        results: vec![ArchiveMove {
+            source: path,
+            dest: dest_str,
+        }],
     })
 }
 
@@ -203,6 +207,7 @@ pub fn undo_archive(app: AppHandle, batch_id: i64) -> Result<ArchiveOutcome, Str
         batch_id: Some(batch_id),
         archived: 0,
         failed: Vec::new(),
+        results: Vec::new(),
     };
     for op in ops {
         if op.undone_at.is_some() {
@@ -219,7 +224,13 @@ pub fn undo_archive(app: AppHandle, batch_id: i64) -> Result<ArchiveOutcome, Str
             undo_one_file(&store, &op)
         };
         match result {
-            Ok(()) => outcome.archived += 1,
+            Ok(()) => {
+                outcome.archived += 1;
+                outcome.results.push(ArchiveMove {
+                    source: op.dest.clone(),
+                    dest: op.source.clone(),
+                });
+            }
             Err(error) => outcome.failed.push(ArchiveFailure {
                 path: op.dest.clone(),
                 error,

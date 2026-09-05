@@ -207,6 +207,7 @@ describe("FilePage 行操作", () => {
       batchId: 1,
       archived: 1,
       failed: [],
+      results: [],
     });
     renderPage();
     await screen.findByText("notes.pdf");
@@ -228,6 +229,7 @@ describe("FilePage 行操作", () => {
       batchId: 2,
       archived: 1,
       failed: [],
+      results: [],
     });
     renderPage();
     await screen.findByText("notes.pdf");
@@ -249,6 +251,7 @@ describe("FilePage 行操作", () => {
       batchId: 3,
       archived: 1,
       failed: [],
+      results: [],
     });
     renderPage();
     await screen.findByText("notes.pdf");

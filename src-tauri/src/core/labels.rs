@@ -77,6 +77,26 @@ mod tests {
     }
 
     #[test]
+    fn key_validation_matches_fixture() {
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        let rule = &value["labelKey"];
+        let max_len = rule["maxLength"].as_u64().expect("maxLength 应存在") as usize;
+        assert_eq!(max_len, MAX_KEY_LEN, "maxLength 应与后端常量一致");
+        for case in rule["accepts"].as_array().unwrap() {
+            let key = case.as_str().unwrap();
+            assert!(valid_key(key), "应接受 key={key:?}");
+        }
+        for case in rule["rejects"].as_array().unwrap() {
+            let key = case.as_str().unwrap();
+            assert!(!valid_key(key), "应拒绝 key={key:?}");
+        }
+        assert!(valid_key(&"a".repeat(max_len)));
+        assert!(!valid_key(&"a".repeat(max_len + 1)));
+    }
+
+    #[test]
     fn key_validation_matrix() {
         assert!(valid_key("course"));
         assert!(valid_key("course-2026"));

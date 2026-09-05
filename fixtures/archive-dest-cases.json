@@ -1,0 +1,10 @@
+{
+  "note": "归档目标路径派生契约：权威实现在 Rust core/archive.rs 的 plan_file_target/category_dir（含 unique_dest 冲突改名，不在本用例范围）；前端 lib/fileUtils.ts 的 archiveDestPath 为展示预览镜像，双端分别断言同一批用例。",
+  "cases": [
+    { "root": "C:/Arc", "labels": "document", "name": "a.pdf", "dest": "C:/Arc/document/a.pdf" },
+    { "root": "D:/Arc/", "labels": "document,course-x", "name": "a.pdf", "dest": "D:/Arc/document/a.pdf" },
+    { "root": "E:/Arc\\sub", "labels": "unknownlabel", "name": "b.bin", "dest": "E:/Arc/sub/other/b.bin" },
+    { "root": "C:/Arc", "labels": "", "name": "c.txt", "dest": "C:/Arc/other/c.txt" },
+    { "root": "D:\\", "labels": "image", "name": "x.png", "dest": "D:/image/x.png" }
+  ]
+}

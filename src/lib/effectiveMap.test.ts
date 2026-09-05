@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import effectiveFixture from "../../fixtures/classify-effective-cases.json";
 import {
   buildEffectiveMap,
   resetExtensionCategory,
@@ -14,6 +15,19 @@ const DEFAULTS: ClassifyDefaultEntry[] = [
   { extension: "png", category: "image" },
   { extension: "zip", category: "archive" },
 ];
+
+describe("生效映射契约（classify-effective-cases.json）", () => {
+  it("内置默认 + 覆盖的生效类别与后端一致", () => {
+    const { map, overridden } = buildEffectiveMap(
+      effectiveFixture.defaults as ClassifyDefaultEntry[],
+      effectiveFixture.overrides as ClassifyRule[],
+    );
+    for (const expectation of effectiveFixture.expectations) {
+      expect(map[expectation.ext] ?? null).toBe(expectation.category);
+    }
+    expect([...overridden].sort()).toEqual([...effectiveFixture.overridden].sort());
+  });
+});
 
 function settingsWith(
   ignore: Partial<Settings["ignore_rules"]>,

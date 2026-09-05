@@ -140,11 +140,13 @@ describe("ProjectsPage", () => {
       batchId: 10,
       archived: 1,
       failed: [],
+      results: [],
     });
     vi.mocked(undoArchive).mockResolvedValue({
       batchId: 10,
       archived: 1,
       failed: [],
+      results: [],
     });
     vi.mocked(listen).mockImplementation((_event, _callback) =>
       Promise.resolve(() => {}),

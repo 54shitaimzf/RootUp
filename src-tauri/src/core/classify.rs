@@ -337,6 +337,39 @@ mod tests {
         assert_eq!(actual, expected, "fixture categories 应与 Category::ALL 一致");
     }
 
+    #[test]
+    fn effective_map_matches_fixture() {
+        let raw = include_str!("../../../fixtures/classify-effective-cases.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/classify-effective-cases.json 应可解析");
+        let overrides: Vec<(Vec<String>, String)> = value["overrides"]
+            .as_array()
+            .expect("overrides 应为数组")
+            .iter()
+            .map(|rule| {
+                (
+                    rule["extensions"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap().to_string())
+                        .collect(),
+                    rule["category"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        let classifier = ExtensionClassifier::with_overrides(&overrides);
+        for case in value["expectations"].as_array().expect("expectations 应为数组") {
+            let ext = case["ext"].as_str().unwrap();
+            let expected = case["category"].as_str();
+            assert_eq!(
+                classifier.category_for(ext).map(|c| c.key()),
+                expected,
+                "ext={ext} 生效类别与契约不符"
+            );
+        }
+    }
+
     fn input<'a>(name: &'a str, file_type: &'a str) -> ClassifyInput<'a> {
         ClassifyInput {
             name,

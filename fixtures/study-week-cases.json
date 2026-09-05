@@ -1,0 +1,25 @@
+{
+  "note": "学业周次规则契约：解析与相交判定在 Rust core/study.rs（parse_week_range/weeks_overlap）与前端 lib/study.ts（parseWeekRange/weeksOverlap）双端镜像，共用本用例。weeks 为排序后的周次全集；valid=false 的用例只断言拒绝。",
+  "parseCases": [
+    { "range": "1", "valid": true, "weeks": [1] },
+    { "range": "2-4", "valid": true, "weeks": [2, 3, 4] },
+    { "range": "1,3,5-8", "valid": true, "weeks": [1, 3, 5, 6, 7, 8] },
+    { "range": "30", "valid": true, "weeks": [30] },
+    { "range": "0", "valid": false },
+    { "range": "31", "valid": false },
+    { "range": "3-2", "valid": false },
+    { "range": "2-", "valid": false },
+    { "range": "-3", "valid": false },
+    { "range": "a", "valid": false },
+    { "range": "1,,2", "valid": false }
+  ],
+  "overlapCases": [
+    { "ruleA": "all", "rangeA": null, "ruleB": "range", "rangeB": "5-6", "overlap": true },
+    { "ruleA": "odd", "rangeA": null, "ruleB": "even", "rangeB": null, "overlap": false },
+    { "ruleA": "odd", "rangeA": null, "ruleB": "range", "rangeB": "2-3", "overlap": true },
+    { "ruleA": "even", "rangeA": null, "ruleB": "range", "rangeB": "2-3", "overlap": true },
+    { "ruleA": "range", "rangeA": "1-5", "ruleB": "range", "rangeB": "6-10", "overlap": false },
+    { "ruleA": "range", "rangeA": "1-5", "ruleB": "range", "rangeB": "5-10", "overlap": true },
+    { "ruleA": "range", "rangeA": "", "ruleB": "all", "rangeB": null, "overlap": false }
+  ]
+}

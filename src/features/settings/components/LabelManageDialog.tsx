@@ -23,7 +23,8 @@ import { Input } from "../../../components/Input";
 import { Modal } from "../../../components/Modal";
 import { SectionLabel } from "../../../components/SectionLabel";
 
-const KEY_PATTERN = /^[a-z0-9-]+$/;
+/** 标签 key 语法（镜像后端 core::labels::valid_key；契约见 fixtures/app-contracts.json 的 labelKey）。 */
+export const KEY_PATTERN = /^[a-z0-9-]+$/;
 
 /**
  * 标签管理弹窗：内置大类只读 + 自定义标签增删改。

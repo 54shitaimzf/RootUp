@@ -48,6 +48,18 @@ pub struct ArchiveOutcome {
     pub batch_id: Option<i64>,
     pub archived: usize,
     pub failed: Vec<ArchiveFailure>,
+    /// 成功移动的 source→dest 映射（dest 为 unique_dest 实际结果，含冲突改名）；
+    /// 展示与撤销核对以此为准，前端不得自行推导目标路径。
+    #[serde(default)]
+    pub results: Vec<ArchiveMove>,
+}
+
+/// 一次成功的移动映射。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveMove {
+    pub source: String,
+    pub dest: String,
 }
 
 /// 单条失败信息。
@@ -76,9 +88,10 @@ pub fn category_dir(labels: &str) -> String {
     }
 }
 
-/// 单文件目标：`root/<大类>/<文件名>`（root 先规范化）。
+/// 单文件目标：`root/<大类>/<文件名>`（root 先规范化；盘根如 `D:/` 去尾斜杠避免双斜杠）。
 pub fn plan_file_target(root: &str, file_name: &str, labels: &str) -> Result<String, String> {
     let root = normalize_path(root);
+    let root = root.trim_end_matches('/');
     if root.is_empty() {
         return Err("归档根目录未配置".to_string());
     }
@@ -179,6 +192,24 @@ mod tests {
             plan_file_target("C:/Archive", "  ", "document").unwrap_err(),
             "文件名为空"
         );
+    }
+
+    #[test]
+    fn archive_dest_fixture_cases() {
+        let raw = include_str!("../../../fixtures/archive-dest-cases.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/archive-dest-cases.json 应可解析");
+        for case in value["cases"].as_array().expect("cases 应为数组") {
+            let root = case["root"].as_str().unwrap();
+            let labels = case["labels"].as_str().unwrap();
+            let name = case["name"].as_str().unwrap();
+            let expected = case["dest"].as_str().unwrap();
+            assert_eq!(
+                plan_file_target(root, name, labels).unwrap(),
+                expected,
+                "root={root} labels={labels}"
+            );
+        }
     }
 
     #[test]

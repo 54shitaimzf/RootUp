@@ -6,7 +6,6 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { isComposing } from "../lib/ime";
 import { cleanPathInput } from "../lib/paths";
-import { validateDirInput } from "../lib/pathValidation";
 import {
   openDirectoryDialog,
   resolveDirTarget,
@@ -49,21 +48,13 @@ export function DirectoryAdder({
 
   const submit = useCallback(
     async (raw: string, resolveParent: boolean) => {
-      let dir = cleanPathInput(raw);
+      const dir = cleanPathInput(raw);
+      // 校验规则唯一源在后端（core::path::validate_dir_path）：
+      // 非法路径经 onAdd 返回的文案或 resolveDirTarget 异常展示，前端不做副本校验。
       if (!dir) return;
-      if (!resolveParent) {
-        const check = validateDirInput(dir);
-        if (!check.ok) {
-          setError(check.error ?? "无效路径");
-          return;
-        }
-        dir = check.value;
-      }
       try {
-        if (resolveParent) {
-          dir = await resolveDirTarget(dir);
-        }
-        const failure = await onAdd(dir);
+        const target = resolveParent ? await resolveDirTarget(dir) : dir;
+        const failure = await onAdd(target);
         if (failure) {
           setError(failure);
           return;

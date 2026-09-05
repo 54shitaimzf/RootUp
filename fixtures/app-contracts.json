@@ -19,5 +19,38 @@
     "installer",
     "data",
     "other"
-  ]
+  ],
+  "preferredIde": [
+    "auto",
+    "vscode",
+    "cursor",
+    "idea",
+    "pycharm",
+    "rustrover",
+    "goland",
+    "none"
+  ],
+  "projectKinds": [
+    "rust",
+    "node",
+    "python",
+    "java",
+    "csharp",
+    "go",
+    "unity",
+    "cpp",
+    "php",
+    "ruby",
+    "dart",
+    "flutter",
+    "kotlin",
+    "swift",
+    "android",
+    "generic"
+  ],
+  "labelKey": {
+    "maxLength": 32,
+    "accepts": ["course", "a-b-1", "0-0"],
+    "rejects": ["A", "a b", "a_b", "课程", "a.b", ""]
+  }
 }

@@ -710,6 +710,21 @@ mod tests {
     }
 
     #[test]
+    fn preferred_ide_whitelist_matches_fixture() {
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        let fixture = value["preferredIde"].as_array().expect("preferredIde 应为数组");
+        assert_eq!(fixture.len(), PREFERRED_IDE_VALUES.len());
+        for value in PREFERRED_IDE_VALUES {
+            assert!(
+                fixture.iter().any(|v| v.as_str() == Some(*value)),
+                "fixture 缺少 preferred_ide {value}"
+            );
+        }
+    }
+
+    #[test]
     fn custom_open_command_validation_matrix() {
         let mut s = Settings {
             custom_open_commands: vec![CustomOpenCommand {

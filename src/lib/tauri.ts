@@ -160,11 +160,19 @@ export interface ArchiveFailure {
   error: string;
 }
 
+/** 一次成功的移动映射（dest 为后端实际结果，含冲突改名） */
+export interface ArchiveMove {
+  source: string;
+  dest: string;
+}
+
 /** 与 Rust 侧 core::archive::ArchiveOutcome 对应 */
 export interface ArchiveOutcome {
   batchId: number | null;
   archived: number;
   failed: ArchiveFailure[];
+  /** 成功移动的 source→dest 映射，展示以此为准，前端不得自行推导 */
+  results: ArchiveMove[];
 }
 
 /** 内置扩展名 → 类别映射条目（设置页只读展示） */

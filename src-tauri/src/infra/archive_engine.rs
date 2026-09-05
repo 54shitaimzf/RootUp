@@ -1,7 +1,7 @@
 //! 归档引擎：文件级移动 + 索引迁移 + 操作日志（不依赖 Tauri，可测试）。
 use crate::core::archive::{
-    move_error, plan_file_target, target_collides, unique_dest, ArchiveFailure, ArchiveOp,
-    ArchiveOutcome, UNDO_KEEP_BATCHES,
+    move_error, plan_file_target, target_collides, unique_dest, ArchiveFailure, ArchiveMove,
+    ArchiveOp, ArchiveOutcome, UNDO_KEEP_BATCHES,
 };
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
@@ -151,10 +151,17 @@ pub fn archive_files(
         batch_id: Some(batch_id),
         archived: 0,
         failed: Vec::new(),
+        results: Vec::new(),
     };
     for path in paths {
         match archive_one(store, root, path, batch_id) {
-            Ok(()) => outcome.archived += 1,
+            Ok(dest) => {
+                outcome.archived += 1;
+                outcome.results.push(ArchiveMove {
+                    source: normalize_path(path),
+                    dest,
+                });
+            }
             Err(error) => outcome.failed.push(ArchiveFailure {
                 path: normalize_path(path),
                 error,
@@ -173,7 +180,7 @@ fn archive_one(
     root: &str,
     path: &str,
     batch_id: i64,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let path = normalize_path(path);
     if path.is_empty() {
         return Err("路径为空".to_string());
@@ -221,7 +228,7 @@ fn archive_one(
         return Err(format!("索引更新失败，已还原: {e}"));
     }
     log::info!("archive: 移动 file={path} -> {dest_str}");
-    Ok(())
+    Ok(dest_str)
 }
 
 /// 撤销一批文件操作（project 操作由命令层处理）。
@@ -238,6 +245,7 @@ pub fn undo_file_batch(
         batch_id: Some(batch_id),
         archived: 0,
         failed: Vec::new(),
+        results: Vec::new(),
     };
     for op in ops {
         if op.kind != "file" || op.undone_at.is_some() {

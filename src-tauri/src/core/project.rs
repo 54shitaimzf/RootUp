@@ -334,6 +334,41 @@ mod tests {
     }
 
     #[test]
+    fn project_kinds_match_fixture() {
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        let fixture = value["projectKinds"].as_array().expect("projectKinds 应为数组");
+        // 与 enum 全量 key 对齐：新增变体时必须同步 fixture
+        let all = [
+            ProjectKind::Rust,
+            ProjectKind::Node,
+            ProjectKind::Python,
+            ProjectKind::Java,
+            ProjectKind::CSharp,
+            ProjectKind::Go,
+            ProjectKind::Unity,
+            ProjectKind::Cpp,
+            ProjectKind::Php,
+            ProjectKind::Ruby,
+            ProjectKind::Dart,
+            ProjectKind::Flutter,
+            ProjectKind::Kotlin,
+            ProjectKind::Swift,
+            ProjectKind::Android,
+            ProjectKind::Generic,
+        ];
+        assert_eq!(fixture.len(), all.len(), "项目类型数应与枚举一致");
+        for kind in all {
+            assert!(
+                fixture.iter().any(|v| v.as_str() == Some(kind.key())),
+                "fixture 缺少项目类型 {}",
+                kind.key()
+            );
+        }
+    }
+
+    #[test]
     fn feature_matrix_covers_all_kinds() {
         let cases: &[(&str, ProjectKind)] = &[
             ("Cargo.toml", ProjectKind::Rust),

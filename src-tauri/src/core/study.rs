@@ -573,6 +573,44 @@ mod tests {
     }
 
     #[test]
+    fn week_rules_match_fixture() {
+        let raw = include_str!("../../../fixtures/study-week-cases.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/study-week-cases.json 应可解析");
+        for case in value["parseCases"].as_array().expect("parseCases 应为数组") {
+            let range = case["range"].as_str().unwrap();
+            let valid = case["valid"].as_bool().unwrap();
+            let parsed = parse_week_range(range);
+            assert_eq!(parsed.is_some(), valid, "range={range:?} 有效性应与契约一致");
+            if let Some(weeks) = parsed {
+                let mut actual: Vec<u32> = weeks.into_iter().collect();
+                actual.sort_unstable();
+                let expected: Vec<u32> = case["weeks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_u64().unwrap() as u32)
+                    .collect();
+                assert_eq!(actual, expected, "range={range:?} 周次集合应与契约一致");
+            }
+        }
+        for case in value["overlapCases"].as_array().expect("overlapCases 应为数组") {
+            let opt = |v: &serde_json::Value| v.as_str().map(|s| s.to_string());
+            let overlap = weeks_overlap(
+                case["ruleA"].as_str().unwrap(),
+                opt(&case["rangeA"]).as_deref(),
+                case["ruleB"].as_str().unwrap(),
+                opt(&case["rangeB"]).as_deref(),
+            );
+            assert_eq!(
+                overlap,
+                case["overlap"].as_bool().unwrap(),
+                "overlap 用例与契约不符"
+            );
+        }
+    }
+
+    #[test]
     fn conflict_detected_in_validation() {
         let mut data = seed_study_data();
         let courses = data.courses_by_semester.get_mut("fall-2026").unwrap();

@@ -1,19 +1,10 @@
 import { describe, expect, it } from "vitest";
+import appContracts from "../../fixtures/app-contracts.json";
 import defaultIgnoreRulesFixture from "../../fixtures/default-ignore-rules.json";
 import { applyPreset, RULE_PRESETS } from "./presets";
 import { DEFAULT_IGNORE_RULES, defaultSettings, type Settings } from "./tauri";
 
-const VALID_CATEGORIES = [
-  "document",
-  "image",
-  "video",
-  "audio",
-  "archive",
-  "code",
-  "installer",
-  "data",
-  "other",
-];
+const VALID_CATEGORIES = appContracts.categories;
 
 function sampleSettings(): Settings {
   return {

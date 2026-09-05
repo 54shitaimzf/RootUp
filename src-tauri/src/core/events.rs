@@ -192,6 +192,28 @@ mod tests {
         assert_eq!(events.len(), all_app_events().len(), "事件数应与常量一致");
     }
 
+    #[test]
+    fn file_states_match_fixture() {
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        let states = value["fileStates"].as_array().expect("fileStates 应为数组");
+        let all = [
+            FileState::Pending,
+            FileState::Indexed,
+            FileState::Archived,
+            FileState::Deleted,
+        ];
+        assert_eq!(states.len(), all.len(), "文件状态数应与常量一致");
+        for state in all {
+            assert!(
+                states.iter().any(|v| v.as_str() == Some(state.as_str())),
+                "fixture 缺少文件状态 {}",
+                state.as_str()
+            );
+        }
+    }
+
     fn ev(kind: FileEventKind) -> NormalizedEvent {
         NormalizedEvent {
             path: PathBuf::from("/tmp/a.pdf"),

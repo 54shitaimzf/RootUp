@@ -160,6 +160,7 @@ describe("SettingsPage", () => {
       batchId: 1,
       archived: 1,
       failed: [],
+      results: [],
     });
   });
 

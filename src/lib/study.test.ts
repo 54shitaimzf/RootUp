@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import reminderCasesFixture from "../../fixtures/reminder-cases.json";
+import weekCasesFixture from "../../fixtures/study-week-cases.json";
+import type { WeekRule } from "./study";
 import {
   DEMO_COURSES,
   DEMO_HOMEWORK,
@@ -699,4 +701,30 @@ describe("共享提醒 fixtures", () => {
       }
     }
   });
+});
+
+describe("周次规则契约（study-week-cases.json）", () => {
+  for (const c of weekCasesFixture.parseCases) {
+    it(`parseWeekRange(${JSON.stringify(c.range)}) valid=${c.valid}`, () => {
+      const parsed = parseWeekRange(c.range);
+      expect(parsed !== null).toBe(c.valid);
+      if (parsed) {
+        expect([...parsed].sort((a, b) => a - b)).toEqual(c.weeks);
+      }
+    });
+  }
+
+  for (const c of weekCasesFixture.overlapCases) {
+    it(
+      `weeksOverlap(${c.ruleA}${c.rangeA ? `[${c.rangeA}]` : ""} vs ${c.ruleB}${c.rangeB ? `[${c.rangeB}]` : ""}) overlap=${c.overlap}`,
+      () => {
+        expect(
+          weeksOverlap(
+            { weekRule: c.ruleA as WeekRule, weekRange: c.rangeA ?? undefined },
+            { weekRule: c.ruleB as WeekRule, weekRange: c.rangeB ?? undefined },
+          ),
+        ).toBe(c.overlap);
+      },
+    );
+  }
 });

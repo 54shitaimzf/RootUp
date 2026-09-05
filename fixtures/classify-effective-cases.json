@@ -1,0 +1,19 @@
+{
+  "note": "生效分类映射契约：内置默认 + 用户覆盖（覆盖优先、扩展名小写归一）。权威语义在 Rust core/classify.rs 的 ExtensionClassifier::with_overrides/category_for；前端镜像为 lib/effectiveMap.ts 的 buildEffectiveMap（仅设置页展示）。defaults 为内置表真实子集，双端分别断言同一批期望。",
+  "defaults": [
+    { "extension": "pdf", "category": "document" },
+    { "extension": "png", "category": "image" },
+    { "extension": "rs", "category": "code" }
+  ],
+  "overrides": [
+    { "extensions": ["PDF", "md"], "category": "code" }
+  ],
+  "expectations": [
+    { "ext": "pdf", "category": "code" },
+    { "ext": "md", "category": "code" },
+    { "ext": "png", "category": "image" },
+    { "ext": "rs", "category": "code" },
+    { "ext": "unknownext", "category": null }
+  ],
+  "overridden": ["pdf", "md"]
+}

@@ -49,6 +49,8 @@ export function ArchiveConfirmDialog({
         ? t("files.archiveConfirmFilteredDescNoCount")
         : t("files.archiveConfirmFilteredDesc", { count: target.count })
     : "";
+  // 确认前的前端预览（镜像规则受 fixtures/archive-dest-cases.json 契约锁定）；
+  // 确认后的真实目标以后端 ArchiveOutcome.results 为准（含冲突改名），不得用本函数替代。
   const fileRow = (file: FileRecord) => (
     <Tooltip
       key={file.path}
