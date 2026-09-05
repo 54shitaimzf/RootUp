@@ -2,7 +2,7 @@
 
 use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::events::FileState;
-use crate::core::index::{FileRecord, IndexStore, ScanDiffStore};
+use crate::core::index::{FileRecord, IndexStore, ScanDiffStore, UnitKind};
 use crate::core::query::{decode_cursor, encode_cursor, FileQuery, QueryPage};
 use crate::core::scan::ScanDiffSummary;
 use crate::infra::time::now_millis;
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS usn_state (
 /// 未采纳默认启用；测试与未来启用时使用（待批量重建优化）。
 #[cfg_attr(not(test), allow(dead_code))]
 const FTS_SCHEMA: &str = r#"
-CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
+CREATE VIRTUAL TABLE IF NOT EXISTS units_fts USING fts5(
     name, path,
     tokenize = 'trigram',
     content='',
@@ -81,6 +81,19 @@ CREATE TABLE IF NOT EXISTS shortcuts (
     target_path TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
+"#;
+
+/// 0.8.7 阶段二（schema v8）：files → units 统一索引。
+/// 旧索引 DROP 后以 idx_units_* 重建（索引名与阶段二前的命名解耦）。
+const UNITS_MIGRATION_SCHEMA: &str = r#"
+ALTER TABLE files RENAME TO units;
+ALTER TABLE units ADD COLUMN kind TEXT NOT NULL DEFAULT 'file';
+ALTER TABLE units ADD COLUMN project_kind TEXT;
+DROP INDEX IF EXISTS idx_files_state;
+DROP INDEX IF EXISTS idx_files_modified;
+DROP INDEX IF EXISTS idx_files_type;
+CREATE INDEX IF NOT EXISTS idx_units_state ON units(state, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_units_modified ON units(modified);
 "#;
 
 /// 版本化迁移：v1 为初始 schema。后续加表/字段一律在此追加迁移分支。
@@ -157,6 +170,28 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
+    if version < 8 {
+        // 0.8.7 阶段二：files 表升级为统一单元表 units（kind: file/project/software）。
+        // 项目/软件单元由各自发现/识别流程同步写入；存量记录 kind 恒为 'file'。
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch(UNITS_MIGRATION_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        // FTS 表若存在（实验启用过）同步改名，保持与主表一致
+        let has_fts: bool = tx
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'files_fts'",
+                [],
+                |row| row.get::<_, i64>(0).map(|n| n > 0),
+            )
+            .map_err(|e| e.to_string())?;
+        if has_fts {
+            tx.execute_batch("ALTER TABLE files_fts RENAME TO units_fts")
+                .map_err(|e| e.to_string())?;
+        }
+        tx.pragma_update(None, "user_version", 8)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -171,6 +206,10 @@ fn row_to_record(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
         first_seen: row.get("first_seen")?,
         modified: row.get("modified")?,
         state: row.get("state")?,
+        kind: row
+            .get::<_, Option<String>>("kind")?
+            .map(|k| UnitKind::parse(&k))
+            .unwrap_or_default(),
     })
 }
 
@@ -211,7 +250,7 @@ impl SqliteIndexStore {
         fts_delete_tombstones(&conn, before)?;
         let purged = conn
             .execute(
-                "DELETE FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
+                "DELETE FROM units WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
                 params![FileState::Deleted.as_str(), before],
             )
             .map_err(|e| e.to_string())?;
@@ -219,7 +258,7 @@ impl SqliteIndexStore {
             log::info!("storage: 清理墓碑 count={purged}");
         }
         let fts_ready = conn
-            .query_row("SELECT EXISTS(SELECT 1 FROM files_fts)", [], |row| {
+            .query_row("SELECT EXISTS(SELECT 1 FROM units_fts)", [], |row| {
                 row.get::<_, i64>(0)
             })
             .map(|n| n > 0)
@@ -250,7 +289,7 @@ impl SqliteIndexStore {
         fts_delete_tombstones(&conn, before_ms)?;
         let n = conn
             .execute(
-                "DELETE FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
+                "DELETE FROM units WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2",
                 params![FileState::Deleted.as_str(), before_ms],
             )
             .map_err(|e| e.to_string())?;
@@ -273,15 +312,16 @@ impl IndexStore for SqliteIndexStore {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
             r#"
-            INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            INSERT INTO units (path, name, size, file_type, labels, first_seen, modified, state, kind)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ON CONFLICT(path) DO UPDATE SET
                 name = excluded.name,
                 size = excluded.size,
                 file_type = excluded.file_type,
                 labels = excluded.labels,
                 modified = excluded.modified,
-                state = excluded.state
+                state = excluded.state,
+                kind = excluded.kind
             "#,
             params![
                 record.path,
@@ -292,6 +332,7 @@ impl IndexStore for SqliteIndexStore {
                 record.first_seen,
                 record.modified,
                 record.state,
+                record.kind.as_str(),
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -303,7 +344,7 @@ impl IndexStore for SqliteIndexStore {
     fn get_by_path(&self, path: &str) -> Result<Option<FileRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
-            "SELECT * FROM files WHERE path = ?1",
+            "SELECT * FROM units WHERE path = ?1",
             params![path],
             row_to_record,
         )
@@ -319,7 +360,7 @@ impl IndexStore for SqliteIndexStore {
         let mut stmt = conn
             .prepare(
                 r#"
-                SELECT * FROM files
+                SELECT * FROM units
                 WHERE state != ?1
                 ORDER BY modified DESC
                 LIMIT ?2 OFFSET ?3
@@ -341,7 +382,7 @@ impl IndexStore for SqliteIndexStore {
         let mut stmt = conn
             .prepare(
                 r#"
-                SELECT * FROM files
+                SELECT * FROM units
                 WHERE state != ?1
                 ORDER BY id
                 "#,
@@ -357,7 +398,7 @@ impl IndexStore for SqliteIndexStore {
     fn update_labels(&mut self, path: &str, labels: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
-            "UPDATE files SET labels = ?1 WHERE path = ?2",
+            "UPDATE units SET labels = ?1 WHERE path = ?2",
             params![labels, path],
         )
         .map_err(|e| e.to_string())?;
@@ -372,7 +413,7 @@ impl IndexStore for SqliteIndexStore {
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         {
             let mut stmt = tx
-                .prepare("UPDATE files SET labels = ?1 WHERE path = ?2")
+                .prepare("UPDATE units SET labels = ?1 WHERE path = ?2")
                 .map_err(|e| e.to_string())?;
             for (path, labels) in updates {
                 stmt.execute(params![labels, path])
@@ -407,7 +448,7 @@ impl IndexStore for SqliteIndexStore {
                     .collect::<Vec<_>>()
                     .join(" ");
                 conditions.push(format!(
-                    "id IN (SELECT rowid FROM files_fts WHERE files_fts MATCH ?{})",
+                    "id IN (SELECT rowid FROM units_fts WHERE units_fts MATCH ?{})",
                     params.len() + 1
                 ));
                 params.push(Value::Text(match_str));
@@ -515,7 +556,7 @@ impl IndexStore for SqliteIndexStore {
 
         let total: i64 = if query.need_total {
             conn.query_row(
-                &format!("SELECT COUNT(*) FROM files WHERE {where_sql}"),
+                &format!("SELECT COUNT(*) FROM units WHERE {where_sql}"),
                 params_from_iter(params.iter()),
                 |row| row.get(0),
             )
@@ -538,7 +579,7 @@ impl IndexStore for SqliteIndexStore {
         };
         let mut stmt = conn
             .prepare(&format!(
-                "SELECT * FROM files WHERE {page_where} {order_sql}"
+                "SELECT * FROM units WHERE {page_where} {order_sql}"
             ))
             .map_err(|e| e.to_string())?;
         page_params.push(Value::Integer(limit + 1));
@@ -574,21 +615,21 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         {
-            // 多行 VALUES 批量写入（子批 1000：8 参数/行 = 8000 变量，低于 SQLite 32766 上限），
+            // 多行 VALUES 批量写入（子批 1000：9 参数/行 = 9000 变量，低于 SQLite 32766 上限），
             // first_seen 不参与冲突更新以保留首次发现时间。
             const SUB_BATCH: usize = 1000;
             for chunk in records.chunks(SUB_BATCH) {
                 let mut sql = String::from(
-                    "INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state) VALUES ",
+                    "INSERT INTO units (path, name, size, file_type, labels, first_seen, modified, state, kind) VALUES ",
                 );
-                let mut values: Vec<Value> = Vec::with_capacity(chunk.len() * 8);
+                let mut values: Vec<Value> = Vec::with_capacity(chunk.len() * 9);
                 for (i, record) in chunk.iter().enumerate() {
                     if i > 0 {
                         sql.push(',');
                     }
-                    let base = i * 8;
+                    let base = i * 9;
                     sql.push_str(&format!(
-                        "(?{},?{},?{},?{},?{},?{},?{},?{})",
+                        "(?{},?{},?{},?{},?{},?{},?{},?{},?{})",
                         base + 1,
                         base + 2,
                         base + 3,
@@ -596,7 +637,8 @@ impl IndexStore for SqliteIndexStore {
                         base + 5,
                         base + 6,
                         base + 7,
-                        base + 8
+                        base + 8,
+                        base + 9
                     ));
                     values.push(Value::Text(record.path.clone()));
                     values.push(Value::Text(record.name.clone()));
@@ -606,11 +648,12 @@ impl IndexStore for SqliteIndexStore {
                     values.push(Value::Integer(record.first_seen));
                     values.push(Value::Integer(record.modified));
                     values.push(Value::Text(record.state.clone()));
+                    values.push(Value::Text(record.kind.as_str().to_string()));
                 }
                 sql.push_str(
                     " ON CONFLICT(path) DO UPDATE SET name=excluded.name, size=excluded.size, \
                      file_type=excluded.file_type, labels=excluded.labels, \
-                     modified=excluded.modified, state=excluded.state",
+                     modified=excluded.modified, state=excluded.state, kind=excluded.kind",
                 );
                 tx.execute(&sql, params_from_iter(values.iter()))
                     .map_err(|e| e.to_string())?;
@@ -633,7 +676,7 @@ impl IndexStore for SqliteIndexStore {
         let mut stmt = conn
             .prepare(
                 r#"
-                SELECT path FROM files
+                SELECT path FROM units
                 WHERE state != ?1
                   AND (LOWER(path) = LOWER(?2) OR LOWER(path) LIKE LOWER(?3) ESCAPE '\')
                 "#,
@@ -652,7 +695,7 @@ impl IndexStore for SqliteIndexStore {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let prefix = format!("{}/%", escape_like(root));
         conn.query_row(
-            "SELECT COUNT(*) FROM files \
+            "SELECT COUNT(*) FROM units \
              WHERE state != ?1 \
                AND (LOWER(path) = LOWER(?2) OR LOWER(path) LIKE LOWER(?3) ESCAPE '\\')",
             params![FileState::Deleted.as_str(), root, prefix],
@@ -669,7 +712,7 @@ impl IndexStore for SqliteIndexStore {
             let placeholders: Vec<String> =
                 (0..chunk.len()).map(|i| format!("?{}", i + 3)).collect();
             let sql = format!(
-                "UPDATE files SET state = ?1, deleted_at = ?2 WHERE path IN ({})",
+                "UPDATE units SET state = ?1, deleted_at = ?2 WHERE path IN ({})",
                 placeholders.join(",")
             );
             let mut values: Vec<Value> = vec![
@@ -691,7 +734,7 @@ impl IndexStore for SqliteIndexStore {
     fn list_labels(&self) -> Result<Vec<String>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
-            .prepare("SELECT DISTINCT labels FROM files WHERE labels != ''")
+            .prepare("SELECT DISTINCT labels FROM units WHERE labels != ''")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
@@ -711,7 +754,7 @@ impl IndexStore for SqliteIndexStore {
     fn mark_deleted(&mut self, path: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
-            "UPDATE files SET state = ?1, deleted_at = ?2 WHERE path = ?3",
+            "UPDATE units SET state = ?1, deleted_at = ?2 WHERE path = ?3",
             params![FileState::Deleted.as_str(), now_millis(), path],
         )
         .map_err(|e| e.to_string())?;
@@ -722,7 +765,7 @@ impl IndexStore for SqliteIndexStore {
     fn count(&self) -> Result<i64, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
-            "SELECT COUNT(*) FROM files WHERE state != ?1",
+            "SELECT COUNT(*) FROM units WHERE state != ?1",
             params![FileState::Deleted.as_str()],
             |row| row.get(0),
         )
@@ -760,7 +803,7 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         let exists = tx
-            .query_row("SELECT 1 FROM files WHERE path = ?1", params![from], |_| {
+            .query_row("SELECT 1 FROM units WHERE path = ?1", params![from], |_| {
                 Ok(true)
             })
             .optional()
@@ -774,7 +817,7 @@ impl IndexStore for SqliteIndexStore {
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| to.to_string());
         tx.execute(
-            "UPDATE files SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
+            "UPDATE units SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
             params![to, name, state, from],
         )
         .map_err(|e| e.to_string())?;
@@ -789,7 +832,7 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         let exists = tx
-            .query_row("SELECT 1 FROM files WHERE path = ?1", params![from], |_| {
+            .query_row("SELECT 1 FROM units WHERE path = ?1", params![from], |_| {
                 Ok(true)
             })
             .optional()
@@ -803,7 +846,7 @@ impl IndexStore for SqliteIndexStore {
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| to.to_string());
         tx.execute(
-            "UPDATE files SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
+            "UPDATE units SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
             params![to, name, FileState::Archived.as_str(), from],
         )
         .map_err(|e| e.to_string())?;
@@ -831,7 +874,7 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         let record_exists = tx
-            .query_row("SELECT 1 FROM files WHERE path = ?1", params![from], |_| {
+            .query_row("SELECT 1 FROM units WHERE path = ?1", params![from], |_| {
                 Ok(true)
             })
             .optional()
@@ -857,7 +900,7 @@ impl IndexStore for SqliteIndexStore {
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| to.to_string());
         tx.execute(
-            "UPDATE files SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
+            "UPDATE units SET path = ?1, name = ?2, state = ?3 WHERE path = ?4",
             params![to, name, FileState::Indexed.as_str(), from],
         )
         .map_err(|e| e.to_string())?;
@@ -880,7 +923,7 @@ impl IndexStore for SqliteIndexStore {
             let pattern = format!("{}/%", escape_like(root));
             changed += tx
                 .execute(
-                    "UPDATE files SET state = ?1, deleted_at = ?2 WHERE state != ?1 AND (LOWER(path) = LOWER(?3) OR path LIKE ?4 ESCAPE '\\')",
+                    "UPDATE units SET state = ?1, deleted_at = ?2 WHERE state != ?1 AND (LOWER(path) = LOWER(?3) OR path LIKE ?4 ESCAPE '\\')",
                     params![
                         FileState::Deleted.as_str(),
                         now_millis(),
@@ -1057,7 +1100,7 @@ impl ScanDiffStore for SqliteIndexStore {
         let prefix = format!("{}/%", escape_like(root));
         conn.execute(
             "INSERT INTO scan_snapshot(key, path)
-             SELECT LOWER(path), path FROM files
+             SELECT LOWER(path), path FROM units
              WHERE state != ?1
                AND (LOWER(path) = LOWER(?2) OR LOWER(path) LIKE LOWER(?3) ESCAPE '\\')",
             params![FileState::Deleted.as_str(), root, prefix],
@@ -1156,20 +1199,20 @@ fn sync_fts_for_path(conn: &Connection, path: &str) -> Result<(), String> {
     }
     let id: i64 = conn
         .query_row(
-            "SELECT id FROM files WHERE path = ?1",
+            "SELECT id FROM units WHERE path = ?1",
             params![path],
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())?;
     let name: String = conn
-        .query_row("SELECT name FROM files WHERE id = ?1", params![id], |row| {
+        .query_row("SELECT name FROM units WHERE id = ?1", params![id], |row| {
             row.get(0)
         })
         .map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM files_fts WHERE rowid = ?1", params![id])
+    conn.execute("DELETE FROM units_fts WHERE rowid = ?1", params![id])
         .map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT INTO files_fts(rowid, name, path) VALUES (?1, ?2, ?3)",
+        "INSERT INTO units_fts(rowid, name, path) VALUES (?1, ?2, ?3)",
         params![id, name, path],
     )
     .map_err(|e| e.to_string())?;
@@ -1179,7 +1222,7 @@ fn sync_fts_for_path(conn: &Connection, path: &str) -> Result<(), String> {
 /// FTS 表是否存在（未采纳/未启用时所有 FTS 操作自动跳过）。
 fn fts_table_exists(conn: &Connection) -> bool {
     conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE name = 'files_fts'",
+        "SELECT COUNT(*) FROM sqlite_master WHERE name = 'units_fts'",
         [],
         |row| row.get::<_, i64>(0),
     )
@@ -1192,7 +1235,7 @@ fn fts_delete_by_path(conn: &Connection, path: &str) -> Result<(), String> {
         return Ok(());
     }
     conn.execute(
-        "DELETE FROM files_fts WHERE rowid = (SELECT id FROM files WHERE path = ?1)",
+        "DELETE FROM units_fts WHERE rowid = (SELECT id FROM units WHERE path = ?1)",
         params![path],
     )
     .map_err(|e| e.to_string())?;
@@ -1205,8 +1248,8 @@ fn fts_delete_under_root(conn: &Connection, root: &str) -> Result<(), String> {
     }
     let pattern = format!("{}/%", escape_like(root));
     conn.execute(
-        "DELETE FROM files_fts WHERE rowid IN (
-            SELECT id FROM files
+        "DELETE FROM units_fts WHERE rowid IN (
+            SELECT id FROM units
             WHERE LOWER(path) = LOWER(?1) OR path LIKE ?2 ESCAPE '\\'
          )",
         params![root, pattern],
@@ -1220,8 +1263,8 @@ fn fts_delete_tombstones(conn: &Connection, before_ms: i64) -> Result<(), String
         return Ok(());
     }
     conn.execute(
-        "DELETE FROM files_fts WHERE rowid IN (
-            SELECT id FROM files WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2
+        "DELETE FROM units_fts WHERE rowid IN (
+            SELECT id FROM units WHERE state = ?1 AND deleted_at IS NOT NULL AND deleted_at <= ?2
          )",
         params![FileState::Deleted.as_str(), before_ms],
     )
@@ -1367,7 +1410,7 @@ mod tests {
             .lock()
             .unwrap()
             .execute(
-                "UPDATE files SET deleted_at = 1 WHERE path = 'C:/old.txt'",
+                "UPDATE units SET deleted_at = 1 WHERE path = 'C:/old.txt'",
                 [],
             )
             .unwrap();
@@ -1660,7 +1703,7 @@ mod tests {
         let conn = store.conn.lock().unwrap();
         let indexes: Vec<String> = conn
             .prepare(
-                "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_files_%'",
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND (name LIKE 'idx_files_%' OR name LIKE 'idx_units_%')",
             )
             .unwrap()
             .query_map([], |row| row.get(0))
@@ -1670,9 +1713,12 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 7);
-        assert!(indexes.contains(&"idx_files_state".to_string()));
-        assert!(indexes.contains(&"idx_files_modified".to_string()));
+        assert_eq!(version, 8);
+        // v8：旧索引已重建为 idx_units_*，idx_files_type 保持移除
+        assert!(indexes.contains(&"idx_units_state".to_string()));
+        assert!(indexes.contains(&"idx_units_modified".to_string()));
+        assert!(!indexes.contains(&"idx_files_state".to_string()));
+        assert!(!indexes.contains(&"idx_files_modified".to_string()));
         assert!(!indexes.contains(&"idx_files_type".to_string()));
         assert!(!indexes.contains(&"idx_files_name".to_string()));
         assert!(!indexes.contains(&"idx_files_state_modified".to_string()));
@@ -1687,12 +1733,96 @@ mod tests {
         // FTS 表默认不创建（决策门未采纳），版本号占位保留
         let fts_tables: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'files_fts'",
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'units_fts'",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
         assert_eq!(fts_tables, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn migrate_v7_to_v8_renames_to_units_preserving_data() {
+        let dir = temp_db_dir("migrate_v7_v8");
+        let db = dir.join("rootup.db");
+        // 构造 v7 存量库：files 表带一条已索引、一条已归档（墓碑）记录。
+        // 墓碑 deleted_at 用昨天（open 启动清理按 30 天保留期删除过期墓碑，远期时间戳会被清掉）。
+        let deleted_at = now_millis() - 24 * 60 * 60 * 1000;
+        {
+            let conn = Connection::open(&db).unwrap();
+            conn.execute_batch(&format!(
+                "CREATE TABLE files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    path TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    size INTEGER NOT NULL DEFAULT 0,
+                    file_type TEXT NOT NULL DEFAULT '',
+                    labels TEXT NOT NULL DEFAULT '',
+                    first_seen INTEGER NOT NULL,
+                    modified INTEGER NOT NULL,
+                    state TEXT NOT NULL DEFAULT 'pending',
+                    deleted_at INTEGER
+                 );
+                 CREATE INDEX idx_files_state ON files(state, deleted_at);
+                 INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state)
+                   VALUES ('C:/w/a.pdf', 'a.pdf', 5, 'pdf', 'course-x', 10, 20, 'indexed');
+                 INSERT INTO files (path, name, size, file_type, labels, first_seen, modified, state, deleted_at)
+                   VALUES ('C:/w/old.txt', 'old.txt', 6, 'txt', '', 11, 21, 'deleted', {deleted_at});
+                 PRAGMA user_version = 7;"
+            ))
+            .unwrap();
+        }
+        let store = SqliteIndexStore::open(db.to_str().unwrap()).unwrap();
+        {
+            let conn = store.conn.lock().unwrap();
+            let version: i64 = conn
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 8);
+            // 记录保全：路径、标签、归档墓碑均保留，kind 填默认 'file'
+            let (labels, state): (String, String) = conn
+                .query_row(
+                    "SELECT labels, state FROM units WHERE path = 'C:/w/a.pdf'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(labels, "course-x");
+            assert_eq!(state, "indexed");
+            let kind: String = conn
+                .query_row(
+                    "SELECT kind FROM units WHERE path = 'C:/w/a.pdf'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(kind, "file");
+            let tombstones: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM units WHERE state = 'deleted' AND deleted_at = ?1",
+                    params![deleted_at],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(tombstones, 1);
+            // 新列可写：project_kind 接受值
+            conn.execute(
+                "UPDATE units SET project_kind = 'rust' WHERE path = 'C:/w/a.pdf'",
+                [],
+            )
+            .unwrap();
+            // 旧表已不存在
+            let legacy: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'files'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(legacy, 0);
+        }
+        drop(store);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2125,7 +2255,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 7);
+            assert_eq!(version, 8);
         }
         // 重复打开幂等，不报错
         {
@@ -2134,7 +2264,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 7);
+            assert_eq!(version, 8);
         }
         fs::remove_dir_all(&dir).unwrap();
     }

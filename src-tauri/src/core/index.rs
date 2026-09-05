@@ -6,7 +6,37 @@ use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::query::{parse_query, FileQuery, QueryPage};
 use crate::core::scan::ScanDiffSummary;
 
-/// 文件索引记录（与数据库表 `files` 对应）。
+/// 统一单元类型（0.8.7 阶段二）：units 表的 kind 列。
+/// 文件单元由扫描器写入；项目单元由项目发现同步（阶段二）；软件单元由识别裁决写入（阶段三）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UnitKind {
+    #[default]
+    File,
+    Project,
+    Software,
+}
+
+impl UnitKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UnitKind::File => "file",
+            UnitKind::Project => "project",
+            UnitKind::Software => "software",
+        }
+    }
+
+    /// 解析 DB / 查询输入；未知值回退 File（历史记录均为文件）。
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "project" => UnitKind::Project,
+            "software" => UnitKind::Software,
+            _ => UnitKind::File,
+        }
+    }
+}
+
+/// 索引记录（0.8.7 阶段二起与数据库表 `units` 对应；历史名 FileRecord 保留为别名）。
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FileRecord {
     pub id: i64,
@@ -18,10 +48,13 @@ pub struct FileRecord {
     pub first_seen: i64,
     pub modified: i64,
     pub state: String,
+    /// 单元类型；存量记录迁移后恒为 File。
+    #[serde(default)]
+    pub kind: UnitKind,
 }
 
 impl FileRecord {
-    /// 从路径与基础信息构造记录（id 由存储层分配）。
+    /// 从路径与基础信息构造记录（id 由存储层分配）。kind 默认 File；项目/软件单元构造后另行设置。
     pub fn new(path: &str, size: i64, first_seen: i64, state: &str) -> Self {
         let path_ref = std::path::Path::new(path);
         let name = path_ref
@@ -42,6 +75,7 @@ impl FileRecord {
             first_seen,
             modified: first_seen,
             state: state.to_string(),
+            kind: UnitKind::File,
         }
     }
 }
