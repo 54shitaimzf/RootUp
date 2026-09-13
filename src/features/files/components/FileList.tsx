@@ -62,6 +62,7 @@ export function FileList({
     const file = items[index];
     return (
       <FileRow
+        key={file.path}
         file={file}
         presentation={presentations[index]}
         labelDefs={labelDefs}
