@@ -1,4 +1,5 @@
 use crate::commands::archive as archive_commands;
+use crate::commands::extract as extract_commands;
 use crate::commands::files as files_commands;
 use crate::commands::habits as habits_commands;
 use crate::commands::labels as labels_commands;
@@ -209,6 +210,7 @@ pub fn run() {
             software_commands::remove_software_dir,
             software_commands::exclude_software_dir,
             software_commands::remove_software_exclusion,
+            extract_commands::extract_archive,
             trash_commands::delete_to_trash,
             trash_commands::list_actions,
             window_commands::hide_to_tray,

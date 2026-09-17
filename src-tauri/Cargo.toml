@@ -49,6 +49,7 @@ walkdir = "2"
 chrono = { version = "0.4", features = ["clock"] }
 tauri-plugin-opener = "2"
 trash = "5"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 mslnk = "0.1.8"
 winreg = "0.56.0"
 aho-corasick = "1"

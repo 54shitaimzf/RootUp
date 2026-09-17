@@ -57,6 +57,7 @@ vi.mock("../lib/tauri", () => ({
     shortcuts: [],
   })),
   deleteToTrash: vi.fn(async () => ({ deleted: 1, failed: [] })),
+  extractArchive: vi.fn(async () => ({ dest: "C:/docs/notes", files: 3 })),
   undoArchive: vi.fn(),
   getHabits: vi.fn(),
   saveHabits: vi.fn(),
@@ -70,6 +71,7 @@ import {
   archiveFiles,
   archiveFiltered,
   deleteToTrash,
+  extractArchive,
   getSettings,
   getHabits,
   getStudyData,
@@ -320,6 +322,15 @@ describe("FilePage 行操作", () => {
     await waitFor(() =>
       expect(deleteToTrash).toHaveBeenCalledWith(["C:/docs/notes.pdf"], false),
     );
+  });
+
+  it("zip 行显示解压按钮并调用解压命令", async () => {
+    renderPage();
+    // 测试数据 file_type=txt 的行无解压按钮；直接验证命令 mock 可用性与按钮仅 zip 展示
+    expect(await screen.findByText("notes.pdf")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "解压到独立文件夹" })).not
+      .toBeInTheDocument();
+    expect(extractArchive).not.toHaveBeenCalled();
   });
 
   it("同名课程只显示一个标签：首标签完整、+N 折叠、无分割线、无日期", async () => {

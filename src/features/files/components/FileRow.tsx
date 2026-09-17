@@ -4,6 +4,7 @@ import {
   Code2,
   Copy,
   ExternalLink,
+  FolderOutput,
   LocateFixed,
   Trash2,
 } from "../../../theme/icons";
@@ -30,6 +31,7 @@ export interface FileRowProps {
   onReveal: (path: string) => void;
   onIdeOpen: (path: string) => void;
   onDelete: (path: string) => void;
+  onExtract: (path: string) => void;
 }
 
 /**
@@ -51,6 +53,7 @@ export function FileRow({
   onReveal,
   onIdeOpen,
   onDelete,
+  onExtract,
 }: FileRowProps) {
   const { t } = useTranslation();
   const {
@@ -170,6 +173,15 @@ export function FileRow({
             tone="brand"
             size="md"
             onClick={() => onIdeOpen(file.path)}
+          />
+        )}
+        {file.file_type === "zip" && (
+          <IconButton
+            label={t("files.extractToFolder")}
+            icon={FolderOutput}
+            tone="neutral"
+            size="md"
+            onClick={() => onExtract(file.path)}
           />
         )}
         <IconButton

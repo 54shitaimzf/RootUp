@@ -5,6 +5,7 @@ pub mod classify;
 pub mod delta;
 pub mod error_codes;
 pub mod events;
+pub mod extract;
 pub mod habits;
 pub mod ignore;
 pub mod index;

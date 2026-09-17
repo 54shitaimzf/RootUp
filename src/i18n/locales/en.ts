@@ -580,6 +580,7 @@ export default {
     archivePartialFail: "{{failed}} file(s) failed to archive",
     archiveAllFail: "Archive failed: {{failed}} file(s) could not be moved",
     deleteToTrash: "Move to recycle bin",
+    extractToFolder: "Extract to its own folder",
     deleteConfirmTitle: "Move to recycle bin",
     deleteConfirmDesc:
       "Move {{count}} selected item(s) to the system recycle bin (restorable there) and remove them from the index.",

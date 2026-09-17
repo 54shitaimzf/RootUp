@@ -26,6 +26,7 @@ import {
   openProjectFromFile,
   revealInExplorer,
   deleteToTrash,
+  extractArchive,
   type SortDir,
   type SortField,
 } from "../lib/tauri";
@@ -247,6 +248,20 @@ export function FilePage({
       } else {
         setActionError(null);
       }
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const handleExtract = async (path: string) => {
+    try {
+      const outcome = await extractArchive(path);
+      setRefreshKey((key) => key + 1);
+      setActionError(null);
+      void logEvent(
+        "info",
+        `ui: 解压 path=${path} dest=${outcome.dest} files=${outcome.files}`,
+      );
     } catch (err) {
       setActionError(String(err));
     }
@@ -493,6 +508,7 @@ export function FilePage({
               onReveal: (path) => void handleRevealFile(path),
               onIdeOpen: (path) => void handleIdeOpenFile(path),
               onDelete: (path) => setDeleteTarget({ paths: [path] }),
+              onExtract: (path) => void handleExtract(path),
             }}
             offset={offset}
             pageSize={PAGE_SIZE}

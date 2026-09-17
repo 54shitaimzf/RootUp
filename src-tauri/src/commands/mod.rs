@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod extract;
 pub mod files;
 pub mod habits;
 pub mod labels;

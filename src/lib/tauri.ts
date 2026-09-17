@@ -477,6 +477,17 @@ export function listActions(limit: number): Promise<ActionEntry[]> {
   return invoke<ActionEntry[]>("list_actions", { limit });
 }
 
+/** 智能解压结果（0.8.8）：dest 为独立目标文件夹，files 为落盘文件数。 */
+export interface ExtractOutcome {
+  dest: string;
+  files: number;
+}
+
+/** zip 解压到同级独立文件夹（安全边界：路径穿越/炸弹/条目数上限）。 */
+export function extractArchive(path: string): Promise<ExtractOutcome> {
+  return invoke<ExtractOutcome>("extract_archive", { path });
+}
+
 export function undoArchive(batchId: number): Promise<ArchiveOutcome> {
   return invoke<ArchiveOutcome>("undo_archive", { batchId });
 }

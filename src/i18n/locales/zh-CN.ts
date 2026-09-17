@@ -569,6 +569,7 @@ export default {
     archivePartialFail: "另有 {{failed}} 个文件归档失败",
     archiveAllFail: "归档失败：{{failed}} 个文件未能移动",
     deleteToTrash: "移入回收站",
+    extractToFolder: "解压到独立文件夹",
     deleteConfirmTitle: "移入回收站",
     deleteConfirmDesc:
       "将把所选 {{count}} 项移入系统回收站（可在回收站还原），索引同步移除。",
