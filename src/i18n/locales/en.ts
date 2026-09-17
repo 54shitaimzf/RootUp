@@ -346,6 +346,16 @@ export default {
     logDir: "Log directory",
     logDirHint:
       "Logs record scans, indexing and queries for troubleshooting and verification.",
+    actionLog: "Change log",
+    actionLogHint: "Tracks classification, archive, undo and delete history.",
+    actionLogView: "View…",
+    actionLogEmpty: "No changes recorded yet",
+    action_archive: "Archive",
+    action_undo: "Undo",
+    action_delete: "Delete",
+    action_classify: "Classify",
+    actionUndo: "Undo",
+    actionUndoDone: "Batch undone",
     copyPath: "Copy path",
     infoIntro: "What it does",
     infoExample: "Example",
@@ -569,6 +579,11 @@ export default {
     archivedNotice: "Archived {{count}} files",
     archivePartialFail: "{{failed}} file(s) failed to archive",
     archiveAllFail: "Archive failed: {{failed}} file(s) could not be moved",
+    deleteToTrash: "Move to recycle bin",
+    deleteConfirmTitle: "Move to recycle bin",
+    deleteConfirmDesc:
+      "Move {{count}} selected item(s) to the system recycle bin (restorable there) and remove them from the index.",
+    deleteConfirm: "Move to recycle bin",
     archiveFailMore: "{{count}} more file(s) failed",
     undoArchive: "Undo",
     autoArchiveOn:

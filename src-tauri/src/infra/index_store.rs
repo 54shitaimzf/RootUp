@@ -2,7 +2,7 @@
 
 use crate::core::archive::{ArchiveBatch, ArchiveOp, ShortcutRecord};
 use crate::core::events::FileState;
-use crate::core::index::{FileRecord, IndexStore, ScanDiffStore, UnitKind};
+use crate::core::index::{ActionEntry, FileRecord, IndexStore, ScanDiffStore, UnitKind};
 use crate::core::query::{decode_cursor, encode_cursor, FileQuery, QueryPage};
 use crate::core::scan::ScanDiffSummary;
 use crate::infra::time::now_millis;
@@ -94,6 +94,18 @@ DROP INDEX IF EXISTS idx_files_modified;
 DROP INDEX IF EXISTS idx_files_type;
 CREATE INDEX IF NOT EXISTS idx_units_state ON units(state, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_units_modified ON units(modified);
+"#;
+
+/// 0.8.8（schema v10）：变更日志 v1——分类 / 归档 / 撤销 / 删除的统一追溯表。
+const ACTION_LOG_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS action_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '',
+    batch_id INTEGER,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_action_log_created ON action_log(created_at);
 "#;
 
 /// 版本化迁移：v1 为初始 schema。后续加表/字段一律在此追加迁移分支。
@@ -199,6 +211,15 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
         tx.execute_batch("ALTER TABLE units ADD COLUMN software_kind TEXT")
             .map_err(|e| e.to_string())?;
         tx.pragma_update(None, "user_version", 9)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    if version < 10 {
+        // 0.8.8 变更日志 v1：分类 / 归档 / 撤销 / 删除统一追溯（幂等语句，存量库直接建表）。
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch(ACTION_LOG_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 10)
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
@@ -1139,6 +1160,45 @@ impl IndexStore for SqliteIndexStore {
         .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    fn log_action(
+        &mut self,
+        action: &str,
+        detail: &str,
+        batch_id: Option<i64>,
+        created_at: i64,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO action_log (action, detail, batch_id, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![action, detail, batch_id, created_at],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn list_actions(&self, limit: i64) -> Result<Vec<ActionEntry>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, action, detail, batch_id, created_at FROM action_log \
+                 ORDER BY created_at DESC, id DESC LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![limit.clamp(1, 200)], |row| {
+                Ok(ActionEntry {
+                    id: row.get(0)?,
+                    action: row.get(1)?,
+                    detail: row.get(2)?,
+                    batch_id: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
 }
 
 impl ScanDiffStore for SqliteIndexStore {
@@ -1844,7 +1904,7 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 9);
+        assert_eq!(version, 10);
         // v8：旧索引已重建为 idx_units_*，idx_files_type 保持移除
         assert!(indexes.contains(&"idx_units_state".to_string()));
         assert!(indexes.contains(&"idx_units_modified".to_string()));
@@ -1910,7 +1970,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 9);
+            assert_eq!(version, 10);
             // 记录保全：路径、标签、归档墓碑均保留，kind 填默认 'file'
             let (labels, state): (String, String) = conn
                 .query_row(
@@ -2389,7 +2449,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 9);
+            assert_eq!(version, 10);
         }
         // 重复打开幂等，不报错
         {
@@ -2398,7 +2458,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 9);
+            assert_eq!(version, 10);
         }
         fs::remove_dir_all(&dir).unwrap();
     }
@@ -2532,6 +2592,25 @@ mod tests {
         s.update_shortcut_target("C:/Desktop/proj.lnk", "C:/proj")
             .unwrap();
         assert_eq!(s.shortcuts_under("C:/proj").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn action_log_roundtrip_order_and_limit() {
+        let mut s = store();
+        for i in 0..5 {
+            s.log_action("archive", &format!("count={i}"), Some(i), 1000 + i)
+                .unwrap();
+        }
+        s.log_action("delete", "count=1", None, 2000).unwrap();
+        // 倒序：最新的 delete 在前
+        let actions = s.list_actions(3).unwrap();
+        assert_eq!(actions.len(), 3);
+        assert_eq!(actions[0].action, "delete");
+        assert_eq!(actions[0].batch_id, None);
+        assert_eq!(actions[1].action, "archive");
+        assert_eq!(actions[1].batch_id, Some(4));
+        // 上限钳制（>200 取 200）
+        assert_eq!(s.list_actions(500).unwrap().len(), 6);
     }
 
     #[test]

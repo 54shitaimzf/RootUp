@@ -148,6 +148,18 @@ pub fn reapply_labels(
         }
     }
     store.update_labels_batch(&updates)?;
+    if changed > 0 {
+        // 变更日志 v1：分类批量变更可追溯（复用 action_log，失败不阻断重分类结果）
+        let detail = format!("count={changed}");
+        if let Err(e) = store.log_action(
+            "classify",
+            &detail,
+            None,
+            chrono::Utc::now().timestamp_millis(),
+        ) {
+            log::warn!("action-log: classify 写入失败 {e}");
+        }
+    }
     Ok(changed)
 }
 

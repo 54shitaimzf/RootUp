@@ -39,7 +39,7 @@ fn require_root(app: &AppHandle) -> Result<String, String> {
 
 /// 命令层归属校验：显式传入的归档源必须位于监控/项目目录内（防越权路径）。
 /// 筛选归档的源来自索引重查，不经此校验。
-fn require_owned(app: &AppHandle, paths: &[String]) -> Result<(), String> {
+pub(crate) fn require_owned(app: &AppHandle, paths: &[String]) -> Result<(), String> {
     let settings = storage::load_settings(app);
     let mut roots = settings.watched_dirs.clone();
     roots.extend(settings.project_dirs.iter().cloned());
@@ -56,8 +56,19 @@ fn store(app: &AppHandle) -> State<'_, Arc<Mutex<dyn IndexStore>>> {
     app.state::<Arc<Mutex<dyn IndexStore>>>()
 }
 
+/// 变更日志写入（0.8.8 变更日志 v1）：失败只记日志不阻断主流程（追溯数据，非关键路径）。
+pub(crate) fn log_action(app: &AppHandle, action: &str, detail: &str, batch_id: Option<i64>) {
+    let result = store(app)
+        .lock()
+        .map_err(|e| e.to_string())
+        .and_then(|mut s| s.log_action(action, detail, batch_id, now_millis()));
+    if let Err(e) = result {
+        log::warn!("action-log: 写入失败 action={action} err={e}");
+    }
+}
+
 /// 现存软件单元路径（预检与整树移动保护共用）。
-fn live_software_units(
+pub(crate) fn live_software_units(
     store: &State<'_, Arc<Mutex<dyn IndexStore>>>,
 ) -> Result<Vec<String>, String> {
     let mut query = parse_query("kind:software state:indexed");
@@ -69,7 +80,7 @@ fn live_software_units(
 
 /// 整树移动软件保护：源命中软件单元（相同/内部/包含）时默认拒绝，
 /// 前端确认后以 allow_software=true 显式放行（风险确认，错误码 archive.software_protected）。
-fn software_guard(
+pub(crate) fn software_guard(
     store: &State<'_, Arc<Mutex<dyn IndexStore>>>,
     paths: &[String],
     allow: bool,
@@ -162,6 +173,12 @@ pub fn archive_files(
             .unwrap_or_else(|| "没有文件归档成功".to_string());
         return Err(first);
     }
+    log_action(
+        &app,
+        "archive",
+        &format!("count={}", outcome.archived),
+        Some(batch_id),
+    );
     log::info!("archive: 开始 batch={batch_id} count={}", outcome.archived);
     Ok(outcome)
 }
@@ -207,6 +224,12 @@ pub fn archive_filtered(
             .unwrap_or_else(|| "没有文件归档成功".to_string());
         return Err(first);
     }
+    log_action(
+        &app,
+        "archive",
+        &format!("count={}", outcome.archived),
+        Some(batch_id),
+    );
     log::info!(
         "archive: 筛选归档 batch={batch_id} count={}",
         outcome.archived
@@ -312,6 +335,7 @@ pub fn archive_project(
         store: store_arc,
     };
     apply_project_journal(&effects, &journal, &dest_str, &path)?;
+    log_action(&app, "archive", &format!("project={path}"), Some(batch_id));
     log::info!("archive: 项目 {path} -> {dest_str}");
     Ok(ArchiveOutcome {
         batch_id: Some(batch_id),
@@ -367,6 +391,14 @@ pub fn undo_archive(app: AppHandle, batch_id: i64) -> Result<ArchiveOutcome, Str
                 .failed
                 .push(failure(op.dest.clone(), PHASE_UNDO, error)),
         }
+    }
+    if outcome.archived > 0 {
+        log_action(
+            &app,
+            "undo",
+            &format!("count={}", outcome.archived),
+            Some(batch_id),
+        );
     }
     log::info!(
         "archive: 撤销 batch={batch_id} ok={} fail={}",

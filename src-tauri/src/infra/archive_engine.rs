@@ -443,6 +443,21 @@ mod tests {
         fn update_labels(&mut self, _path: &str, _labels: &str) -> Result<(), String> {
             unimplemented!()
         }
+        fn log_action(
+            &mut self,
+            _action: &str,
+            _detail: &str,
+            _batch_id: Option<i64>,
+            _created_at: i64,
+        ) -> Result<(), String> {
+            unimplemented!()
+        }
+        fn list_actions(
+            &self,
+            _limit: i64,
+        ) -> Result<Vec<crate::core::index::ActionEntry>, String> {
+            unimplemented!()
+        }
         fn query(
             &self,
             _query: &crate::core::query::FileQuery,

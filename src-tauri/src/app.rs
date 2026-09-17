@@ -8,6 +8,7 @@ use crate::commands::settings as settings_commands;
 use crate::commands::software as software_commands;
 use crate::commands::startup as startup_commands;
 use crate::commands::study as study_commands;
+use crate::commands::trash as trash_commands;
 use crate::commands::window as window_commands;
 use crate::core::archive::category_dir;
 use crate::core::classify::{ClassifierChain, ExtensionClassifier};
@@ -208,6 +209,8 @@ pub fn run() {
             software_commands::remove_software_dir,
             software_commands::exclude_software_dir,
             software_commands::remove_software_exclusion,
+            trash_commands::delete_to_trash,
+            trash_commands::list_actions,
             window_commands::hide_to_tray,
             window_commands::quit_app,
             startup_commands::app_ready,

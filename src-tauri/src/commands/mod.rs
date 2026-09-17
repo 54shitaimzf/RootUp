@@ -8,4 +8,5 @@ pub mod settings;
 pub mod software;
 pub mod startup;
 pub mod study;
+pub mod trash;
 pub mod window;

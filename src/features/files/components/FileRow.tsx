@@ -5,6 +5,7 @@ import {
   Copy,
   ExternalLink,
   LocateFixed,
+  Trash2,
 } from "../../../theme/icons";
 import { FileTypeIcon } from "../../../components/FileTypeIcon";
 import { IconButton } from "../../../components/IconButton";
@@ -28,6 +29,7 @@ export interface FileRowProps {
   onOpen: (path: string) => void;
   onReveal: (path: string) => void;
   onIdeOpen: (path: string) => void;
+  onDelete: (path: string) => void;
 }
 
 /**
@@ -48,6 +50,7 @@ export function FileRow({
   onOpen,
   onReveal,
   onIdeOpen,
+  onDelete,
 }: FileRowProps) {
   const { t } = useTranslation();
   const {
@@ -169,6 +172,13 @@ export function FileRow({
             onClick={() => onIdeOpen(file.path)}
           />
         )}
+        <IconButton
+          label={t("files.deleteToTrash")}
+          icon={Trash2}
+          tone="neutral"
+          size="md"
+          onClick={() => onDelete(file.path)}
+        />
       </span>
       <span className="flex w-14 min-w-0 shrink-0 items-center gap-1.5 text-left text-xs text-slate-500 dark:text-slate-400">
         <span className={`size-1.5 shrink-0 rounded-full ${meta.dotClass}`} />

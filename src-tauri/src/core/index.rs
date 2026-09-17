@@ -84,6 +84,18 @@ impl FileRecord {
     }
 }
 
+/// 变更日志条目（0.8.8 变更日志 v1）：action ∈ archive | undo | delete | classify，
+/// detail 为人读摘要（count=N; sample=路径），batch_id 关联可撤销的归档批次。
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionEntry {
+    pub id: i64,
+    pub action: String,
+    pub detail: String,
+    pub batch_id: Option<i64>,
+    pub created_at: i64,
+}
+
 /// 索引存储契约：实现可替换（SQLite / 内存 / 未来其他后端）。
 pub trait IndexStore: Send + Sync {
     /// 插入或按 path 更新（幂等）。
@@ -162,6 +174,16 @@ pub trait IndexStore: Send + Sync {
     fn shortcuts_under(&self, root: &str) -> Result<Vec<ShortcutRecord>, String>;
     /// 更新一条快捷方式的目标路径。
     fn update_shortcut_target(&mut self, lnk_path: &str, target_path: &str) -> Result<(), String>;
+    /// 追加一条变更日志（0.8.8 变更日志 v1：archive/undo/delete/classify）。
+    fn log_action(
+        &mut self,
+        action: &str,
+        detail: &str,
+        batch_id: Option<i64>,
+        created_at: i64,
+    ) -> Result<(), String>;
+    /// 最近变更日志（按创建时间倒序，limit 上限 200）。
+    fn list_actions(&self, limit: i64) -> Result<Vec<ActionEntry>, String>;
     #[cfg_attr(not(test), allow(dead_code))]
     fn count(&self) -> Result<i64, String>;
     /// 空闲/退出前维护钩子（默认无操作；SQLite 实现执行 checkpoint + optimize）。

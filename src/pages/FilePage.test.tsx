@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { FilePage } from "./FilePage";
 import { SettingsProvider } from "../hooks/useSettings";
 import { HelpCenterProvider } from "../components/HelpCenter";
@@ -50,6 +56,7 @@ vi.mock("../lib/tauri", () => ({
     softwareUnits: [],
     shortcuts: [],
   })),
+  deleteToTrash: vi.fn(async () => ({ deleted: 1, failed: [] })),
   undoArchive: vi.fn(),
   getHabits: vi.fn(),
   saveHabits: vi.fn(),
@@ -62,6 +69,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import {
   archiveFiles,
   archiveFiltered,
+  deleteToTrash,
   getSettings,
   getHabits,
   getStudyData,
@@ -297,6 +305,21 @@ describe("FilePage 行操作", () => {
     expect(await screen.findByText(/自动归档已开启/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("关闭"));
     expect(screen.queryByText(/自动归档已开启/)).not.toBeInTheDocument();
+  });
+
+  it("行删除先确认再移入回收站并刷新列表", async () => {
+    renderPage();
+    await screen.findByText("notes.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
+    // 确认弹窗出现，确认按钮在弹窗内
+    const dialog = await screen.findByRole("dialog", { name: "移入回收站" });
+    expect(
+      within(dialog).getByText(/移入系统回收站/),
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "移入回收站" }));
+    await waitFor(() =>
+      expect(deleteToTrash).toHaveBeenCalledWith(["C:/docs/notes.pdf"], false),
+    );
   });
 
   it("同名课程只显示一个标签：首标签完整、+N 折叠、无分割线、无日期", async () => {

@@ -28,11 +28,9 @@ pub const ARCHIVE_INDEX_WRITE_FAILED: &str = "archive.index_write_failed";
 pub const ARCHIVE_UNDO_CONFLICT: &str = "archive.undo_conflict";
 /// 单批数量超上限。
 pub const ARCHIVE_TOO_MANY: &str = "archive.too_many";
-/// 移入回收站失败。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 移入回收站失败（0.8.8 回收站删除消费）。
 pub const DELETE_FAILED: &str = "delete.failed";
-/// 删除时被占用。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 删除时被占用（0.8.8 回收站删除消费）。
 pub const DELETE_LOCKED: &str = "delete.locked";
 /// 非受支持压缩包。
 #[cfg_attr(not(test), allow(dead_code))]

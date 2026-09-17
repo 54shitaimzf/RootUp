@@ -25,9 +25,11 @@ import {
   openFile,
   openProjectFromFile,
   revealInExplorer,
+  deleteToTrash,
   type SortDir,
   type SortField,
 } from "../lib/tauri";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FileBanners } from "../features/files/components/FileBanners";
 import { ArchiveConfirmDialog } from "../features/files/components/ArchiveConfirmDialog";
 import { FileList } from "../features/files/components/FileList";
@@ -80,6 +82,10 @@ export function FilePage({
   const [showLoadingBar, setShowLoadingBar] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [autoHintHidden, setAutoHintHidden] = useState(false);
+  /** 回收站删除确认（0.8.8）：行级入口，paths 预留批量。 */
+  const [deleteTarget, setDeleteTarget] = useState<{ paths: string[] } | null>(
+    null,
+  );
   /** 四视图（0.8.7 阶段二）：默认「文件」保持既有行为零回归；kind 注入 kind: token。 */
   const [view, setView] = useState<"all" | "file" | "project" | "software">(
     "file",
@@ -220,6 +226,27 @@ export function FilePage({
       await revealInExplorer(path);
       setActionError(null);
       void logEvent("info", `ui: 定位文件 path=${path}`);
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    const paths = deleteTarget.paths;
+    setDeleteTarget(null);
+    try {
+      const outcome = await deleteToTrash(paths, false);
+      if (outcome.deleted > 0) {
+        setRefreshKey((key) => key + 1);
+        void logEvent("info", `ui: 回收站删除 count=${outcome.deleted}`);
+      }
+      if (outcome.failed.length > 0) {
+        const first = outcome.failed[0];
+        setActionError(`${first.path}: ${first.error}`);
+      } else {
+        setActionError(null);
+      }
     } catch (err) {
       setActionError(String(err));
     }
@@ -465,6 +492,7 @@ export function FilePage({
               onOpen: (path) => void handleOpenFile(path),
               onReveal: (path) => void handleRevealFile(path),
               onIdeOpen: (path) => void handleIdeOpenFile(path),
+              onDelete: (path) => setDeleteTarget({ paths: [path] }),
             }}
             offset={offset}
             pageSize={PAGE_SIZE}
@@ -488,6 +516,17 @@ export function FilePage({
         onRiskConfirmChange={archive.setRiskConfirmed}
         onConfirm={archive.confirmArchive}
         onCancel={archive.closeArchiveTarget}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("files.deleteConfirmTitle")}
+        description={t("files.deleteConfirmDesc", {
+          count: deleteTarget?.paths.length ?? 0,
+        })}
+        confirmLabel={t("files.deleteConfirm")}
+        danger
+        onConfirm={() => void handleDeleteConfirm()}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

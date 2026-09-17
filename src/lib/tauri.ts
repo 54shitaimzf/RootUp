@@ -452,6 +452,31 @@ export function archivePreflight(paths: string[]): Promise<PreflightReport> {
   return invoke<PreflightReport>("archive_preflight", { paths });
 }
 
+/** 回收站删除结果（0.8.8）：failed 携带 code（delete.failed / delete.locked）。 */
+export interface DeleteOutcome {
+  deleted: number;
+  failed: ArchiveFailure[];
+}
+
+/** 应用内删除统一走系统回收站（可恢复），并记入变更日志。 */
+export function deleteToTrash(paths: string[], allowSoftware = false): Promise<DeleteOutcome> {
+  return invoke<DeleteOutcome>("delete_to_trash", { paths, allowSoftware });
+}
+
+/** 变更日志条目（0.8.8 变更日志 v1）：archive / undo / delete / classify。 */
+export interface ActionEntry {
+  id: number;
+  action: string;
+  detail: string;
+  batchId: number | null;
+  createdAt: number;
+}
+
+/** 最近变更日志（≤200 条）。 */
+export function listActions(limit: number): Promise<ActionEntry[]> {
+  return invoke<ActionEntry[]>("list_actions", { limit });
+}
+
 export function undoArchive(batchId: number): Promise<ArchiveOutcome> {
   return invoke<ArchiveOutcome>("undo_archive", { batchId });
 }

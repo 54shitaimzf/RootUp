@@ -23,13 +23,16 @@ import {
   createHomeworkShortcut,
   excludeSoftwareDir,
   getLogDir,
+  listActions,
   listCategories,
   listClassifyDefaults,
   listLabelDefs,
   listSchemes,
   removeSoftwareDir,
   removeSoftwareExclusion,
+  undoArchive,
   watchedDirsOverview,
+  type ActionEntry,
   type WatchedDirInfo,
   listCommonDirs,
   removeWatchedDir,
@@ -50,9 +53,11 @@ import {
   summarizeIgnoreRules,
 } from "../lib/effectiveMap";
 import { PREFERRED_IDE_OPTIONS } from "../lib/projects";
+import { formatTimestamp } from "../lib/fileUtils";
 import { useTheme } from "../theme/ThemeProvider";
 import { FormSection } from "../components/FormSection";
 import { DirectoryAdder } from "../components/DirectoryAdder";
+import { Modal } from "../components/Modal";
 import { RevealLink } from "../components/RevealLink";
 import { Select } from "../components/Select";
 import { SettingsInfoDialog } from "../components/SettingsInfoDialog";
@@ -200,6 +205,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     count: number;
   } | null>(null);
   const [infoEntry, setInfoEntry] = useState<SettingsGuideEntry | null>(null);
+  // 变更日志 v1（0.8.8）：查看分类 / 归档 / 撤销 / 删除历史
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actions, setActions] = useState<ActionEntry[]>([]);
 
   useEffect(() => {
     watchedDirsOverview()
@@ -998,6 +1006,30 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 </div>
               )}
             </div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-secondary">
+                    {t("settings.actionLog")}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {t("settings.actionLogHint")}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setActionsOpen(true);
+                    listActions(50)
+                      .then(setActions)
+                      .catch(() => setActions([]));
+                  }}
+                >
+                  {t("settings.actionLogView")}
+                </Button>
+              </div>
+            </div>
             <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 dark:border-red-500/25 dark:bg-red-500/10">
               <div>
                 <div className="text-sm font-semibold text-red-600 dark:text-red-400">
@@ -1025,6 +1057,63 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         entry={infoEntry}
         onClose={() => setInfoEntry(null)}
       />
+      <Modal
+        open={actionsOpen}
+        title={t("settings.actionLog")}
+        onClose={() => setActionsOpen(false)}
+      >
+        {actions.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted">
+            {t("settings.actionLogEmpty")}
+          </p>
+        ) : (
+          <ul className="max-h-96 space-y-1.5 overflow-y-auto">
+            {actions.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800"
+              >
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${
+                    entry.action === "undo"
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                      : entry.action === "delete"
+                        ? "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+                        : "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+                  }`}
+                >
+                  {t(`settings.action_${entry.action}`, entry.action)}
+                </span>
+                <span
+                  className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300"
+                  title={entry.detail}
+                >
+                  {entry.detail}
+                </span>
+                <span className="shrink-0 text-slate-400 dark:text-slate-500">
+                  {formatTimestamp(entry.createdAt)}
+                </span>
+                {entry.action === "archive" && entry.batchId !== null && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-brand-600 hover:underline dark:text-brand-400"
+                    onClick={() => {
+                      void undoArchive(entry.batchId!)
+                        .then(() => {
+                          setNotice(t("settings.actionUndoDone"));
+                          return listActions(50).then(setActions);
+                        })
+                        .catch((err) => setRuleError(String(err)));
+                    }}
+                  >
+                    {t("settings.actionUndo")}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
       <IgnoreRulesDialog
         open={ignoreOpen}
         initial={settings.ignore_rules}
