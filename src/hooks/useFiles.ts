@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { loadMoreMerge, mergeFiles } from "../lib/fileUtils";
+import { mergeFiles } from "../lib/fileUtils";
 import { APP_EVENTS } from "../lib/events";
 import {
   logEvent,
@@ -42,7 +42,7 @@ export function useFiles(
         setItems((prev) =>
           offset === 0
             ? page.items
-            : loadMoreMerge(prev, page.items, offset + limit),
+            : mergeFiles(prev, page.items, offset + limit),
         );
       })
       .catch((err) => {
@@ -57,13 +57,24 @@ export function useFiles(
     };
   }, [query, limit, offset, refreshKey, sortBy, sortDir]);
 
+  // 监听回调只读瞬时值：经 ref 读取筛选/翻页状态，订阅只建立一次，
+  // 避免每次查询变化都注销重订阅（异步注册间隙会漏掉 files-changed 事件）。
+  const latest = useRef({ query, offset, limit });
+  latest.current = { query, offset, limit };
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen<FileRecord[]>(APP_EVENTS.filesChanged, (event) => {
-      const hasFilter = query.trim() !== "";
-      if (!hasFilter && offset === 0) {
+      const { query: currentQuery, offset: currentOffset, limit: currentLimit } =
+        latest.current;
+      const hasFilter = currentQuery.trim() !== "";
+      if (!hasFilter && currentOffset === 0) {
         setItems((prev) =>
-          mergeFiles(prev, event.payload, Math.max(prev.length, limit)),
+          mergeFiles(
+            prev,
+            event.payload,
+            Math.max(prev.length, currentLimit),
+          ),
         );
       } else {
         setStale(true);
@@ -78,7 +89,7 @@ export function useFiles(
     return () => {
       unlisten?.();
     };
-  }, [query, offset, limit]);
+  }, []);
 
   return { items, total, loading, stale, hasMore: nextCursor !== null };
 }

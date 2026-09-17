@@ -143,23 +143,25 @@ pub fn discover_software(
 ) -> Vec<SoftwareInfo> {
     let excluded_keys: Vec<String> = excluded.iter().map(|d| path_key(d)).collect();
     let mut result: Vec<SoftwareInfo> = Vec::new();
-    let mut seen: Vec<String> = Vec::new();
-    let mut push = |path: String, detected_by: &str, seen: &mut Vec<String>| {
-        let key = path_key(&path);
-        if seen.contains(&key) {
-            return;
-        }
-        seen.push(key);
-        let name = Path::new(&path)
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.clone());
-        result.push(SoftwareInfo {
-            path,
-            name,
-            detected_by: detected_by.to_string(),
-        });
-    };
+    // HashSet 去重与 discover_projects 同构：发现量大时 contains 不随规模退化。
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut push =
+        |path: String, detected_by: &str, seen: &mut std::collections::HashSet<String>| {
+            let key = path_key(&path);
+            if seen.contains(&key) {
+                return;
+            }
+            seen.insert(key);
+            let name = Path::new(&path)
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.clone());
+            result.push(SoftwareInfo {
+                path,
+                name,
+                detected_by: detected_by.to_string(),
+            });
+        };
     // 手动裁决：排除优先级最高（先剔除再并入）
     for dir in manual {
         let dir = normalize_path(dir);

@@ -375,26 +375,23 @@ pub fn run() {
                 ignore_matcher.clone(),
                 StabilityParams::default(),
                 move |records| {
-                    let _ = emit_handle.emit(EVENT_FILES_CHANGED, records.clone());
                     // 热路径零磁盘 IO：自动归档开关与根目录由 managed_state::refresh
                     // 在设置变更时推送到 ArchiveService 缓存，这里只读内存状态。
-                    let Some(archive_state) = app_for_auto.try_state::<Mutex<ArchiveService>>()
-                    else {
-                        return;
-                    };
-                    let Ok(service) = archive_state.lock() else {
-                        return;
-                    };
-                    if !service.is_active() {
-                        return;
-                    }
-                    for record in records {
-                        if record.state == FileState::Indexed.as_str()
-                            && category_dir(&record.labels) != "other"
-                        {
-                            service.enqueue(record.path);
+                    // 先借用遍历入队、再 move 发射，避免整批深拷贝（发射始终执行）。
+                    if let Some(archive_state) = app_for_auto.try_state::<Mutex<ArchiveService>>() {
+                        if let Ok(service) = archive_state.lock() {
+                            if service.is_active() {
+                                for record in &records {
+                                    if record.state == FileState::Indexed.as_str()
+                                        && category_dir(&record.labels) != "other"
+                                    {
+                                        service.enqueue(record.path.clone());
+                                    }
+                                }
+                            }
                         }
                     }
+                    let _ = emit_handle.emit(EVENT_FILES_CHANGED, records);
                 },
             )
             .map_err(|e| format!("监听服务创建失败: {e}"))?;

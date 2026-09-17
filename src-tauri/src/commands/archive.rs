@@ -12,7 +12,7 @@ use crate::core::error_codes::{
     coded, ARCHIVE_FORBIDDEN, ARCHIVE_NO_ROOT, ARCHIVE_SOFTWARE_PROTECTED, ARCHIVE_TARGET_COLLIDES,
     ARCHIVE_UNDO_CONFLICT,
 };
-use crate::core::index::IndexStore;
+use crate::core::index::{IndexStore, UNIT_SCAN_CAP};
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector, ProjectKind};
 use crate::core::query::parse_query;
@@ -73,7 +73,7 @@ pub(crate) fn live_software_units(
 ) -> Result<Vec<String>, String> {
     let mut query = parse_query("kind:software state:indexed");
     query.need_total = false;
-    query.limit = 10_000;
+    query.limit = UNIT_SCAN_CAP;
     let page = store.lock().map_err(|e| e.to_string())?.query(&query)?;
     Ok(page.items.into_iter().map(|r| r.path).collect())
 }

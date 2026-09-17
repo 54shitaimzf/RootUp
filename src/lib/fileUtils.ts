@@ -56,16 +56,6 @@ export function sortLabelsByPriority(
   ];
 }
 
-/** 按名称/路径过滤（大小写不敏感）。 */
-export function filterFiles(files: FileRecord[], query: string): FileRecord[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return files;
-  return files.filter(
-    (f) =>
-      f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
-  );
-}
-
 /**
  * 合并实时批次到现有列表：
  * - state=deleted 的记录从列表移除
@@ -88,15 +78,6 @@ export function mergeFiles(
   return [...map.values()]
     .sort((a, b) => b.modified - a.modified)
     .slice(0, limit);
-}
-
-/** “加载更多”语义：新页追加到已有列表，上限为已加载总量（offset + limit）。 */
-export function loadMoreMerge(
-  prev: FileRecord[],
-  incoming: FileRecord[],
-  cap: number,
-): FileRecord[] {
-  return mergeFiles(prev, incoming, cap);
 }
 
 /** 状态徽标元数据（文案 key 与颜色类分离，便于主题/皮肤调整）。 */

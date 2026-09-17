@@ -59,7 +59,8 @@ export function FileList({
   onLoadMore,
 }: FileListProps) {
   const { t } = useTranslation();
-  const renderRow = (index: number) => {
+  // animate：非虚拟分支播放入场动画；虚拟分支行随区间重挂载，禁用避免滚动时重放。
+  const renderRow = (index: number, animate: boolean) => {
     const file = items[index];
     return (
       <FileRow
@@ -71,6 +72,7 @@ export function FileList({
         selected={selected.has(file.path)}
         archiveVisible={archiveVisible(file)}
         onToggleSelect={onToggleSelect}
+        animate={animate}
         {...rowHandlers}
       />
     );
@@ -103,11 +105,11 @@ export function FileList({
         <VirtualRows
           total={items.length}
           rowHeight={FILE_ROW_HEIGHT}
-          renderRow={renderRow}
+          renderRow={(index) => renderRow(index, false)}
         />
       ) : (
         <ul className="@container divide-y divide-slate-100 dark:divide-slate-800">
-          {items.map((_, index) => renderRow(index))}
+          {items.map((_, index) => renderRow(index, true))}
         </ul>
       )}
       <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">

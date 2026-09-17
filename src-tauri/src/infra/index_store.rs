@@ -108,6 +108,16 @@ CREATE TABLE IF NOT EXISTS action_log (
 CREATE INDEX IF NOT EXISTS idx_action_log_created ON action_log(created_at);
 "#;
 
+/// 0.8.8 发布前加固（schema v11）：units 组合索引。
+/// kind 维度查询（software/project 同步失效清理、归档软件快照）原为全表扫——
+/// `state != deleted` 是范围条件，idx_units_state 无法支撑 kind 过滤。
+const UNITS_KIND_INDEX_SCHEMA: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_units_kind ON units(kind, state);
+"#;
+
+/// 墓碑保留窗口（30 天）：开库时物理清除超期的 deleted 记录。
+const TOMBSTONE_RETENTION_MS: i64 = 30 * 86_400_000;
+
 /// 版本化迁移：v1 为初始 schema。后续加表/字段一律在此追加迁移分支。
 fn migrate(conn: &mut Connection) -> Result<(), String> {
     let version: i64 = conn
@@ -223,6 +233,15 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
+    if version < 11 {
+        // 0.8.8 发布前加固：kind 维度同步/快照查询补组合索引（幂等，存量库直接建索引）。
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch(UNITS_KIND_INDEX_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 11)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -278,7 +297,7 @@ impl SqliteIndexStore {
             .map_err(|e| e.to_string())?;
         conn.busy_timeout(std::time::Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
-        let before = now_millis() - 30 * 86_400_000;
+        let before = now_millis() - TOMBSTONE_RETENTION_MS;
         fts_delete_tombstones(&conn, before)?;
         let purged = conn
             .execute(
@@ -834,6 +853,34 @@ impl IndexStore for SqliteIndexStore {
         )
         .map_err(|e| e.to_string())?;
         fts_delete_by_path(&conn, path)?;
+        Ok(())
+    }
+
+    /// 批量版 mark_deleted：单事务分块 IN 更新 + 批量 FTS 清理（同 mark_missing 模式），
+    /// 供派生层失效清理一次提交数十至数百条陈旧单元。
+    fn mark_deleted_many(&mut self, paths: &[String]) -> Result<(), String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let now = now_millis();
+        for chunk in paths.chunks(500) {
+            let placeholders: Vec<String> =
+                (0..chunk.len()).map(|i| format!("?{}", i + 3)).collect();
+            let sql = format!(
+                "UPDATE units SET state = ?1, deleted_at = ?2 WHERE path IN ({})",
+                placeholders.join(",")
+            );
+            let mut values: Vec<Value> = vec![
+                Value::Text(FileState::Deleted.as_str().into()),
+                Value::Integer(now),
+            ];
+            values.extend(chunk.iter().map(|p| Value::Text(p.clone())));
+            tx.execute(&sql, params_from_iter(values.iter()))
+                .map_err(|e| e.to_string())?;
+            for path in chunk {
+                fts_delete_by_path(&tx, path)?;
+            }
+        }
+        tx.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -1904,10 +1951,12 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 10);
+        assert_eq!(version, 11);
         // v8：旧索引已重建为 idx_units_*，idx_files_type 保持移除
         assert!(indexes.contains(&"idx_units_state".to_string()));
         assert!(indexes.contains(&"idx_units_modified".to_string()));
+        // v11：kind 维度同步/快照查询的组合索引
+        assert!(indexes.contains(&"idx_units_kind".to_string()));
         assert!(!indexes.contains(&"idx_files_state".to_string()));
         assert!(!indexes.contains(&"idx_files_modified".to_string()));
         assert!(!indexes.contains(&"idx_files_type".to_string()));
@@ -1970,7 +2019,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 10);
+            assert_eq!(version, 11);
             // 记录保全：路径、标签、归档墓碑均保留，kind 填默认 'file'
             let (labels, state): (String, String) = conn
                 .query_row(
@@ -2449,7 +2498,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 10);
+            assert_eq!(version, 11);
         }
         // 重复打开幂等，不报错
         {
@@ -2458,7 +2507,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 10);
+            assert_eq!(version, 11);
         }
         fs::remove_dir_all(&dir).unwrap();
     }

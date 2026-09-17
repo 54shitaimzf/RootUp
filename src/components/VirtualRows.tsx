@@ -45,7 +45,10 @@ export function VirtualRows({
       total,
       overscan,
     });
-    setRange(next);
+    // 区间未变时保持原对象身份，避免滚动事件驱动无意义的重渲。
+    setRange((prev) =>
+      prev.start === next.start && prev.end === next.end ? prev : next,
+    );
   }, [rowHeight, total, overscan]);
 
   useLayoutEffect(() => {

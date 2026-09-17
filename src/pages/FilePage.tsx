@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
@@ -28,6 +28,7 @@ import {
   revealInExplorer,
   deleteToTrash,
   extractArchive,
+  type FileRecord,
   type SortDir,
   type SortField,
 } from "../lib/tauri";
@@ -179,7 +180,8 @@ export function FilePage({
     sortDir,
   );
 
-  const refreshList = () => setRefreshKey((key) => key + 1);
+  // FileRow 已 memo：所有传给行渲染的 handler 保持引用稳定，否则按键级重渲全部行。
+  const refreshList = useCallback(() => setRefreshKey((key) => key + 1), []);
 
   const archive = useFileArchive(items, queryString, refreshList);
 
@@ -216,7 +218,7 @@ export function FilePage({
     void logEvent("info", `ui: 排序 field=${field}`);
   };
 
-  const handleOpenFile = async (path: string) => {
+  const handleOpenFile = useCallback(async (path: string) => {
     try {
       await openFile(path);
       setActionError(null);
@@ -225,9 +227,9 @@ export function FilePage({
     } catch (err) {
       setActionError(String(err));
     }
-  };
+  }, []);
 
-  const handleRevealFile = async (path: string) => {
+  const handleRevealFile = useCallback(async (path: string) => {
     try {
       await revealInExplorer(path);
       setActionError(null);
@@ -236,7 +238,7 @@ export function FilePage({
     } catch (err) {
       setActionError(String(err));
     }
-  };
+  }, []);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
@@ -260,7 +262,7 @@ export function FilePage({
     }
   };
 
-  const handleExtract = async (path: string) => {
+  const handleExtract = useCallback(async (path: string) => {
     try {
       const outcome = await extractArchive(path);
       setRefreshKey((key) => key + 1);
@@ -273,32 +275,35 @@ export function FilePage({
     } catch (err) {
       setActionError(String(err));
     }
-  };
+  }, []);
 
-  const handleCopyPath = async (path: string) => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(path);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = path;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        textarea.remove();
+  const handleCopyPath = useCallback(
+    async (path: string) => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(path);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = path;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        setActionError(null);
+        setActionNotice(t("files.copyPathDone"));
+        void logEvent("info", `ui: 复制路径 path=${path}`);
+      } catch {
+        setActionNotice(null);
+        setActionError(t("files.copyPathFailed"));
       }
-      setActionError(null);
-      setActionNotice(t("files.copyPathDone"));
-      void logEvent("info", `ui: 复制路径 path=${path}`);
-    } catch {
-      setActionNotice(null);
-      setActionError(t("files.copyPathFailed"));
-    }
-  };
+    },
+    [t],
+  );
 
-  const handleIdeOpenFile = async (path: string) => {
+  const handleIdeOpenFile = useCallback(async (path: string) => {
     try {
       const outcome = await openProjectFromFile(path);
       setActionError(null);
@@ -307,14 +312,42 @@ export function FilePage({
     } catch (err) {
       setActionError(String(err));
     }
-  };
+  }, []);
 
   const filterActive =
     query.trim() !== "" ||
     selectedCategories.length > 0 ||
     states.length > 0 ||
     labels.length > 0;
-  const unarchivedCount = items.filter((file) => file.state === "indexed").length;
+  const unarchivedCount = useMemo(
+    () => items.filter((file) => file.state === "indexed").length,
+    [items],
+  );
+
+  const archiveVisible = useCallback(
+    (file: FileRecord) => file.state === "indexed" && archiveRoot !== "",
+    [archiveRoot],
+  );
+
+  const rowHandlers = useMemo(
+    () => ({
+      onArchive: (path: string) => void archive.handleArchiveOne(path),
+      onCopyPath: (path: string) => void handleCopyPath(path),
+      onOpen: (path: string) => void handleOpenFile(path),
+      onReveal: (path: string) => void handleRevealFile(path),
+      onIdeOpen: (path: string) => void handleIdeOpenFile(path),
+      onDelete: (path: string) => setDeleteTarget({ paths: [path] }),
+      onExtract: (path: string) => void handleExtract(path),
+    }),
+    [
+      archive.handleArchiveOne,
+      handleCopyPath,
+      handleOpenFile,
+      handleRevealFile,
+      handleIdeOpenFile,
+      handleExtract,
+    ],
+  );
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -504,16 +537,8 @@ export function FilePage({
             batchMode={archive.batchMode}
             selected={archive.selected}
             onToggleSelect={archive.toggleSelect}
-            archiveVisible={(file) => file.state === "indexed" && archiveRoot !== ""}
-            rowHandlers={{
-              onArchive: (path) => void archive.handleArchiveOne(path),
-              onCopyPath: (path) => void handleCopyPath(path),
-              onOpen: (path) => void handleOpenFile(path),
-              onReveal: (path) => void handleRevealFile(path),
-              onIdeOpen: (path) => void handleIdeOpenFile(path),
-              onDelete: (path) => setDeleteTarget({ paths: [path] }),
-              onExtract: (path) => void handleExtract(path),
-            }}
+            archiveVisible={archiveVisible}
+            rowHandlers={rowHandlers}
             offset={offset}
             pageSize={PAGE_SIZE}
             total={total}

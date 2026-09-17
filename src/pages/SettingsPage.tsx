@@ -69,6 +69,9 @@ import { LabelManageDialog } from "../features/settings/components/LabelManageDi
 import { ArchiveSettingsDialog } from "../features/settings/components/ArchiveSettingsDialog";
 import { SchemeDialog } from "../features/settings/components/SchemeDialog";
 import { SchemeApplyDialog } from "../features/settings/components/SchemeApplyDialog";
+
+/** 变更日志拉取条数（两处入口共用：查看按钮 + 撤销后刷新）。 */
+const ACTIONS_LOG_LIMIT = 50;
 import {
   ProjectOpenDialog,
   type OpenConfig,
@@ -206,6 +209,8 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     count: number;
   } | null>(null);
   const [infoEntry, setInfoEntry] = useState<SettingsGuideEntry | null>(null);
+  const openGuide = (id: string) =>
+    setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null);
   // 软件目录/排除目录移除确认：与监控目录移除同纪律（影响索引可见性，不可裸删）
   const [softwareRemove, setSoftwareRemove] = useState<{
     kind: "software" | "excluded";
@@ -701,9 +706,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 names: ignoreSummary.exactNames,
               })}
               guideId="ignoreRules"
-              onInfo={(id) =>
-                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
-              }
+              onInfo={openGuide}
               onEdit={() => setIgnoreOpen(true)}
             />
             <Row
@@ -713,9 +716,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 overrides: settings.classify_overrides.length,
               })}
               guideId="classifyMapping"
-              onInfo={(id) =>
-                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
-              }
+              onInfo={openGuide}
               onEdit={() => setMappingOpen(true)}
             />
             <Row
@@ -725,9 +726,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 custom: customLabels.length,
               })}
               guideId="labels"
-              onInfo={(id) =>
-                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
-              }
+              onInfo={openGuide}
               onEdit={() => setLabelOpen(true)}
             />
           </div>
@@ -879,9 +878,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               )
             }
             guideId="archive"
-            onInfo={(id) =>
-              setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
-            }
+            onInfo={openGuide}
             onEdit={() => setArchiveOpen(true)}
           />
         </FormSection>
@@ -995,9 +992,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 custom: settings.custom_open_commands.length,
               })}
               guideId="projectOpen"
-              onInfo={(id) =>
-                setInfoEntry(SETTINGS_GUIDE.find((item) => item.id === id) ?? null)
-              }
+              onInfo={openGuide}
               onEdit={() => setProjectOpenOpen(true)}
             />
             <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
@@ -1038,7 +1033,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                   size="sm"
                   onClick={() => {
                     setActionsOpen(true);
-                    listActions(50)
+                    listActions(ACTIONS_LOG_LIMIT)
                       .then(setActions)
                       .catch(() => setActions([]));
                   }}
@@ -1118,7 +1113,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                       void undoArchive(entry.batchId!)
                         .then(() => {
                           setNotice(t("settings.actionUndoDone"));
-                          return listActions(50).then(setActions);
+                          return listActions(ACTIONS_LOG_LIMIT).then(setActions);
                         })
                         .catch((err) => setRuleError(String(err)));
                     }}

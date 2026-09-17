@@ -96,6 +96,9 @@ pub struct ActionEntry {
     pub created_at: i64,
 }
 
+/// 派生单元扫描上限（software/project 同步失效清理与归档软件快照共用）。
+pub const UNIT_SCAN_CAP: i64 = 10_000;
+
 /// 索引存储契约：实现可替换（SQLite / 内存 / 未来其他后端）。
 pub trait IndexStore: Send + Sync {
     /// 插入或按 path 更新（幂等）。
@@ -138,6 +141,14 @@ pub trait IndexStore: Send + Sync {
     /// 库中现存标签 key 列表（去重排序）。
     fn list_labels(&self) -> Result<Vec<String>, String>;
     fn mark_deleted(&mut self, path: &str) -> Result<(), String>;
+    /// 批量按 path 标 deleted（单事务 + 批量 FTS 清理，供派生层失效清理用）；
+    /// 默认实现逐条组合，仅供测试替身。
+    fn mark_deleted_many(&mut self, paths: &[String]) -> Result<(), String> {
+        for path in paths {
+            self.mark_deleted(path)?;
+        }
+        Ok(())
+    }
     /// 事务内把一条记录的路径迁移到新路径并改状态（归档/撤销用）。
     fn move_record(&mut self, from: &str, to: &str, state: &str) -> Result<(), String>;
     /// 原子归档：记录迁移 + 操作日志写入必须在同一事务内完成；

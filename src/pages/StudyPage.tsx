@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, ClipboardList } from "../theme/icons";
 import { Banner } from "../components/Banner";
@@ -72,7 +72,7 @@ function loadPrefs(): StudyPrefs {
 
 /** 学业页：数据由后端 study.json 统一管理，UI 仅做展示与整份保存。*/
 export function StudyPage({
-  today = new Date(),
+  today: todayProp,
   initialData,
   reminderEnabled = false,
   leadDays = 3,
@@ -88,6 +88,10 @@ export function StudyPage({
 }) {
   const { t } = useTranslation();
   const [prefs] = useState(loadPrefs);
+  // 未显式传入时冻结挂载时刻：默认参数每次渲染新建 Date 会击穿下游 memo
+  // （日期均为绝对值展示，无需随渲染跳动）。
+  const [defaultToday] = useState(() => new Date());
+  const today = todayProp ?? defaultToday;
   const [data, setData] = useState<StudyData | null>(initialData ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -382,21 +386,43 @@ export function StudyPage({
     }
   };
 
-  const courseCounts = Object.fromEntries(
-    (data?.semesters ?? []).map((item) => [
-      item.id,
-      (data?.coursesBySemester[item.id] ?? []).length,
-    ]),
+  const courseCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        (data?.semesters ?? []).map((item) => [
+          item.id,
+          (data?.coursesBySemester[item.id] ?? []).length,
+        ]),
+      ),
+    [data],
   );
 
-  const pendingCount = homework.filter(
-    (item) => item.status === "pending",
-  ).length;
-  const reminderCount = homework.filter(
-    (item) =>
-      item.status === "pending" &&
-      (isOverdue(item, today) || isDueSoon(item.dueAt, leadDays, today)),
-  ).length;
+  const pendingCount = useMemo(
+    () => homework.filter((item) => item.status === "pending").length,
+    [homework],
+  );
+  const reminderCount = useMemo(
+    () =>
+      homework.filter(
+        (item) =>
+          item.status === "pending" &&
+          (isOverdue(item, today) || isDueSoon(item.dueAt, leadDays, today)),
+      ).length,
+    [homework, today, leadDays],
+  );
+
+  const existingColors = useMemo(
+    () => courses.map((course) => course.color),
+    [courses],
+  );
+
+  const selectedCourseHomework = useMemo(
+    () =>
+      selectedCourse
+        ? homework.filter((item) => item.courseId === selectedCourse.id)
+        : [],
+    [homework, selectedCourse],
+  );
 
   const studyHeader = (
     <PageHeader
@@ -525,7 +551,7 @@ export function StudyPage({
         open={courseFormOpen}
         initial={editingCourse}
         existingCourses={courses}
-        existingColors={courses.map((course) => course.color)}
+        existingColors={existingColors}
         onSave={saveCourse}
         onDelete={deleteCourse}
         onClose={() => setCourseFormOpen(false)}
@@ -533,11 +559,7 @@ export function StudyPage({
       <CourseDetailDialog
         open={selectedCourse !== null}
         course={selectedCourse}
-        homework={
-          selectedCourse
-            ? homework.filter((item) => item.courseId === selectedCourse.id)
-            : []
-        }
+        homework={selectedCourseHomework}
         today={today}
         onEdit={() => {
           if (!selectedCourse) return;

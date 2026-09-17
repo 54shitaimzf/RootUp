@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Archive,
@@ -32,14 +33,18 @@ export interface FileRowProps {
   onIdeOpen: (path: string) => void;
   onDelete: (path: string) => void;
   onExtract: (path: string) => void;
+  /** 入场动画只在非虚拟列表分支播放：虚拟行随可见区间重挂载，重放会闪烁。 */
+  animate?: boolean;
 }
 
 /**
  * 文件列表单行（虚拟滚动与非虚拟列表共用同一渲染）。
  * 0.8.7 阶段一拆出自 FilePage，DOM 结构与类名保持零回归；
  * props 以「记录 + 展示派生」为形态，阶段二 units 类型迁移只换解析不换行。
+ * 行数可达数百，组件以 memo 跳过无关重渲：调用方须保持 handler 引用稳定
+ * （FilePage 侧统一 useCallback/useMemo），否则 memo 失效。
  */
-export function FileRow({
+export const FileRow = memo(function FileRow({
   file,
   presentation,
   labelDefs,
@@ -54,6 +59,7 @@ export function FileRow({
   onIdeOpen,
   onDelete,
   onExtract,
+  animate = true,
 }: FileRowProps) {
   const { t } = useTranslation();
   const {
@@ -68,7 +74,7 @@ export function FileRow({
   } = presentation;
   return (
     <li
-      className="list-enter group flex items-center gap-1.5 px-4 py-3 text-sm"
+      className={`${animate ? "list-enter " : ""}group flex items-center gap-1.5 px-4 py-3 text-sm`}
       title={file.path}
     >
       {batchMode && (
@@ -200,4 +206,4 @@ export function FileRow({
       </span>
     </li>
   );
-}
+});

@@ -1,6 +1,7 @@
 use crate::core::settings::Settings;
 use crate::infra::local_file;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
@@ -8,11 +9,17 @@ use tauri_plugin_store::StoreExt;
 const SETTINGS_FILE: &str = "settings.json";
 const SETTINGS_KEY: &str = "settings";
 
+/// 损坏备份检查每进程只做一次：load_settings 调用极频（query_files 每次都读设置），
+/// 重复读盘 + 全量 JSON 解析只为确认同一文件可读，首次检查后短路。
+static CORRUPT_BACKUP_CHECKED: AtomicBool = AtomicBool::new(false);
+
 /// 读取设置；文件不存在或数据损坏时回落到默认值。
 pub fn load_settings(app: &AppHandle) -> Settings {
-    if let Ok(dir) = app.path().app_config_dir() {
-        if let Err(e) = backup_corrupt_settings(&dir) {
-            log::warn!("settings: 损坏备份失败: {e}");
+    if !CORRUPT_BACKUP_CHECKED.swap(true, Ordering::SeqCst) {
+        if let Ok(dir) = app.path().app_config_dir() {
+            if let Err(e) = backup_corrupt_settings(&dir) {
+                log::warn!("settings: 损坏备份失败: {e}");
+            }
         }
     }
     let store = match app.store(SETTINGS_FILE) {

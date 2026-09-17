@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### 0.8.8-dev 发布前性能与可读性加固（批次 A：行为零变化）
+
+功能与完成度零变化前提下的发布前加固批次（全库前后端性能/可读性审查后落地）：
+- **文件页渲染身份收敛**：`FileRow` 以 `React.memo` 跳过无关重渲（此前全仓库零 memo，搜索框每次按键在防抖触发前重渲全部可见行）；FilePage 侧行为 handler（打开/定位/复制/IDE/解压/删除）与 `rowHandlers` / `archiveVisible` 统一 useCallback/useMemo 稳定引用，`refreshList` 稳定化（此前每帧新建身份会传染 useFileArchive 全部回调）；`unarchivedCount` 入 useMemo。
+- **虚拟滚动去抖**：`VirtualRows` 可见区间未变时保持原对象身份（滚动事件不再驱动无意义重渲）；`list-enter` 入场动画仅在非虚拟分支播放（虚拟行随区间重挂载，滚动时重放闪烁）。
+- **实时事件订阅稳定化**：`useFiles` 的 files-changed 监听改为挂载期订阅一次 + ref 读取筛选/翻页瞬时值（此前每次查询变化注销重订阅，异步注册间隙可能漏事件）。
+- **学业页派生值 memo**：StudyPage 未显式传入 today 时冻结挂载时刻（默认参数每帧新建 Date 击穿下游 memo）、courseCounts / pending / reminder / existingColors / 选中课程作业过滤入 useMemo；CourseScheduleView 作业计数聚合为 Map（每卡片 filter 全表 O(n×m) 退役）、按天分组 + 布局派生单次完成（原每次渲染对全列表 7 遍 filter 再逐列重排）、叠层浮层扇形布局参数提为命名常量。
+- **设置页微收敛**：`SETTINGS_GUIDE.find` 同表达式 5 处 JSX 复制提为 `openGuide`；变更日志条数 50 命名 `ACTIONS_LOG_LIMIT`。
+- **死代码清理**：`filterFiles`（客户端过滤，已被后端 query_files 取代）与 `loadMoreMerge`（mergeFiles 纯别名）删除，对应 8 个测试用例退役。
+- **设置读取热路径去盘**：`load_settings` 的损坏备份检查改每进程一次（原子标记短路）——此前 query_files 等高频命令每次调用都读盘 + 全量 JSON 解析 settings.json，仅为反复确认同一文件可读。
+- **schema v11**：`idx_units_kind(kind, state)` 组合索引——`kind:software` / `kind:project` 同步失效清理与归档软件快照原为全表扫（`state != deleted` 范围条件下 idx_units_state 无法支撑 kind 过滤）。
+- **派生层批量失效清理**：新增 `IndexStore::mark_deleted_many`（单事务分块 path IN + 批量 FTS 清理，与 mark_missing 同模式），software/project 同步的逐条 mark_deleted 循环（各自隐式事务，持锁放大）退役。
+- **零散算法与分配**：`discover_software` 去重 Vec.contains O(n²) → HashSet（与 discover_projects 同构）；watcher 批次回调先借用遍历入队再 move 发射（整批 FileRecord 深拷贝退役，发射无条件执行）；扫描上限 10_000（三处散落）与墓碑保留窗口 30 天提为命名常量（`UNIT_SCAN_CAP` / `TOMBSTONE_RETENTION_MS`）。
+- 验收：前端 vitest 534 例全绿（净 -8 死代码用例）、tsc 零错、check-arch 绿；Rust 393 例全绿（迁移测试跟进 v11 + idx_units_kind 存在性断言）、fmt/clippy/rust-arch 绿。
+- 同轮审查的批次 B 立项 0.8.9：只读重命令 async 化（Tauri v2 同步命令在主线程执行，慢盘查询冻结 UI——最高收益项，因改变命令间调度顺序须单独批次 + 手测）、`LOWER(path) LIKE` 前缀查询索引化（EXPLAIN QUERY PLAN 验证）、archive_project 单路径校验去全量 discover（见 ROADMAP v0.8.9）。
+
 ### 0.8.8-dev UI 一致性审查修复（弹层栈 / 反馈通道 / 键盘可达性）
 
 全库前端五维审查（一致性/合理性/美观/易用/复用）后的修复批次：

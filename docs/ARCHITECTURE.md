@@ -154,7 +154,7 @@ pages → features / components / hooks → lib(API) → Tauri commands → core
 
 ### 损坏容错
 
-`infra/storage.rs` 的 `backup_corrupt_settings` 在加载前校验 JSON，损坏文件改名为 `settings.corrupt-<时间戳>.bak` 并回退默认。
+`infra/storage.rs` 的 `backup_corrupt_settings` 在加载前校验 JSON，损坏文件改名为 `settings.corrupt-<时间戳>.bak` 并回退默认。该校验**每进程只执行一次**（`CORRUPT_BACKUP_CHECKED` 原子标记短路）：`load_settings` 是高频路径（`query_files` 每次调用都读设置），不得在读取路径上反复读盘 + 全量解析同一文件。
 
 ### 应用自有领域 JSON 的统一本地文件层
 
@@ -215,7 +215,7 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 
 ### 监听热路径与设置缓存推送
 
-监听回调（`files-changed` 批次广播 + 自动归档入队）**零磁盘 IO**：自动归档开关与归档根不重读 settings.json，而是由 `infra::managed_state::refresh` 在全部设置写路径（`infra/settings_io.rs` 单入口：`update_settings` / `reset_settings` / 托盘切换 / 监控与项目目录增删 / 归档 journal；启动装配例外）后推送到 `ArchiveService` 缓存（`update(root, enabled)`），回调内只读内存状态（`try_state` + `is_active()`）。约定：任何新增的「设置驱动后台行为」沿用同一模式——写路径推送缓存，热路径读缓存；不得在监听/扫描回调里调用 `storage::load_settings`。副作用说明：settings.json 为应用私有文件，外部手改不会在下一批次「顺带生效」，需经应用内设置或重启。
+监听回调（`files-changed` 批次广播 + 自动归档入队）**零磁盘 IO**：自动归档开关与归档根不重读 settings.json，而是由 `infra::managed_state::refresh` 在全部设置写路径（`infra/settings_io.rs` 单入口：`update_settings` / `reset_settings` / 托盘切换 / 监控与项目目录增删 / 归档 journal；启动装配例外）后推送到 `ArchiveService` 缓存（`update(root, enabled)`），回调内只读内存状态（`try_state` + `is_active()`）。约定：任何新增的「设置驱动后台行为」沿用同一模式——写路径推送缓存，热路径读缓存；不得在监听/扫描回调里调用 `storage::load_settings`。副作用说明：settings.json 为应用私有文件，外部手改不会在下一批次「顺带生效」，需经应用内设置或重启。批次回调先借用遍历入队、再 move 发射（避免整批 `Vec<FileRecord>` 深拷贝），发射无条件执行（归档状态缺失/未激活不影响前端收到事件）。
 
 ### 事件协议
 
@@ -238,8 +238,9 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 ### 数据库与批量
 
 - `ScanParams.batch_size` 默认 2000；`upsert_many` 多行 VALUES（子批 1000，9 参数/行含 kind）+ 冲突更新（first_seen 不覆盖）；FTS 未启用时表存在性只检查一次；扫描日志含 `db_ms`，MFT 阶段含 `read_ms / parse_ms / resolve_ms`。
-- SQLite 迁移阶梯 v1–v8 集中在 `infra/index_store.rs::migrate`；v8（0.8.7 阶段二）把 `files` 表升级为统一单元表 `units`：`kind: file | project | software`（存量记录迁移后恒为 file）+ `project_kind` 扩展列（software 列留 0.8.8），索引重建为 `idx_units_state / idx_units_modified`，FTS 表同步改名 `units_fts`；USN 状态持久化于 `usn_state`（schema v5）。
+- SQLite 迁移阶梯 v1–v11 集中在 `infra/index_store.rs::migrate`；v8（0.8.7 阶段二）把 `files` 表升级为统一单元表 `units`：`kind: file | project | software`（存量记录迁移后恒为 file）+ `project_kind` 扩展列，索引重建为 `idx_units_state / idx_units_modified`，FTS 表同步改名 `units_fts`；USN 状态持久化于 `usn_state`（schema v5）；v9 `units.software_kind` 与 v10 `action_log` 见 0.8.8 小节；v11（0.8.8 发布前加固）补 `idx_units_kind(kind, state)` 组合索引——kind 维度同步/快照查询（`kind:software` / `kind:project` 失效清理、归档软件快照）原先为全表扫，`state != deleted` 范围条件下 `idx_units_state` 无法支撑 kind 过滤。
 - **项目单元派生同步**：`infra/project_sync.rs` 把 `discover_projects` 结果 upsert 为 `kind=project` 单元、失效项标记 deleted——发现逻辑（core/project.rs）是唯一真源，units 只作查询派生层；同步时机为启动延迟服务与监控 / 项目目录变更后（均后台执行）。
+- **派生层失效清理批量事务**：software/project 同步的陈旧单元清理走 `IndexStore::mark_deleted_many`（单事务分块 `path IN` + 批量 FTS 清理，与 `mark_missing` 同模式）；逐条 `mark_deleted`（各自隐式事务）仅保留单路径场景。扫描上限与墓碑窗口等跨文件共享数值以命名常量收口（`core::index::UNIT_SCAN_CAP`、`TOMBSTONE_RETENTION_MS`），禁止三处散落同一魔法数。
 - walkdir 微优化：跳过集与时间戳在枚举开始时快照一次（不再逐目录加锁/取时钟），忽略规则与符号链接语义不变。
 
 ### USN 启动补账
@@ -321,6 +322,7 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 - **链接文本与完整路径展示约定**：界面文字需要表达文件系统路径时，一律显示友好名链接（如归档目的地显示「档案库」），完整路径只经悬浮提示呈现，禁止在界面平铺完整路径；链接文本统一样式 `text-brand-700 dark:text-brand-300` + 下划线（hover 加深），行为统一走 `RevealLink`（点击在资源管理器定位，失败静默）。
 - **图标消费模型**：UI 图标唯一入口为 `theme/icons.ts`（具名再导出 lucide，不影响 tree-shaking）；组件与数据注册表一律从该路径导入，`check-arch` 门禁禁止其它任何文件直连 `lucide-react`（白名单仅 `theme/icons.ts`）。v1.3 Iris 皮肤替换图标集时只改该模块，组件零改动。数据图标（标签 icon/color 等 key）经 `lib/labelDefs.ts` 解析，类别视觉经 `lib/categoryDefs.ts`；阶段三建立统一的 lib key 注册表后收敛进同一 key 空间。
 - **文件页结构**：`pages/FilePage.tsx` 只做页面壳（状态装配、行为处理与布局组合）；行渲染、列表、批量工具条、横幅与归档弹层在 `features/files/components/`，纯逻辑（常量、自动补全候选、行展示派生）在 `features/files/model.ts`（归档目的地路径派生在 `lib/fileUtils.ts`，跨页复用），归档动作状态机在 `features/files/hooks/useFileArchive.ts`。`FileRow` 以「记录 + 展示派生」为 props 形态，供阶段二 units 四视图与 v0.9.4 命令面板复用；页面壳内禁止再内联大段 UI 实现。
+- **列表渲染身份纪律（0.8.8 发布前加固）**：可能达数百行的列表行组件（当前 `FileRow`）一律 `React.memo`，调用方必须保持传入 handler 的引用稳定——页面壳用 useCallback/useMemo 组装 `rowHandlers` / `archiveVisible` / 注入 hook 的 `refreshList` 等依赖，否则 memo 失效；`VirtualRows` 在可见区间未变时保持状态对象身份（滚动事件不驱动重渲），行内入场动画仅在非虚拟分支播放（虚拟行随区间重挂载会重放）；渲染体内禁止对列表做 O(n×m) 派生（按天分组、计数聚合、today 等以 useMemo 冻结——默认参数每帧新建 Date 会击穿下游 memo）；Tauri 事件监听订阅一次 + ref 读瞬时值，不随筛选/翻页反复拆装（异步重订阅间隙会漏事件）。
 
 ## 学业模块
 

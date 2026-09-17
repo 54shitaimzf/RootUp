@@ -5,12 +5,10 @@ import {
   archiveDestPath,
   buildQuery,
   fileStateMeta,
-  filterFiles,
   formatFileSize,
   formatFileSizeParts,
   formatTimestamp,
   joinArchivePath,
-  loadMoreMerge,
   mergeFiles,
   parseLabels,
   pathBasename,
@@ -37,28 +35,6 @@ function rec(
     state,
   };
 }
-
-describe("filterFiles", () => {
-  const files = [rec("C:/Math/notes.pdf", 1), rec("C:/Music/song.mp3", 2)];
-
-  it("空查询返回全部", () => {
-    expect(filterFiles(files, "")).toHaveLength(2);
-    expect(filterFiles(files, "   ")).toHaveLength(2);
-  });
-
-  it("按名称过滤且忽略大小写", () => {
-    expect(filterFiles(files, "NOTES")).toHaveLength(1);
-    expect(filterFiles(files, "song")).toHaveLength(1);
-  });
-
-  it("按路径过滤", () => {
-    expect(filterFiles(files, "math")).toHaveLength(1);
-  });
-
-  it("无匹配返回空", () => {
-    expect(filterFiles(files, "nothing")).toHaveLength(0);
-  });
-});
 
 describe("buildQuery", () => {
   it("kind 产 kind: token，all 视图不产（四视图契约）", () => {
@@ -182,47 +158,6 @@ describe("mergeFiles", () => {
     expect(result).toHaveLength(100);
     expect(result[0].path).toBe("C:/new.txt");
     expect(result.some((f) => f.path === "C:/f0.txt")).toBe(false);
-  });
-});
-
-describe("loadMoreMerge", () => {
-  it("下一页追加到已有列表并去重", () => {
-    const result = loadMoreMerge(
-      [rec("C:/a.txt", 2)],
-      [rec("C:/b.txt", 3), rec("C:/a.txt", 4)],
-      100,
-    );
-    expect(result).toHaveLength(2);
-    expect(result.find((f) => f.path === "C:/a.txt")?.modified).toBe(4);
-  });
-
-  it("按 modified 倒序排列", () => {
-    const result = loadMoreMerge(
-      [rec("C:/old.txt", 1)],
-      [rec("C:/new.txt", 5)],
-      100,
-    );
-    expect(result.map((f) => f.path)).toEqual(["C:/new.txt", "C:/old.txt"]);
-  });
-
-  it("cap 等于 offset+limit 时截断到已加载总量", () => {
-    const first = Array.from({ length: 50 }, (_, i) => rec(`C:/f${i}.txt`, i));
-    const second = Array.from(
-      { length: 50 },
-      (_, i) => rec(`C:/g${i}.txt`, 100 + i),
-    );
-    const result = loadMoreMerge(first, second, 100);
-    expect(result).toHaveLength(100);
-    expect(result[0].modified).toBe(149);
-  });
-
-  it("deleted 记录从累计列表移除", () => {
-    const result = loadMoreMerge(
-      [rec("C:/a.txt", 1)],
-      [rec("C:/a.txt", 1, "deleted")],
-      100,
-    );
-    expect(result).toEqual([]);
   });
 });
 

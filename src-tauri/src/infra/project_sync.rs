@@ -4,7 +4,7 @@
 //! 不在最新发现集合内的历史 project 单元标记 deleted（索引保留，可重扫恢复）。
 //! 同步在启动（延迟服务）与目录配置变更后触发，均为后台执行不阻塞交互。
 use crate::core::events::FileState;
-use crate::core::index::{FileRecord, IndexStore, UnitKind};
+use crate::core::index::{FileRecord, IndexStore, UnitKind, UNIT_SCAN_CAP};
 use crate::core::path::path_key;
 use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector};
 use crate::core::query::parse_query;
@@ -74,15 +74,17 @@ pub fn sync_project_units(
     // 失效清理：现存 project 单元不在最新集合 → deleted
     let mut query = parse_query("kind:project state:indexed");
     query.need_total = false;
-    query.limit = 10_000;
+    query.limit = UNIT_SCAN_CAP;
     let page = store.query(&query)?;
-    let mut removed = 0usize;
-    for stale in &page.items {
-        if !live_keys.contains(&path_key(&stale.path)) {
-            store.mark_deleted(&stale.path)?;
-            removed += 1;
-        }
-    }
+    let stale_paths: Vec<String> = page
+        .items
+        .iter()
+        .filter(|stale| !live_keys.contains(&path_key(&stale.path)))
+        .map(|stale| stale.path.clone())
+        .collect();
+    let removed = stale_paths.len();
+    // 单事务批量标记（逐条 mark_deleted 各自隐式事务，量大时持锁放大）
+    store.mark_deleted_many(&stale_paths)?;
 
     Ok(SyncSummary {
         upserted: upserts.len(),

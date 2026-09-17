@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -44,6 +45,12 @@ import { SlotCoursesDialog } from "./SlotCoursesDialog";
 
 const HOUR_HEIGHT = 56;
 const MIN_CARD_HEIGHT = 28;
+/** 叠层散开浮层（StackOverlay）的扇形布局参数。 */
+const STACK_MAX_FAN = 4;
+const STACK_CARD_W = 320;
+const STACK_CARD_H = 240;
+const STACK_COL_GAP = 16;
+const STACK_ROW_GAP = 8;
 const DAY_KEYS = [
   "monday",
   "tuesday",
@@ -243,11 +250,38 @@ export function CourseScheduleView({
     return undefined;
   }, [lang]);
 
-  const visibleCourses = showAllWeeks
-    ? courses
-    : courses.filter((course) =>
-        sessionActiveInWeek(course.weekRule, course.weekRange, currentWeek),
-      );
+  const visibleCourses = useMemo(
+    () =>
+      showAllWeeks
+        ? courses
+        : courses.filter((course) =>
+            sessionActiveInWeek(course.weekRule, course.weekRange, currentWeek),
+          ),
+    [courses, showAllWeeks, currentWeek],
+  );
+
+  // 作业计数聚合一次，避免每张卡片 filter 全表（O(n×m)）；悬空作业（courseId 为 null）不匹配任何卡片，跳过。
+  const homeworkCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of homework) {
+      if (item.courseId === null) continue;
+      counts.set(item.courseId, (counts.get(item.courseId) ?? 0) + 1);
+    }
+    return counts;
+  }, [homework]);
+
+  // 按天分组 + 布局派生一次完成，避免每次渲染对全列表 7 遍 filter 再逐列重排。
+  const dayBlocks = useMemo(() => {
+    const byDay = new Map<number, Course[]>();
+    for (const day of [1, 2, 3, 4, 5, 6, 7]) byDay.set(day, []);
+    for (const course of visibleCourses) {
+      byDay.get(course.day)?.push(course);
+    }
+    const blocks = new Map<number, ReturnType<typeof layoutDayCourses>>();
+    for (const [day, list] of byDay) blocks.set(day, layoutDayCourses(list));
+    return blocks;
+  }, [visibleCourses]);
+
   const axis = axisRange(visibleCourses);
   const days = weekDaysOrder(weekStart);
   const dates = weekDates(today, weekStart);
@@ -269,7 +303,7 @@ export function CourseScheduleView({
   };
 
   const homeworkCountOf = (courseId: string) =>
-    homework.filter((item) => item.courseId === courseId).length;
+    homeworkCounts.get(courseId) ?? 0;
 
   const openStackOverlay = (
     _event: { currentTarget: HTMLElement },
@@ -457,9 +491,6 @@ export function CourseScheduleView({
             </div>
             <div className="flex">
               {days.map((day, index) => {
-                const dayCourses = visibleCourses.filter(
-                  (course) => course.day === day,
-                );
                 const isToday = day === todayStudyDay;
                 const isWeekend = day >= 6;
                 return (
@@ -497,7 +528,7 @@ export function CourseScheduleView({
                         <div className="absolute -left-0.5 -top-[3px] size-1.5 rounded-full bg-brand-500" />
                       </div>
                     )}
-                    {layoutDayCourses(dayCourses).map((block) => {
+                    {(dayBlocks.get(day) ?? []).map((block) => {
                       const blockTopPx =
                         (axisTopPercent(block.startMin, axis) / 100) *
                         gridHeight;
@@ -714,17 +745,12 @@ export function CourseScheduleView({
             onClick={() => setStackOverlay(null)}
           />
           {(() => {
-            const MAX_FAN = 4;
-            const CARD_W = 320;
-            const CARD_H = 240;
-            const COL_GAP = 16;
-            const ROW_GAP = 8;
-            const visible = stackOverlay.courses.slice(0, MAX_FAN);
-            const overflow = stackOverlay.courses.slice(MAX_FAN);
+            const visible = stackOverlay.courses.slice(0, STACK_MAX_FAN);
+            const overflow = stackOverlay.courses.slice(STACK_MAX_FAN);
             const cols = visible.length <= 2 ? visible.length : 2;
             const rows = Math.ceil(visible.length / cols);
-            const totalW = cols * CARD_W + (cols - 1) * COL_GAP;
-            const totalH = rows * CARD_H + (rows - 1) * ROW_GAP;
+            const totalW = cols * STACK_CARD_W + (cols - 1) * STACK_COL_GAP;
+            const totalH = rows * STACK_CARD_H + (rows - 1) * STACK_ROW_GAP;
             const startX = Math.max(
               8,
               Math.floor((window.innerWidth - totalW) / 2),
@@ -734,8 +760,10 @@ export function CourseScheduleView({
               Math.floor((window.innerHeight - totalH) / 2),
             );
             const positionOf = (index: number) => ({
-              left: startX + (index % cols) * (CARD_W + COL_GAP),
-              top: startY + Math.floor(index / cols) * (CARD_H + ROW_GAP),
+              left: startX + (index % cols) * (STACK_CARD_W + STACK_COL_GAP),
+              top:
+                startY +
+                Math.floor(index / cols) * (STACK_CARD_H + STACK_ROW_GAP),
             });
             return (
               <>
@@ -744,7 +772,7 @@ export function CourseScheduleView({
                   const dealStyle = {
                     left: pos.left,
                     top: pos.top,
-                    width: CARD_W,
+                    width: STACK_CARD_W,
                     animationDelay: `${index * 40}ms`,
                     "--deal-rotate": `${index % 2 === 0 ? -1.5 : 1.5}deg`,
                   } as CSSProperties;
