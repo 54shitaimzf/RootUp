@@ -119,6 +119,8 @@ pub fn start_deferred_services(app: &AppHandle) -> Result<(), String> {
             crate::infra::project_sync::schedule_project_sync(&sync_app);
         })
         .ok();
+    // 软件单元同步：后台执行（识别结果派生写入，失败不影响功能）
+    crate::infra::software_sync::schedule_software_sync(app);
     log::info!(
         "startup: 延迟服务已启动 ms={}",
         started.elapsed().as_millis()

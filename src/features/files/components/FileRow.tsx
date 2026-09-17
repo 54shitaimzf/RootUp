@@ -53,6 +53,7 @@ export function FileRow({
   const {
     meta,
     iconCategory,
+    unitIcon,
     sortedLabels,
     firstDef,
     firstName,
@@ -73,7 +74,7 @@ export function FileRow({
           className="size-4 shrink-0 accent-brand-600"
         />
       )}
-      <FileTypeIcon category={iconCategory} title={iconCategory} />
+      <FileTypeIcon category={iconCategory} unitKind={unitIcon} title={iconCategory} />
       <span className="w-56 shrink-0">
         <span
           className="block truncate font-medium text-slate-800 dark:text-slate-100"

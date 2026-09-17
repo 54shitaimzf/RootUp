@@ -189,6 +189,7 @@ export default {
     groups: {
       general: { title: "General", description: "Appearance, language and close behavior." },
       watch: { title: "Monitoring & classification", description: "Choose which folders RootUp watches and how files are grouped." },
+      software: { title: "Software components", description: "Adjudicate software unit detection and hide internal files on the files page." },
       archive: { title: "Archive", description: "Controlled file moves with undo support." },
       reminder: { title: "Study reminders", description: "Homework deadline reminders and quick entry." },
       advanced: { title: "Advanced", description: "Smart open, logs and reset." },
@@ -212,6 +213,16 @@ export default {
       intro: "Files inside watched folders are scanned, indexed and tracked in real time.",
       example: "Add “Downloads” and “Desktop” so new files appear within seconds.",
       tips: "Drop a folder or use “Browse…” to add; removing a folder also cleans its index (disk files are untouched and can be restored by re-adding).",
+    },
+    hideInternalFiles: {
+      intro: "Hide system-generated files, software component internals and project program files on the files page.",
+      example: "Once on, desktop.ini, Thumbs.db, files inside detected software folders and exe/dll inside projects disappear from lists and search.",
+      tips: "Display only: the index is kept and stats stay consistent; turning it off restores everything instantly. Software units themselves stay visible.",
+    },
+    softwareDirs: {
+      intro: "Mark or exclude software directories manually; results merge with automatic detection (PortableApps / Scoop / portable layout / heuristic) into software units.",
+      example: "Mark “C:\\Tools\\MyApp” and it stays pinned in the software view, protected from whole-tree archive moves.",
+      tips: "Exclusion wins (suppresses both auto-detection and manual marks); lists re-sync software units in the background after every change.",
     },
     scheme: {
       intro: "A scheme is a named snapshot of ignore rules plus classification mapping.",
@@ -289,9 +300,28 @@ export default {
     homeworkShortcutCreated: "Desktop shortcut created",
     settingsGroupGeneral: "General",
     settingsGroupWatch: "Monitoring & classification",
+    settingsGroupSoftware: "Software components",
     settingsGroupArchive: "Archive",
     settingsGroupReminder: "Study reminders",
     settingsGroupAdvanced: "Advanced",
+    hideInternalFiles: "Hide system & component internal files",
+    hideInternalFilesHint:
+      "Hide system-generated files (desktop.ini etc.), internal files of detected software components, and program files (exe/dll etc.) inside projects on the files page. Display only — the index is kept and turning it off restores everything.",
+    softwareDirs: "Software directories",
+    softwareDirsDesc:
+      "Manually mark or exclude software directories; combined with automatic detection (PortableApps / Scoop / portable layout), exclusion wins. Marked software units are protected from whole-tree archive moves.",
+    addSoftwareDir: "Mark software directory",
+    softwareDirPlaceholder: "Enter a software folder path, e.g. C:\\Tools\\MyApp",
+    softwareEmpty: "No manually marked software directories (auto-detection keeps running)",
+    removeSoftware: "Unmark",
+    softwareExcluded: "Excluded software directories",
+    softwareExcludedDesc: "Excluded directories are never detected as software units (overrides manual marks).",
+    addSoftwareExclusion: "Exclude directory",
+    softwareExclusionPlaceholder: "Enter a folder path to exclude",
+    softwareExclusionEmpty: "No excluded directories",
+    removeSoftwareExclusion: "Remove exclusion",
+    softwareAdded: "Marked — syncing software units",
+    softwareExcludedDone: "Excluded — syncing software units",
     watchedDirs: "Watched folders",
     watchedDirsDesc:
       "Add download or study folders; existing files are scanned and new files are indexed in real time.",

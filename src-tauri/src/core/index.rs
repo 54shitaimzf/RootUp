@@ -51,6 +51,9 @@ pub struct FileRecord {
     /// 单元类型；存量记录迁移后恒为 File。
     #[serde(default)]
     pub kind: UnitKind,
+    /// 识别依据（仅 kind=Software 使用：manual/paf/scoop/portable/heuristic）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub software_kind: Option<String>,
 }
 
 impl FileRecord {
@@ -76,6 +79,7 @@ impl FileRecord {
             modified: first_seen,
             state: state.to_string(),
             kind: UnitKind::File,
+            software_kind: None,
         }
     }
 }

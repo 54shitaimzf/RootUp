@@ -147,6 +147,8 @@ export interface RowPresentation {
   meta: FileStateMeta;
   /** 行首图标的类别 key（首个标签，未知回落 other）。 */
   iconCategory: string;
+  /** 单元类型图标（0.8.8）：project / software 覆盖类别图标；文件行不设置。 */
+  unitIcon?: "project" | "software";
   /** 去重 + 课程优先排序后的标签 key 列表。 */
   sortedLabels: string[];
   firstDef?: LabelDefLike;
@@ -192,6 +194,8 @@ export function presentRow(
   return {
     meta: fileStateMeta(file.state),
     iconCategory: fileLabels[0] ?? "other",
+    unitIcon:
+      file.kind === "software" ? "software" : file.kind === "project" ? "project" : undefined,
     sortedLabels,
     firstDef,
     firstName,

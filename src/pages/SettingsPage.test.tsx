@@ -33,7 +33,7 @@ vi.mock("../lib/tauri", () => ({
     exact_names: ["desktop.ini", "thumbs.db", ".ds_store", "$recycle.bin"],
   },
   defaultSettings: {
-    version: 3,
+    version: 4,
     theme: "system",
     language: "zh-CN",
     watched_dirs: [],
@@ -48,11 +48,18 @@ vi.mock("../lib/tauri", () => ({
     custom_open_commands: [],
     archive_root: "",
     auto_archive: false,
+    software_dirs: [],
+    software_excluded: [],
+    hide_internal_files: false,
   },
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   addWatchedDir: vi.fn(),
   removeWatchedDir: vi.fn(),
+  addSoftwareDir: vi.fn(),
+  removeSoftwareDir: vi.fn(),
+  excludeSoftwareDir: vi.fn(),
+  removeSoftwareExclusion: vi.fn(),
   applyScheme: vi.fn(),
   listCommonDirs: vi.fn(),
   resolveDirTarget: vi.fn(),
@@ -109,6 +116,9 @@ const SETTINGS: Settings = {
       close_action: "ask",
       reminder_enabled: false,
       reminder_lead_days: 3,
+      software_dirs: [],
+      software_excluded: [],
+      hide_internal_files: false,
     };
 
 function scan(): ScanController {
@@ -194,7 +204,9 @@ describe("SettingsPage", () => {
     await screen.findByText("作业截止提醒");
     const leadSelect = screen.getByLabelText("提前提醒天数");
     expect(leadSelect).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "作业截止提醒" }),
+    );
     await waitFor(() =>
       expect(updateSettings).toHaveBeenCalledWith(
         expect.objectContaining({ reminder_enabled: true }),
@@ -217,8 +229,9 @@ describe("SettingsPage", () => {
       { path: "C:/Users/x/Downloads", kind: "downloads" },
     ]);
     renderPage();
-    const chip = await screen.findByText("下载");
-    fireEvent.click(chip);
+    // 监控/软件/排除三处 DirectoryAdder 共用常用目录 chips，取首个（监控目录区）
+    const chips = await screen.findAllByText("下载");
+    fireEvent.click(chips[0]);
     await waitFor(() =>
       expect(addWatchedDir).toHaveBeenCalledWith("C:/Users/x/Downloads"),
     );
@@ -228,7 +241,9 @@ describe("SettingsPage", () => {
     vi.mocked(openDirectoryDialog).mockResolvedValue("C:/Picked");
     renderPage();
     await screen.findByLabelText("语言");
-    fireEvent.click(screen.getByRole("button", { name: "浏览…" }));
+    // 监控/软件/排除三处都有「浏览…」，取首个（监控目录区）
+    const browseButtons = screen.getAllByRole("button", { name: "浏览…" });
+    fireEvent.click(browseButtons[0]);
     await waitFor(() =>
       expect(addWatchedDir).toHaveBeenCalledWith("C:/Picked"),
     );

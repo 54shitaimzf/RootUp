@@ -246,6 +246,7 @@ fn run_query(
     sort_dir: Option<String>,
     cursor: Option<String>,
     need_total: Option<bool>,
+    hide_internal: bool,
 ) -> Result<QueryPage, String> {
     let started = Instant::now();
     let raw = query.unwrap_or("");
@@ -279,6 +280,7 @@ fn run_query(
         || parsed.after.is_some();
     parsed.need_total =
         need_total.unwrap_or_else(|| parsed.cursor.is_none() && offset == 0 && !has_filter);
+    parsed.hide_internal = hide_internal;
     let store = store.lock().map_err(|e| e.to_string())?;
     let page = store.query(&parsed)?;
     let ms = started.elapsed().as_millis();
@@ -296,6 +298,7 @@ fn run_query(
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn query_files(
+    app: AppHandle,
     store: State<'_, Arc<Mutex<dyn IndexStore>>>,
     query: Option<String>,
     limit: Option<i64>,
@@ -305,6 +308,8 @@ pub fn query_files(
     cursor: Option<String>,
     need_total: Option<bool>,
 ) -> Result<QueryPage, String> {
+    // 隐藏开关从设置实时读取（仅展示层过滤，查询本身无状态；设置保存即时生效）
+    let hide_internal = storage::load_settings(&app).hide_internal_files;
     run_query(
         &store,
         query.as_deref(),
@@ -314,6 +319,7 @@ pub fn query_files(
         sort_dir,
         cursor,
         need_total,
+        hide_internal,
     )
 }
 

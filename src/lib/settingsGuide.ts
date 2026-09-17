@@ -5,6 +5,7 @@
 export type SettingsGuideGroup =
   | "general"
   | "watch"
+  | "software"
   | "archive"
   | "reminder"
   | "advanced";
@@ -39,6 +40,11 @@ export const SETTINGS_GUIDE_GROUPS: SettingsGuideGroupDef[] = [
     descriptionKey: "settingsGuide.groups.watch.description",
   },
   {
+    id: "software",
+    titleKey: "settingsGuide.groups.software.title",
+    descriptionKey: "settingsGuide.groups.software.description",
+  },
+  {
     id: "archive",
     titleKey: "settingsGuide.groups.archive.title",
     descriptionKey: "settingsGuide.groups.archive.description",
@@ -68,6 +74,8 @@ const ENTRY_KEYWORDS: Record<string, string[]> = {
   reminder: ["提醒", "作业", "截止", "reminder"],
   homeworkShortcut: ["快捷方式", "作业", "桌面", "shortcut"],
   projectOpen: ["IDE", "打开", "项目", "命令", "project"],
+  hideInternalFiles: ["隐藏", "内部文件", "系统文件", "desktop.ini", "hide"],
+  softwareDirs: ["软件", "便携", "认定", "排除", "software"],
   logDir: ["日志", "目录", "log"],
   reset: ["恢复", "默认", "重置", "reset"],
 };
@@ -93,6 +101,8 @@ export const SETTINGS_GUIDE: SettingsGuideEntry[] = [
   entry("ignoreRules", "watch", "ignoreRow"),
   entry("classifyMapping", "watch", "mappingRow"),
   entry("labels", "watch", "labelRow"),
+  entry("hideInternalFiles", "software", "hideInternalFiles"),
+  entry("softwareDirs", "software", "softwareDirs"),
   entry("archive", "archive", "archiveRow"),
   entry("reminder", "reminder", "reminderEnabled"),
   entry("homeworkShortcut", "reminder", "homeworkShortcut"),

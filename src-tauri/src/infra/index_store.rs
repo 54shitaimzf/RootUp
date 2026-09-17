@@ -192,6 +192,16 @@ fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
     }
+    if version < 9 {
+        // 0.8.8 软件单元：units 增 software_kind 列（识别依据 manual/paf/scoop/portable/heuristic，
+        // 仅 kind='software' 行使用；存量库补列即可，无数据转换）。
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute_batch("ALTER TABLE units ADD COLUMN software_kind TEXT")
+            .map_err(|e| e.to_string())?;
+        tx.pragma_update(None, "user_version", 9)
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -210,6 +220,7 @@ fn row_to_record(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
             .get::<_, Option<String>>("kind")?
             .map(|k| UnitKind::parse(&k))
             .unwrap_or_default(),
+        software_kind: row.get("software_kind")?,
     })
 }
 
@@ -312,8 +323,8 @@ impl IndexStore for SqliteIndexStore {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
             r#"
-            INSERT INTO units (path, name, size, file_type, labels, first_seen, modified, state, kind)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            INSERT INTO units (path, name, size, file_type, labels, first_seen, modified, state, kind, software_kind)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             ON CONFLICT(path) DO UPDATE SET
                 name = excluded.name,
                 size = excluded.size,
@@ -321,7 +332,8 @@ impl IndexStore for SqliteIndexStore {
                 labels = excluded.labels,
                 modified = excluded.modified,
                 state = excluded.state,
-                kind = excluded.kind
+                kind = excluded.kind,
+                software_kind = excluded.software_kind
             "#,
             params![
                 record.path,
@@ -333,6 +345,7 @@ impl IndexStore for SqliteIndexStore {
                 record.modified,
                 record.state,
                 record.kind.as_str(),
+                record.software_kind,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -512,6 +525,26 @@ impl IndexStore for SqliteIndexStore {
             conditions.push(format!("kind IN ({})", placeholders.join(",")));
             params.extend(query.kinds.iter().map(|k| Value::Text(k.clone())));
         }
+        // 0.8.8 文件页隐藏开关：系统生成文件、已识别软件组件内部文件、项目程序内部
+        // 文件（exe/dll/sys）。仅展示层过滤（索引保留，搜索/统计口径同步），软件与
+        // 项目单元本身不受影响； 子查询自关联按前缀判定归属（outer 表未起别名，
+        // 内层 su/pj 别名不遮蔽 units.path）。
+        if query.hide_internal {
+            let deleted_ph = params.len() + 1;
+            params.push(Value::Text(FileState::Deleted.as_str().into()));
+            conditions.push(format!(
+                "NOT (\
+                 LOWER(name) IN ('desktop.ini','thumbs.db','.ds_store') \
+                 OR EXISTS (SELECT 1 FROM units su WHERE su.kind = 'software' \
+                   AND su.state != ?{deleted_ph} \
+                   AND substr(LOWER(units.path), 1, LENGTH(su.path) + 1) = LOWER(su.path) || '/') \
+                 OR (kind = 'file' AND file_type IN ('exe','dll','sys') \
+                   AND EXISTS (SELECT 1 FROM units pj WHERE pj.kind = 'project' \
+                     AND pj.state != ?{deleted_ph} \
+                     AND substr(LOWER(units.path), 1, LENGTH(pj.path) + 1) = LOWER(pj.path) || '/'))\
+                 )"
+            ));
+        }
         if let Some(min) = query.size_min {
             conditions.push(format!("size >= ?{}", params.len() + 1));
             params.push(Value::Integer(min));
@@ -627,21 +660,21 @@ impl IndexStore for SqliteIndexStore {
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         {
-            // 多行 VALUES 批量写入（子批 1000：9 参数/行 = 9000 变量，低于 SQLite 32766 上限），
+            // 多行 VALUES 批量写入（子批 1000：10 参数/行 = 10000 变量，低于 SQLite 32766 上限），
             // first_seen 不参与冲突更新以保留首次发现时间。
             const SUB_BATCH: usize = 1000;
             for chunk in records.chunks(SUB_BATCH) {
                 let mut sql = String::from(
-                    "INSERT INTO units (path, name, size, file_type, labels, first_seen, modified, state, kind) VALUES ",
+                    "INSERT INTO units (path, name, size, file_type, labels, first_seen, modified, state, kind, software_kind) VALUES ",
                 );
-                let mut values: Vec<Value> = Vec::with_capacity(chunk.len() * 9);
+                let mut values: Vec<Value> = Vec::with_capacity(chunk.len() * 10);
                 for (i, record) in chunk.iter().enumerate() {
                     if i > 0 {
                         sql.push(',');
                     }
-                    let base = i * 9;
+                    let base = i * 10;
                     sql.push_str(&format!(
-                        "(?{},?{},?{},?{},?{},?{},?{},?{},?{})",
+                        "(?{},?{},?{},?{},?{},?{},?{},?{},?{},?{})",
                         base + 1,
                         base + 2,
                         base + 3,
@@ -650,7 +683,8 @@ impl IndexStore for SqliteIndexStore {
                         base + 6,
                         base + 7,
                         base + 8,
-                        base + 9
+                        base + 9,
+                        base + 10
                     ));
                     values.push(Value::Text(record.path.clone()));
                     values.push(Value::Text(record.name.clone()));
@@ -661,11 +695,19 @@ impl IndexStore for SqliteIndexStore {
                     values.push(Value::Integer(record.modified));
                     values.push(Value::Text(record.state.clone()));
                     values.push(Value::Text(record.kind.as_str().to_string()));
+                    values.push(
+                        record
+                            .software_kind
+                            .clone()
+                            .map(Value::Text)
+                            .unwrap_or(Value::Null),
+                    );
                 }
                 sql.push_str(
                     " ON CONFLICT(path) DO UPDATE SET name=excluded.name, size=excluded.size, \
                      file_type=excluded.file_type, labels=excluded.labels, \
-                     modified=excluded.modified, state=excluded.state, kind=excluded.kind",
+                     modified=excluded.modified, state=excluded.state, kind=excluded.kind, \
+                     software_kind=excluded.software_kind",
                 );
                 tx.execute(&sql, params_from_iter(values.iter()))
                     .map_err(|e| e.to_string())?;
@@ -1320,6 +1362,7 @@ fn sort_value_of(order_col: &str, record: &FileRecord) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::query::parse_query;
     use std::fs;
 
     fn temp_db_dir(tag: &str) -> std::path::PathBuf {
@@ -1348,6 +1391,82 @@ mod tests {
         assert_eq!(got.file_type, "pdf");
         assert_eq!(got.state, "indexed");
         assert_eq!(s.get_by_path("C:/none").unwrap(), None);
+    }
+
+    fn query_paths(s: &SqliteIndexStore, q: &str, hide_internal: bool) -> Vec<String> {
+        let mut query = parse_query(q);
+        query.need_total = false;
+        query.hide_internal = hide_internal;
+        query.sort_by = Some("name".into());
+        let page = s.query(&query).unwrap();
+        page.items.iter().map(|r| r.path.clone()).collect()
+    }
+
+    #[test]
+    fn hide_internal_filters_system_software_and_project_internals() {
+        let mut s = store();
+        let mk = |path: &str| {
+            let mut r = record(path, 1, 1);
+            r.state = "indexed".into();
+            r
+        };
+        // 系统/生成文件（大小写不敏感）
+        s.upsert(&mk("C:/Watch/desktop.INI")).unwrap();
+        s.upsert(&mk("C:/Watch/Thumbs.db")).unwrap();
+        // 普通文件（不隐藏）
+        s.upsert(&mk("C:/Watch/notes.txt")).unwrap();
+        // 软件单元本身（不隐藏）与其内部文件（隐藏）
+        let mut su = mk("C:/Watch/SomeApp");
+        su.kind = UnitKind::Software;
+        s.upsert(&su).unwrap();
+        s.upsert(&mk("C:/Watch/SomeApp/App/app.exe")).unwrap();
+        s.upsert(&mk("C:/Watch/SomeApp/readme.txt")).unwrap();
+        // 项目单元本身（不隐藏）与其程序内部文件（隐藏 exe/dll/sys）
+        let mut pj = mk("C:/Watch/myproj");
+        pj.kind = UnitKind::Project;
+        s.upsert(&pj).unwrap();
+        s.upsert(&mk("C:/Watch/myproj/main.exe")).unwrap();
+        s.upsert(&mk("C:/Watch/myproj/lib.dll")).unwrap();
+        s.upsert(&mk("C:/Watch/myproj/main.rs")).unwrap();
+        // 深层项目目录中的 exe 同样隐藏；项目目录外的 exe 不隐藏
+        s.upsert(&mk("C:/Watch/myproj/sub/inner.sys")).unwrap();
+        s.upsert(&mk("C:/Watch/standalone.exe")).unwrap();
+
+        // 开关关闭：全部可见
+        let all = query_paths(&s, "", false);
+        assert_eq!(all.len(), 12, "{all:?}");
+        // 开关开启：系统生成文件 + 软件组件内部全部文件 + 项目内 exe/dll/sys 隐藏；
+        // 软件/项目单元本身与项目内非程序文件保持可见
+        let visible = query_paths(&s, "", true);
+        assert!(
+            visible.contains(&"C:/Watch/notes.txt".to_string()),
+            "{visible:?}"
+        );
+        assert!(
+            visible.contains(&"C:/Watch/SomeApp".to_string()),
+            "软件单元本身可见"
+        );
+        assert!(
+            visible.contains(&"C:/Watch/myproj".to_string()),
+            "项目单元本身可见"
+        );
+        assert!(visible.contains(&"C:/Watch/myproj/main.rs".to_string()));
+        assert!(visible.contains(&"C:/Watch/standalone.exe".to_string()));
+        assert!(!visible
+            .iter()
+            .any(|p| p.contains("desktop.ini") || p.contains("Thumbs.db")));
+        assert!(
+            !visible.iter().any(|p| p.starts_with("C:/Watch/SomeApp/")),
+            "软件内部全隐藏"
+        );
+        assert!(!visible.contains(&"C:/Watch/myproj/main.exe".to_string()));
+        assert!(!visible.contains(&"C:/Watch/myproj/lib.dll".to_string()));
+        assert!(!visible.contains(&"C:/Watch/myproj/sub/inner.sys".to_string()));
+        assert_eq!(visible.len(), 5, "{visible:?}");
+
+        // 隐藏口径与搜索/统计同步：文本搜索同样过滤（软件内部不可见，仅单元本身）
+        let search = query_paths(&s, "SomeApp", true);
+        assert_eq!(search, vec!["C:/Watch/SomeApp".to_string()]);
     }
 
     #[test]
@@ -1725,7 +1844,7 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
         // v8：旧索引已重建为 idx_units_*，idx_files_type 保持移除
         assert!(indexes.contains(&"idx_units_state".to_string()));
         assert!(indexes.contains(&"idx_units_modified".to_string()));
@@ -1791,7 +1910,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 8);
+            assert_eq!(version, 9);
             // 记录保全：路径、标签、归档墓碑均保留，kind 填默认 'file'
             let (labels, state): (String, String) = conn
                 .query_row(
@@ -2270,7 +2389,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 8);
+            assert_eq!(version, 9);
         }
         // 重复打开幂等，不报错
         {
@@ -2279,7 +2398,7 @@ mod tests {
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 8);
+            assert_eq!(version, 9);
         }
         fs::remove_dir_all(&dir).unwrap();
     }

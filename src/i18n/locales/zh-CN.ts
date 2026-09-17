@@ -185,6 +185,7 @@ export default {
     groups: {
       general: { title: "常规", description: "外观、语言与关闭行为。", },
       watch: { title: "监控与分类", description: "告诉 RootUp 看哪些目录、如何归类文件。", },
+      software: { title: "软件组件", description: "软件单元识别裁决与文件页内部文件隐藏。", },
       archive: { title: "归档", description: "受控移动文件并保留撤销能力。", },
       reminder: { title: "学业提醒", description: "作业临期提醒与快捷入口。", },
       advanced: { title: "高级", description: "智能打开、日志与重置。", },
@@ -208,6 +209,16 @@ export default {
       intro: "监控目录内的文件会被扫描、索引并实时跟踪。",
       example: "把“下载”和“桌面”加进来，新文件几秒内出现在文件页。",
       tips: "可直接拖入文件夹或用“浏览…”选择；移除目录会同时清理其索引（不影响磁盘文件，可重新添加恢复）。",
+    },
+    hideInternalFiles: {
+      intro: "在文件页一键隐藏系统生成文件、软件组件内部文件与项目内程序文件。",
+      example: "开启后 desktop.ini、Thumbs.db、已识别软件目录内的文件与项目里的 exe/dll 不再出现在列表与搜索中。",
+      tips: "仅影响展示：索引保留、统计口径同步，关闭开关立即完整还原；软件单元本身始终可见。",
+    },
+    softwareDirs: {
+      intro: "手动认定或排除软件目录，与自动识别（PortableApps / Scoop / 便携形态 / 启发式）合并为软件单元。",
+      example: "把“C:\\Tools\\MyApp”认定为软件后，它在软件视图常驻且受整树移动保护。",
+      tips: "排除优先级最高（可压制自动识别与认定）；清单变更后软件单元在后台自动重同步。",
     },
     scheme: {
       intro: "规则方案是“忽略规则 + 分类映射”的命名快照。",
@@ -283,9 +294,28 @@ export default {
     homeworkShortcutCreated: "已创建桌面快捷方式",
     settingsGroupGeneral: "常规",
     settingsGroupWatch: "监控与分类",
+    settingsGroupSoftware: "软件组件",
     settingsGroupArchive: "归档",
     settingsGroupReminder: "学业提醒",
     settingsGroupAdvanced: "高级",
+    hideInternalFiles: "隐藏系统与组件内部文件",
+    hideInternalFilesHint:
+      "文件页一键隐藏系统生成文件（desktop.ini 等）、已识别软件组件内部文件与项目内程序文件（exe/dll 等）；仅影响展示，索引保留，关闭后完整还原。",
+    softwareDirs: "软件目录裁决",
+    softwareDirsDesc:
+      "手动认定或排除软件目录，与自动识别（PortableApps / Scoop / 便携形态）取并集，排除优先。认定的软件单元受归档整树移动保护。",
+    addSoftwareDir: "认定软件目录",
+    softwareDirPlaceholder: "输入软件目录路径，如 C:\\Tools\\MyApp",
+    softwareEmpty: "尚无手动认定的软件目录（自动识别持续进行）",
+    removeSoftware: "取消认定",
+    softwareExcluded: "软件排除目录",
+    softwareExcludedDesc: "排除后该目录不再被识别为软件单元（含压制手动认定）。",
+    addSoftwareExclusion: "排除目录",
+    softwareExclusionPlaceholder: "输入要排除的目录路径",
+    softwareExclusionEmpty: "尚无排除目录",
+    removeSoftwareExclusion: "解除排除",
+    softwareAdded: "已认定，正在同步软件单元",
+    softwareExcludedDone: "已排除，正在同步软件单元",
     watchedDirs: "监控目录",
     watchedDirsDesc:
       "添加下载目录或资料目录，已有文件会自动全量扫描，新文件实时索引。",

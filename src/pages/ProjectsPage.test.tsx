@@ -104,6 +104,9 @@ describe("ProjectsPage", () => {
       close_action: "ask",
       reminder_enabled: false,
       reminder_lead_days: 3,
+      software_dirs: [],
+      software_excluded: [],
+      hide_internal_files: false,
     });
     vi.mocked(updateSettings).mockResolvedValue(undefined);
     vi.mocked(listProjects).mockResolvedValue([
@@ -191,6 +194,9 @@ describe("ProjectsPage", () => {
       close_action: "ask",
       reminder_enabled: false,
       reminder_lead_days: 3,
+      software_dirs: [],
+      software_excluded: [],
+      hide_internal_files: false,
     });
     renderPage();
     await screen.findByText("rust-app");

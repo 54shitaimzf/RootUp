@@ -17,14 +17,18 @@ import { isComposing } from "../lib/ime";
 import { applyPreset, RULE_PRESETS } from "../lib/presets";
 import { LANGUAGE_OPTIONS } from "../lib/languages";
 import {
+  addSoftwareDir,
   addWatchedDir,
   applyScheme,
   createHomeworkShortcut,
+  excludeSoftwareDir,
   getLogDir,
   listCategories,
   listClassifyDefaults,
   listLabelDefs,
   listSchemes,
+  removeSoftwareDir,
+  removeSoftwareExclusion,
   watchedDirsOverview,
   type WatchedDirInfo,
   listCommonDirs,
@@ -168,6 +172,8 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   // 监控目录单一数据源：直接派生自全局 settings，禁止持有平行副本
   // （否则任何 replace 全量写都会用旧快照静默丢掉运行期增删的目录）。
   const watchedDirs = settings?.watched_dirs ?? [];
+  const softwareDirs = settings?.software_dirs ?? [];
+  const softwareExcluded = settings?.software_excluded ?? [];
   const [missingDirs, setMissingDirs] = useState<Set<string>>(new Set());
   const [dirError, setDirError] = useState<string | null>(null);
   const [ruleError, setRuleError] = useState<string | null>(null);
@@ -282,6 +288,71 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const handleRescanAll = () => {
     scan.startScanAll();
     setNotice(t("settings.scanStarted"));
+  };
+
+  // 软件目录裁决（0.8.8）：认定 / 排除走命令（带重同步），乐观回显经 settings-changed 校正
+  const handleAddSoftware = async (dir: string): Promise<string | null> => {
+    try {
+      const outcome = await addSoftwareDir(dir);
+      mergeLocal({
+        software_dirs: [
+          ...new Set([...(settings?.software_dirs ?? []), outcome.dir]),
+        ],
+        software_excluded: (settings?.software_excluded ?? []).filter(
+          (d) => d !== outcome.dir,
+        ),
+      });
+      setNotice(outcome.message ?? t("settings.softwareAdded"));
+      return null;
+    } catch (err) {
+      setNotice(null);
+      return String(err);
+    }
+  };
+
+  const handleRemoveSoftware = async (dir: string) => {
+    try {
+      await removeSoftwareDir(dir);
+      mergeLocal({
+        software_dirs: (settings?.software_dirs ?? []).filter((d) => d !== dir),
+      });
+      setDirError(null);
+    } catch (err) {
+      setDirError(String(err));
+    }
+  };
+
+  const handleExcludeSoftware = async (dir: string): Promise<string | null> => {
+    try {
+      const outcome = await excludeSoftwareDir(dir);
+      mergeLocal({
+        software_excluded: [
+          ...new Set([...(settings?.software_excluded ?? []), outcome.dir]),
+        ],
+        software_dirs: (settings?.software_dirs ?? []).filter(
+          (d) => d !== outcome.dir,
+        ),
+      });
+      setNotice(outcome.message ?? t("settings.softwareExcludedDone"));
+      return null;
+    } catch (err) {
+      setNotice(null);
+      return String(err);
+    }
+  };
+
+  const handleRemoveSoftwareExclusion = async (dir: string) => {
+    try {
+      await removeSoftwareExclusion(dir);
+      mergeLocal({
+        software_excluded: (settings?.software_excluded ?? []).filter(
+          (d) => d !== dir,
+        ),
+      });
+      setDirError(null);
+    } catch (err) {
+      setDirError(String(err));
+    }
   };
 
   const handleCopyLogDir = async () => {
@@ -638,6 +709,118 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               }
               onEdit={() => setLabelOpen(true)}
             />
+          </div>
+        </FormSection>
+
+        <FormSection
+          title={t("settings.settingsGroupSoftware")}
+          description={t("settingsGuide.groups.software.description")}
+          indentContent
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-strong">
+                  {t("settings.hideInternalFiles")}
+                </div>
+                <div className="mt-0.5 text-xs text-muted">
+                  {t("settings.hideInternalFilesHint")}
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.hide_internal_files}
+                onChange={(event) =>
+                  update({ hide_internal_files: event.target.checked })
+                }
+                aria-label={t("settings.hideInternalFiles")}
+                className="size-4 shrink-0 accent-brand-600"
+              />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-secondary">
+                {t("settings.softwareDirs")}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {t("settings.softwareDirsDesc")}
+              </p>
+              <DirectoryAdder
+                placeholder={t("settings.softwareDirPlaceholder")}
+                hint={t("settings.dragDropHint")}
+                addLabel={t("settings.addSoftwareDir")}
+                browseLabel={t("settings.browse")}
+                commonDirs={commonDirs}
+                onAdd={handleAddSoftware}
+                disableDrop
+              />
+              <ul className="mt-2.5 space-y-1">
+                {softwareDirs.length === 0 ? (
+                  <li className="text-xs text-slate-400 dark:text-slate-500">
+                    {t("settings.softwareEmpty")}
+                  </li>
+                ) : (
+                  softwareDirs.map((dir) => (
+                    <li
+                      key={dir}
+                      className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800"
+                    >
+                      <span className="min-w-0 flex-1 truncate" title={dir}>
+                        {dir}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveSoftware(dir)}
+                        className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
+                      >
+                        {t("settings.removeSoftware")}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-secondary">
+                {t("settings.softwareExcluded")}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {t("settings.softwareExcludedDesc")}
+              </p>
+              <DirectoryAdder
+                placeholder={t("settings.softwareExclusionPlaceholder")}
+                hint={t("settings.dragDropHint")}
+                addLabel={t("settings.addSoftwareExclusion")}
+                browseLabel={t("settings.browse")}
+                commonDirs={commonDirs}
+                onAdd={handleExcludeSoftware}
+                disableDrop
+              />
+              <ul className="mt-2.5 space-y-1">
+                {softwareExcluded.length === 0 ? (
+                  <li className="text-xs text-slate-400 dark:text-slate-500">
+                    {t("settings.softwareExclusionEmpty")}
+                  </li>
+                ) : (
+                  softwareExcluded.map((dir) => (
+                    <li
+                      key={dir}
+                      className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800"
+                    >
+                      <span className="min-w-0 flex-1 truncate" title={dir}>
+                        {dir}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveSoftwareExclusion(dir)}
+                        className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
+                      >
+                        {t("settings.removeSoftwareExclusion")}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
           </div>
         </FormSection>
 

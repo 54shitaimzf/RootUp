@@ -1,0 +1,27 @@
+{
+  "comment": "数据图标 key 注册表真源（0.8.8 下半）：labels=标签图标 key；units=单元类型 key；softwareKinds=软件识别依据 key。前端 lib/iconKeys.ts 与 Rust core/software.rs 同源断言。",
+  "labels": [
+    "tag",
+    "star",
+    "book",
+    "graduation",
+    "flask",
+    "wrench",
+    "rocket",
+    "bulb",
+    "heart",
+    "music",
+    "leaf",
+    "coffee",
+    "briefcase",
+    "palette",
+    "database",
+    "code",
+    "file",
+    "layers",
+    "trophy",
+    "cloud"
+  ],
+  "units": ["file", "project", "software"],
+  "softwareKinds": ["manual", "paf", "scoop", "portable", "heuristic"]
+}

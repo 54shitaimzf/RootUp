@@ -96,6 +96,9 @@ const SETTINGS: Settings = {
       close_action: "ask",
       reminder_enabled: false,
       reminder_lead_days: 3,
+      software_dirs: [],
+      software_excluded: [],
+      hide_internal_files: false,
     };
 
 function renderPage() {

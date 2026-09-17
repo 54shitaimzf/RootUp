@@ -5,6 +5,7 @@ use crate::commands::labels as labels_commands;
 use crate::commands::projects as projects_commands;
 use crate::commands::schemes as schemes_commands;
 use crate::commands::settings as settings_commands;
+use crate::commands::software as software_commands;
 use crate::commands::startup as startup_commands;
 use crate::commands::study as study_commands;
 use crate::commands::window as window_commands;
@@ -202,6 +203,10 @@ pub fn run() {
             projects_commands::create_homework_shortcut,
             projects_commands::list_detected_tools,
             projects_commands::open_url,
+            software_commands::add_software_dir,
+            software_commands::remove_software_dir,
+            software_commands::exclude_software_dir,
+            software_commands::remove_software_exclusion,
             window_commands::hide_to_tray,
             window_commands::quit_app,
             startup_commands::app_ready,

@@ -17,6 +17,7 @@ pub mod scan;
 pub mod scan_choice;
 pub mod schemes;
 pub mod settings;
+pub mod software;
 pub mod study;
 pub mod study_classify;
 pub mod tools;

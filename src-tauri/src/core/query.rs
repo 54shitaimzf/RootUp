@@ -22,6 +22,9 @@ pub struct FileQuery {
     pub types: Vec<String>,
     /// `kind:` 单元类型（file / project / software，小写）
     pub kinds: Vec<String>,
+    /// 展示层隐藏系统/组件内部文件（0.8.8 文件页开关；索引保留，仅查询过滤）。
+    #[serde(default)]
+    pub hide_internal: bool,
     /// `label:` / `tag:` 标签 key
     pub labels: Vec<String>,
     /// 显式 AND 标签组：`+label:` 与 `label:a AND label:b` 语法；与 labels（OR）同时满足
@@ -53,6 +56,7 @@ impl Default for FileQuery {
             categories: Vec::new(),
             types: Vec::new(),
             kinds: Vec::new(),
+            hide_internal: false,
             labels: Vec::new(),
             labels_all: Vec::new(),
             states: Vec::new(),

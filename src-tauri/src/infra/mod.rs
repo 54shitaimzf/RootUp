@@ -15,6 +15,7 @@ pub mod scanner;
 pub mod scheme_store;
 pub mod settings_io;
 pub mod shortcut;
+pub mod software_sync;
 pub mod startup;
 pub mod storage;
 pub mod study_store;

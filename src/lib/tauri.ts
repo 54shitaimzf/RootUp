@@ -7,7 +7,7 @@ export type Language = "zh-CN" | "en";
 export type CloseAction = "ask" | "background" | "quit";
 
 /** 设置 schema 版本（与 Rust 侧 core::settings::CURRENT_VERSION 一致；写入以后端盖章为准）。 */
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 
 /** 忽略规则：临时扩展名 / 文件名前缀 / 完整文件名（与后端 IgnoreRules 对应） */
 export interface IgnoreRules {
@@ -45,6 +45,12 @@ export interface Settings {
   close_action: CloseAction;
   reminder_enabled: boolean;
   reminder_lead_days: number;
+  /** 手动认定的软件目录（0.8.8；裁决经 add/remove_software_dir 命令，不走补丁）。 */
+  software_dirs: string[];
+  /** 排除的软件目录（压制自动识别与认定）。 */
+  software_excluded: string[];
+  /** 文件页隐藏系统/组件内部文件（仅展示层过滤，索引保留）。 */
+  hide_internal_files: boolean;
 }
 
 /** 用户自定义打开命令（tool 为空 = 通用最后兜底） */
@@ -142,6 +148,9 @@ export const defaultSettings: Settings = {
   close_action: "ask",
   reminder_enabled: false,
   reminder_lead_days: 3,
+  software_dirs: [],
+  software_excluded: [],
+  hide_internal_files: false,
 };
 
 /** 与 Rust 侧 core::archive::ArchiveBatch 对应 */
@@ -211,6 +220,8 @@ export interface FileRecord {
    * 可选兼容旧序列化；缺省按 file 处理（resolveUnitKind）。
    */
   kind?: "file" | "project" | "software";
+  /** 识别依据（仅 kind=software：manual/paf/scoop/portable/heuristic）。 */
+  software_kind?: string | null;
 }
 
 /** 与 Rust 侧 core::query::QueryPage 对应 */
@@ -521,6 +532,23 @@ export function addProjectDir(dir: string): Promise<AddDirOutcome> {
 
 export function removeProjectDir(dir: string): Promise<void> {
   return invoke<void>("remove_project_dir", { dir });
+}
+
+/** 软件目录裁决（0.8.8）：认定 / 取消认定 / 排除 / 解除排除。 */
+export function addSoftwareDir(dir: string): Promise<AddDirOutcome> {
+  return invoke<AddDirOutcome>("add_software_dir", { dir });
+}
+
+export function removeSoftwareDir(dir: string): Promise<void> {
+  return invoke<void>("remove_software_dir", { dir });
+}
+
+export function excludeSoftwareDir(dir: string): Promise<AddDirOutcome> {
+  return invoke<AddDirOutcome>("exclude_software_dir", { dir });
+}
+
+export function removeSoftwareExclusion(dir: string): Promise<void> {
+  return invoke<void>("remove_software_exclusion", { dir });
 }
 
 export function openProject(path: string): Promise<OpenOutcome> {

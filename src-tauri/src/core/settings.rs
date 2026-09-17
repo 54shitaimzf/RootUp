@@ -49,7 +49,7 @@ pub const MAX_CUSTOM_OPEN_COMMANDS: usize = 10;
 /// - 新增字段必须带 `#[serde(default)]`，结构体不启用 `deny_unknown_fields`，
 ///   旧版本配置文件永远可被新版本读取；
 /// - 结构性升级在 [`Settings::migrate`] 中按版本号逐级迁移。
-pub const CURRENT_VERSION: u32 = 3;
+pub const CURRENT_VERSION: u32 = 4;
 
 /// 用户分类覆盖规则上限。
 pub const MAX_CLASSIFY_RULES: usize = 100;
@@ -116,6 +116,12 @@ pub struct Settings {
     pub reminder_enabled: bool,
     /// 临期提前天数（1–14，默认 3）
     pub reminder_lead_days: u32,
+    /// 手动裁决为软件的目录（识别权威标记之外的补充，识别结果 = 手动 ∪ 启发式 − 排除）
+    pub software_dirs: Vec<String>,
+    /// 手动裁决为「不是软件」的目录（压制启发式命中，优先级最高）
+    pub software_excluded: Vec<String>,
+    /// 文件页隐藏系统与组件内部文件（仅展示层过滤：索引保留、搜索与列表口径一致）
+    pub hide_internal_files: bool,
 }
 
 impl Default for Settings {
@@ -143,6 +149,9 @@ impl Default for Settings {
             close_action: CLOSE_ACTION_ASK.to_string(),
             reminder_enabled: false,
             reminder_lead_days: 3,
+            software_dirs: Vec::new(),
+            software_excluded: Vec::new(),
+            hide_internal_files: false,
         }
     }
 }
@@ -153,10 +162,11 @@ impl Settings {
         self.version = CURRENT_VERSION;
     }
 
-    /// 版本升级（逐级迁移）；当前 v1 为幂等空迁移。
+    /// 版本升级（逐级迁移）。
     pub fn migrate(&mut self) {
         while self.version < CURRENT_VERSION {
-            // 1 -> 2：archive_root / auto_archive；2 -> 3：close_action / reminder_*。
+            // 1 -> 2：archive_root / auto_archive；2 -> 3：close_action / reminder_*；
+            // 3 -> 4：software_dirs / software_excluded / hide_internal_files。
             // 缺失字段由 serde default 填充，无需数据转换，仅提升版本号。
             self.version += 1;
         }
@@ -263,6 +273,7 @@ pub struct SettingsPatch {
     pub close_action: Option<String>,
     pub reminder_enabled: Option<bool>,
     pub reminder_lead_days: Option<u32>,
+    pub hide_internal_files: Option<bool>,
 }
 
 impl SettingsPatch {
@@ -280,6 +291,7 @@ impl SettingsPatch {
             (self.close_action.is_some(), "close_action"),
             (self.reminder_enabled.is_some(), "reminder_enabled"),
             (self.reminder_lead_days.is_some(), "reminder_lead_days"),
+            (self.hide_internal_files.is_some(), "hide_internal_files"),
         ]
         .into_iter()
         .filter(|(dirty, _)| *dirty)
@@ -323,6 +335,9 @@ impl Settings {
         }
         if let Some(value) = patch.reminder_lead_days {
             self.reminder_lead_days = value;
+        }
+        if let Some(value) = patch.hide_internal_files {
+            self.hide_internal_files = value;
         }
     }
 }
@@ -392,14 +407,18 @@ mod tests {
     }
 
     #[test]
-    fn new_fields_default_and_migrate_v1_to_v3() {
+    fn new_fields_default_and_migrate_v1_to_v4() {
         let s = Settings::default();
-        assert_eq!(s.version, 3);
+        assert_eq!(s.version, 4);
         assert_eq!(s.archive_root, "");
         assert!(!s.auto_archive);
         assert_eq!(s.close_action, CLOSE_ACTION_ASK);
         assert!(!s.reminder_enabled);
         assert_eq!(s.reminder_lead_days, 3);
+        // v4（0.8.8 软件单元 + 隐藏开关）：serde 默认值
+        assert!(s.software_dirs.is_empty());
+        assert!(s.software_excluded.is_empty());
+        assert!(!s.hide_internal_files);
 
         let json = r#"{
             "version": 1,
@@ -414,16 +433,18 @@ mod tests {
         }"#;
         let mut settings: Settings = serde_json::from_str(json).unwrap();
         settings.migrate();
-        assert_eq!(settings.version, 3);
+        assert_eq!(settings.version, 4);
         assert_eq!(settings.archive_root, "");
         assert!(!settings.auto_archive);
         assert_eq!(settings.close_action, CLOSE_ACTION_ASK);
         assert!(!settings.reminder_enabled);
+        assert!(settings.software_dirs.is_empty());
+        assert!(!settings.hide_internal_files);
         assert!(settings.is_valid());
     }
 
     #[test]
-    fn migrate_v2_to_v3_is_idempotent() {
+    fn migrate_v2_to_v4_is_idempotent() {
         let json = r#"{
             "version": 2,
             "theme": "light",
@@ -439,7 +460,7 @@ mod tests {
         }"#;
         let mut settings: Settings = serde_json::from_str(json).unwrap();
         settings.migrate();
-        assert_eq!(settings.version, 3);
+        assert_eq!(settings.version, 4);
         assert_eq!(settings.archive_root, "C:/Archive");
         assert!(settings.auto_archive);
         assert_eq!(settings.close_action, CLOSE_ACTION_ASK);
@@ -447,7 +468,7 @@ mod tests {
         assert!(settings.is_valid());
 
         settings.migrate();
-        assert_eq!(settings.version, 3);
+        assert_eq!(settings.version, 4);
     }
 
     #[test]

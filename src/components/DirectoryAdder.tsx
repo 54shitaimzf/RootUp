@@ -28,6 +28,7 @@ export function DirectoryAdder({
   commonDirs,
   onAdd,
   allowFileParent = true,
+  disableDrop = false,
   className = "",
 }: {
   placeholder: string;
@@ -39,6 +40,8 @@ export function DirectoryAdder({
   onAdd: (dir: string) => Promise<string | null>;
   /** 拖入文件时先解析父目录（默认 true） */
   allowFileParent?: boolean;
+  /** 关闭全局拖拽订阅（同页多实例时避免一次拖入触发多处添加，默认 false） */
+  disableDrop?: boolean;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -69,6 +72,7 @@ export function DirectoryAdder({
   );
 
   useEffect(() => {
+    if (disableDrop) return;
     let unlisten: (() => void) | undefined;
     try {
       getCurrentWindow()
@@ -93,7 +97,7 @@ export function DirectoryAdder({
     return () => {
       unlisten?.();
     };
-  }, [submit, allowFileParent]);
+  }, [submit, allowFileParent, disableDrop]);
 
   const handleBrowse = async () => {
     try {
