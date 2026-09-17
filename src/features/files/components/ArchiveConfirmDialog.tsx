@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft } from "../../../theme/icons";
+import { AlertTriangle, ChevronLeft } from "../../../theme/icons";
 import { Button } from "../../../components/Button";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { RevealLink } from "../../../components/RevealLink";
 import { Tooltip } from "../../../components/Tooltip";
-import type { FileRecord } from "../../../lib/tauri";
-import { archiveDestPath } from "../../../lib/fileUtils";
+import { archiveDestPath, formatFileSize } from "../../../lib/fileUtils";
+import type { FileRecord, PreflightReport } from "../../../lib/tauri";
 import type { ArchiveTarget } from "../hooks/useFileArchive";
 
 export type { ArchiveTarget };
@@ -16,6 +16,10 @@ export interface ArchiveConfirmDialogProps {
   archiveRoot: string;
   items: FileRecord[];
   selected: Set<string>;
+  /** 归档预检报告（0.8.8；selected 模式异步获取，filtered 模式为 null） */
+  preflight: PreflightReport | null;
+  riskConfirmed: boolean;
+  onRiskConfirmChange: (checked: boolean) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -32,6 +36,9 @@ export function ArchiveConfirmDialog({
   archiveRoot,
   items,
   selected,
+  preflight,
+  riskConfirmed,
+  onRiskConfirmChange,
   onConfirm,
   onCancel,
 }: ArchiveConfirmDialogProps) {
@@ -42,6 +49,7 @@ export function ArchiveConfirmDialog({
   }, [target]);
   const selectedFiles = items.filter((file) => selected.has(file.path));
   const unknownCount = (target?.count ?? 0) <= 0;
+  const softwareConflict = (preflight?.softwareUnits.length ?? 0) > 0;
   const description = target
     ? target.mode === "selected"
       ? t("files.archiveConfirmSelectedDesc", { count: target.count })
@@ -80,12 +88,60 @@ export function ArchiveConfirmDialog({
             })
       }
       danger
+      confirmDisabled={softwareConflict && !riskConfirmed}
       onConfirm={onConfirm}
       onCancel={onCancel}
     >
       <div className="mt-2">
         <RevealLink label={t("files.archiveDestLabel")} path={archiveRoot} />
       </div>
+      {preflight && (
+        <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <span>{t("files.preflightSummary", {
+            count: preflight.count,
+            size: formatFileSize(preflight.totalSize),
+          })}</span>
+          {(preflight.exeCount > 0 || preflight.dllCount > 0) && (
+            <span className="ml-2">{t("files.preflightExecutables", {
+              exe: preflight.exeCount,
+              dll: preflight.dllCount,
+            })}</span>
+          )}
+          {preflight.symlinkCount > 0 && (
+            <span className="ml-2">{t("files.preflightSymlinks", { count: preflight.symlinkCount })}</span>
+          )}
+          {preflight.shortcuts.length > 0 && (
+            <div className="mt-1 text-amber-600 dark:text-amber-400">
+              {t("files.preflightShortcuts", { count: preflight.shortcuts.length })}
+            </div>
+          )}
+          {preflight.truncated && (
+            <div className="mt-1">{t("files.preflightTruncated")}</div>
+          )}
+        </div>
+      )}
+      {softwareConflict && (
+        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="flex items-start gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+            <span className="break-all">
+              {t("files.archiveSoftwareWarning", {
+                names: preflight?.softwareUnits.join(", "),
+              })}
+            </span>
+          </div>
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={riskConfirmed}
+              onChange={(event) => onRiskConfirmChange(event.target.checked)}
+              aria-label={t("files.archiveRiskConfirm")}
+              className="size-4 shrink-0 accent-brand-600"
+            />
+            {t("files.archiveRiskConfirm")}
+          </label>
+        </div>
+      )}
       {target?.mode === "selected" && !showAll && (
         <>
           <div className="mt-3 text-xs font-medium text-strong">

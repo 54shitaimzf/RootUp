@@ -5,8 +5,12 @@ use crate::core::archive::{
 };
 use crate::core::archive_guard::assess_archive_root as assess_archive_root_inner;
 use crate::core::archive_guard::ArchiveAssessment;
+use crate::core::archive_safety::{
+    reference_report, scan_paths, software_conflicts, PathStats, MAX_SCAN_ENTRIES,
+};
 use crate::core::error_codes::{
-    coded, ARCHIVE_FORBIDDEN, ARCHIVE_NO_ROOT, ARCHIVE_TARGET_COLLIDES, ARCHIVE_UNDO_CONFLICT,
+    coded, ARCHIVE_FORBIDDEN, ARCHIVE_NO_ROOT, ARCHIVE_SOFTWARE_PROTECTED, ARCHIVE_TARGET_COLLIDES,
+    ARCHIVE_UNDO_CONFLICT,
 };
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
@@ -52,15 +56,102 @@ fn store(app: &AppHandle) -> State<'_, Arc<Mutex<dyn IndexStore>>> {
     app.state::<Arc<Mutex<dyn IndexStore>>>()
 }
 
+/// 现存软件单元路径（预检与整树移动保护共用）。
+fn live_software_units(
+    store: &State<'_, Arc<Mutex<dyn IndexStore>>>,
+) -> Result<Vec<String>, String> {
+    let mut query = parse_query("kind:software state:indexed");
+    query.need_total = false;
+    query.limit = 10_000;
+    let page = store.lock().map_err(|e| e.to_string())?.query(&query)?;
+    Ok(page.items.into_iter().map(|r| r.path).collect())
+}
+
+/// 整树移动软件保护：源命中软件单元（相同/内部/包含）时默认拒绝，
+/// 前端确认后以 allow_software=true 显式放行（风险确认，错误码 archive.software_protected）。
+fn software_guard(
+    store: &State<'_, Arc<Mutex<dyn IndexStore>>>,
+    paths: &[String],
+    allow: bool,
+) -> Result<(), String> {
+    if allow {
+        return Ok(());
+    }
+    let units = live_software_units(store)?;
+    software_guard_paths(paths, &units)
+}
+
+/// 纯逻辑内核（可单测）：冲突非空即拒绝。
+fn software_guard_paths(paths: &[String], units: &[String]) -> Result<(), String> {
+    let conflicts = software_conflicts(paths, units);
+    if conflicts.is_empty() {
+        return Ok(());
+    }
+    Err(coded(
+        ARCHIVE_SOFTWARE_PROTECTED,
+        format!(
+            "{}: 已识别为软件组件，禁止整树移动（可在确认弹窗中选择风险确认）",
+            conflicts.join(", ")
+        ),
+    ))
+}
+
+/// 归档预检报告（0.8.8）：数量/体积/可执行文件/符号链接 + 软件冲突 + 引用快捷方式。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightReport {
+    #[serde(flatten)]
+    pub stats: PathStats,
+    /// 与源冲突的软件单元（相同/内部/包含）
+    pub software_units: Vec<String>,
+    /// 指向源树内部的快捷方式 lnk 路径
+    pub shortcuts: Vec<String>,
+}
+
+/// 归档预检：批量前返回统计与风险，前端确认后执行。
+#[tauri::command]
+pub fn archive_preflight(
+    store: State<'_, Arc<Mutex<dyn IndexStore>>>,
+    paths: Vec<String>,
+) -> Result<PreflightReport, String> {
+    if paths.is_empty() {
+        return Err("没有选择文件".to_string());
+    }
+    let paths: Vec<String> = paths.into_iter().map(|p| normalize_path(&p)).collect();
+    let stats = scan_paths(&paths, MAX_SCAN_ENTRIES);
+    let units = live_software_units(&store)?;
+    let software_units = software_conflicts(&paths, &units);
+    let mut shortcut_pairs: Vec<(String, String)> = Vec::new();
+    {
+        let locked = store.lock().map_err(|e| e.to_string())?;
+        for path in &paths {
+            for record in locked.shortcuts_under(path)? {
+                shortcut_pairs.push((record.lnk_path, record.target_path));
+            }
+        }
+    }
+    let shortcuts = reference_report(&paths, &shortcut_pairs).shortcuts;
+    Ok(PreflightReport {
+        stats,
+        software_units,
+        shortcuts,
+    })
+}
+
 /// 手动批量归档（单文件也走此入口，batch 为 1）。
 #[tauri::command]
-pub fn archive_files(app: AppHandle, paths: Vec<String>) -> Result<ArchiveOutcome, String> {
+pub fn archive_files(
+    app: AppHandle,
+    paths: Vec<String>,
+    allow_software: Option<bool>,
+) -> Result<ArchiveOutcome, String> {
     let root = require_root(&app)?;
     if paths.is_empty() {
         return Err("没有选择文件".to_string());
     }
     let paths: Vec<String> = paths.into_iter().map(|p| normalize_path(&p)).collect();
     require_owned(&app, &paths)?;
+    software_guard(&store(&app), &paths, allow_software.unwrap_or(false))?;
     let batch_id = next_batch_id();
     let outcome = engine_archive_files(&store(&app), &root, &paths, batch_id)?;
     if outcome.archived == 0 {
@@ -77,7 +168,11 @@ pub fn archive_files(app: AppHandle, paths: Vec<String>) -> Result<ArchiveOutcom
 
 /// 归档当前筛选结果（后端重查，仅 indexed，上限 200）。
 #[tauri::command]
-pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome, String> {
+pub fn archive_filtered(
+    app: AppHandle,
+    query: String,
+    allow_software: Option<bool>,
+) -> Result<ArchiveOutcome, String> {
     let root = require_root(&app)?;
     let mut file_query = parse_query(&query);
     file_query.states = vec!["indexed".to_string()];
@@ -101,6 +196,7 @@ pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome,
         return Err("当前筛选没有可归档的文件".to_string());
     }
     let paths: Vec<String> = page.items.into_iter().map(|r| r.path).collect();
+    software_guard(&store(&app), &paths, allow_software.unwrap_or(false))?;
     let batch_id = next_batch_id();
     let outcome = engine_archive_files(&store(&app), &root, &paths, batch_id)?;
     if outcome.archived == 0 {
@@ -120,9 +216,18 @@ pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome,
 
 /// 项目单元归档：整目录移动 + project_dirs 更新 + 快捷方式重建。
 #[tauri::command]
-pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, String> {
+pub fn archive_project(
+    app: AppHandle,
+    path: String,
+    allow_software: Option<bool>,
+) -> Result<ArchiveOutcome, String> {
     let path = normalize_path(&path);
     let root = require_root(&app)?;
+    software_guard(
+        &store(&app),
+        std::slice::from_ref(&path),
+        allow_software.unwrap_or(false),
+    )?;
     let detector = FeatureDetector;
     let snapshot = storage::load_settings(&app);
     let projects = discover_projects(&snapshot.watched_dirs, &snapshot.project_dirs, &detector);
@@ -415,4 +520,25 @@ pub fn recommended_archive_roots() -> Result<Vec<String>, String> {
         format!("{profile}/RootUpArchive"),
     ];
     Ok(candidates.into_iter().map(|p| normalize_path(&p)).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn software_guard_blocks_conflicts_and_allows_rest() {
+        let units = vec!["C:/Watch/SomeApp".to_string()];
+        // 命中软件单元（内部文件）→ 拒绝，错误带 code
+        let err = software_guard_paths(&["C:/Watch/SomeApp/App/app.exe".to_string()], &units)
+            .unwrap_err();
+        assert_eq!(
+            crate::core::error_codes::code_of(&err),
+            Some(ARCHIVE_SOFTWARE_PROTECTED)
+        );
+        // 无冲突 → 放行
+        assert!(software_guard_paths(&["C:/Watch/notes.txt".to_string()], &units).is_ok());
+        // 冲突但 allow（风险确认在调用方短路）——直接验证纯内核对空冲突放行
+        assert!(software_guard_paths(&[], &units).is_ok());
+    }
 }

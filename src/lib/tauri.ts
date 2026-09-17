@@ -423,16 +423,33 @@ export function deleteLabelDef(key: string): Promise<void> {
   return invoke<void>("delete_label_def", { key });
 }
 
-export function archiveFiles(paths: string[]): Promise<ArchiveOutcome> {
-  return invoke<ArchiveOutcome>("archive_files", { paths });
+export function archiveFiles(paths: string[], allowSoftware = false): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("archive_files", { paths, allowSoftware });
 }
 
-export function archiveFiltered(query: string): Promise<ArchiveOutcome> {
-  return invoke<ArchiveOutcome>("archive_filtered", { query });
+export function archiveFiltered(query: string, allowSoftware = false): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("archive_filtered", { query, allowSoftware });
 }
 
-export function archiveProject(path: string): Promise<ArchiveOutcome> {
-  return invoke<ArchiveOutcome>("archive_project", { path });
+export function archiveProject(path: string, allowSoftware = false): Promise<ArchiveOutcome> {
+  return invoke<ArchiveOutcome>("archive_project", { path, allowSoftware });
+}
+
+/** 归档预检报告（0.8.8）：数量/体积/可执行/符号链接 + 软件冲突 + 引用快捷方式。 */
+export interface PreflightReport {
+  count: number;
+  totalSize: number;
+  exeCount: number;
+  dllCount: number;
+  symlinkCount: number;
+  truncated: boolean;
+  softwareUnits: string[];
+  shortcuts: string[];
+}
+
+/** 归档预检：确认弹窗打开时取报告（软件冲突需风险确认后放行）。 */
+export function archivePreflight(paths: string[]): Promise<PreflightReport> {
+  return invoke<PreflightReport>("archive_preflight", { paths });
 }
 
 export function undoArchive(batchId: number): Promise<ArchiveOutcome> {

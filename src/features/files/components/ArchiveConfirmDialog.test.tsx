@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ArchiveConfirmDialog } from "./ArchiveConfirmDialog";
-import { revealInExplorer, type FileRecord } from "../../../lib/tauri";
+import {
+  revealInExplorer,
+  type FileRecord,
+  type PreflightReport,
+} from "../../../lib/tauri";
 
 vi.mock("../../../lib/tauri", () => ({
   revealInExplorer: vi.fn(async () => {}),
@@ -30,11 +34,15 @@ function renderDialog(overrides?: {
   target?: { mode: "selected" | "filtered"; count: number } | null;
   items?: FileRecord[];
   selected?: Set<string>;
+  preflight?: PreflightReport | null;
+  riskConfirmed?: boolean;
 }) {
   const {
     target = { mode: "selected", count: 5 },
     items: list = items,
     selected: sel = selected,
+    preflight: report = null,
+    riskConfirmed = false,
   } = overrides ?? {};
   return render(
     <ArchiveConfirmDialog
@@ -42,6 +50,9 @@ function renderDialog(overrides?: {
       archiveRoot="C:/Arc"
       items={list}
       selected={sel}
+      preflight={report}
+      riskConfirmed={riskConfirmed}
+      onRiskConfirmChange={vi.fn()}
       onConfirm={vi.fn()}
       onCancel={vi.fn()}
     />,
@@ -128,5 +139,46 @@ describe("ArchiveConfirmDialog", () => {
     await waitFor(() =>
       expect(revealInExplorer).toHaveBeenCalledWith("C:/Arc"),
     );
+  });
+
+  it("预检报告展示数量/体积/可执行与快捷方式风险", () => {
+    const report: PreflightReport = {
+      count: 120,
+      totalSize: 5 * 1024 * 1024,
+      exeCount: 2,
+      dllCount: 3,
+      symlinkCount: 1,
+      truncated: false,
+      softwareUnits: [],
+      shortcuts: ["C:/Users/x/Desktop/a.lnk"],
+    };
+    renderDialog({ preflight: report });
+    expect(screen.getByText(/共 120 项/)).toBeInTheDocument();
+    expect(screen.getByText(/可执行 2 · 动态库 3/)).toBeInTheDocument();
+    expect(screen.getByText("符号链接 1")).toBeInTheDocument();
+    expect(screen.getByText("1 个快捷方式指向所选内容，归档后将失效")).toBeInTheDocument();
+    // 无软件冲突：确认按钮可用，无风险勾选
+    expect(screen.getByRole("button", { name: "归档 5 个文件" })).toBeEnabled();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("软件冲突需勾选风险确认后才能归档", () => {
+    const report: PreflightReport = {
+      count: 9,
+      totalSize: 1024,
+      exeCount: 1,
+      dllCount: 0,
+      symlinkCount: 0,
+      truncated: false,
+      softwareUnits: ["C:/Watch/SomeApp"],
+      shortcuts: [],
+    };
+    const view = renderDialog({ preflight: report, riskConfirmed: false });
+    expect(screen.getByText(/已识别为软件组件/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "归档 5 个文件" })).toBeDisabled();
+    view.unmount();
+    // 勾选风险确认后可归档
+    renderDialog({ preflight: report, riskConfirmed: true });
+    expect(screen.getByRole("button", { name: "归档 5 个文件" })).toBeEnabled();
   });
 });

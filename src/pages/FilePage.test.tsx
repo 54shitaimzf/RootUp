@@ -40,6 +40,16 @@ vi.mock("../lib/tauri", () => ({
   watchedDirsOverview: vi.fn(),
   archiveFiles: vi.fn(),
   archiveFiltered: vi.fn(),
+  archivePreflight: vi.fn(async () => ({
+    count: 1,
+    totalSize: 1,
+    exeCount: 0,
+    dllCount: 0,
+    symlinkCount: 0,
+    truncated: false,
+    softwareUnits: [],
+    shortcuts: [],
+  })),
   undoArchive: vi.fn(),
   getHabits: vi.fn(),
   saveHabits: vi.fn(),
@@ -222,7 +232,7 @@ describe("FilePage 行操作", () => {
     await screen.findByText("notes.pdf");
     fireEvent.click(screen.getByLabelText("归档"));
     await waitFor(() =>
-      expect(archiveFiles).toHaveBeenCalledWith(["C:/docs/notes.pdf"]),
+      expect(archiveFiles).toHaveBeenCalledWith(["C:/docs/notes.pdf"], false),
     );
     expect(await screen.findByText(/已归档 1 个文件/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "撤销" }));
@@ -247,7 +257,7 @@ describe("FilePage 行操作", () => {
     fireEvent.click(screen.getByRole("button", { name: "归档所选" }));
     fireEvent.click(screen.getByRole("button", { name: "归档 1 个文件" }));
     await waitFor(() =>
-      expect(archiveFiles).toHaveBeenCalledWith(["C:/docs/notes.pdf"]),
+      expect(archiveFiles).toHaveBeenCalledWith(["C:/docs/notes.pdf"], false),
     );
   });
 

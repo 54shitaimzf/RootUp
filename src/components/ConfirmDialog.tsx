@@ -12,6 +12,7 @@ export function ConfirmDialog({
   confirmLabel,
   danger = false,
   width = "max-w-sm",
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: {
@@ -24,6 +25,8 @@ export function ConfirmDialog({
   confirmLabel: string;
   danger?: boolean;
   width?: string;
+  /** 确认按钮禁用（如归档软件组件需先勾选风险确认）。 */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -40,6 +43,7 @@ export function ConfirmDialog({
             variant={danger ? "danger" : "primary"}
             size="md"
             onClick={onConfirm}
+            disabled={confirmDisabled}
           >
             {confirmLabel}
           </Button>

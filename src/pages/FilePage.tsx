@@ -483,6 +483,9 @@ export function FilePage({
         archiveRoot={archiveRoot}
         items={items}
         selected={archive.selected}
+        preflight={archive.preflight}
+        riskConfirmed={archive.riskConfirmed}
+        onRiskConfirmChange={archive.setRiskConfirmed}
         onConfirm={archive.confirmArchive}
         onCancel={archive.closeArchiveTarget}
       />

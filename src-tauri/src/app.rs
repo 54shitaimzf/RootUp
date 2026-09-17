@@ -156,6 +156,7 @@ pub fn run() {
             archive_commands::archive_files,
             archive_commands::archive_filtered,
             archive_commands::archive_project,
+            archive_commands::archive_preflight,
             archive_commands::undo_archive,
             archive_commands::list_archive_batches,
             archive_commands::assess_archive_root,

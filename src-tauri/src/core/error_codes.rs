@@ -10,11 +10,10 @@ use std::collections::HashMap;
 pub const ARCHIVE_NO_ROOT: &str = "archive.no_root";
 /// 归档源不在监控/项目目录内（命令层归属校验）。
 pub const ARCHIVE_FORBIDDEN: &str = "archive.forbidden";
-/// 已识别软件目录禁止整树移动。
-// 以下码由 0.8.8 后续模块（软件保护 / 回收站删除 / 智能解压 / 监听注册）消费，
-// 先随注册表落地（与 FTS_SCHEMA 同款保留策略）。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 已识别软件目录禁止整树移动（风险确认后放行；0.8.8 归档安全收口消费）。
 pub const ARCHIVE_SOFTWARE_PROTECTED: &str = "archive.software_protected";
+// 以下码由 0.8.8 后续模块（回收站删除 / 智能解压 / 监听注册）消费，
+// 先随注册表落地（与 FTS_SCHEMA 同款保留策略）。
 /// 文件不在索引中或状态不允许归档。
 pub const ARCHIVE_NOT_INDEXED: &str = "archive.not_indexed";
 /// 源与目标互相包含。

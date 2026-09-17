@@ -2,10 +2,12 @@ import { useCallback, useState } from "react";
 import {
   archiveFiles,
   archiveFiltered,
+  archivePreflight,
   logEvent,
   undoArchive,
   type ArchiveFailure,
   type FileRecord,
+  type PreflightReport,
 } from "../../../lib/tauri";
 
 /** 归档确认弹层的目标形态（所选 / 当前筛选）。 */
@@ -56,6 +58,9 @@ export function useFileArchive(
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveFailure, setArchiveFailure] =
     useState<ArchiveFailureSummary | null>(null);
+  // 归档预检（0.8.8）：确认弹窗打开时取报告；软件冲突需风险确认后放行
+  const [preflight, setPreflight] = useState<PreflightReport | null>(null);
+  const [riskConfirmed, setRiskConfirmed] = useState(false);
 
   const finishBatch = useCallback(
     (archived: number, failed: ArchiveFailure[], batchId: number | null | undefined) => {
@@ -71,7 +76,7 @@ export function useFileArchive(
   const handleArchiveOne = useCallback(
     async (path: string) => {
       try {
-        const outcome = await archiveFiles([path]);
+        const outcome = await archiveFiles([path], false);
         setArchiveNotice(
           outcome.archived > 0 ? { batchId: outcome.batchId ?? 0, count: outcome.archived } : null,
         );
@@ -91,13 +96,13 @@ export function useFileArchive(
       .filter((file) => selected.has(file.path))
       .map((file) => file.path);
     try {
-      const outcome = await archiveFiles(paths);
+      const outcome = await archiveFiles(paths, riskConfirmed && (preflight?.softwareUnits.length ?? 0) > 0);
       finishBatch(outcome.archived, outcome.failed, outcome.batchId);
       void logEvent("info", `ui: 归档所选 count=${outcome.archived}`);
     } catch (err) {
       setArchiveError(String(err));
     }
-  }, [items, selected, finishBatch]);
+  }, [items, selected, finishBatch, riskConfirmed, preflight]);
 
   const handleArchiveFiltered = useCallback(async () => {
     try {
@@ -152,23 +157,37 @@ export function useFileArchive(
   }, []);
 
   const enterBatchMode = useCallback(() => setBatchMode(true), []);
-  const openArchiveSelected = useCallback(
-    () => setArchiveTarget({ mode: "selected", count: selected.size }),
-    [selected.size],
-  );
+  const openArchiveSelected = useCallback(() => {
+    setRiskConfirmed(false);
+    setPreflight(null);
+    setArchiveTarget({ mode: "selected", count: selected.size });
+    const paths = items
+      .filter((file) => selected.has(file.path))
+      .map((file) => file.path);
+    archivePreflight(paths)
+      .then(setPreflight)
+      .catch(() => setPreflight(null));
+  }, [items, selected.size]);
   const openArchiveFiltered = useCallback(
-    (total: number, limit: number) =>
+    (total: number, limit: number) => {
       // total=-1 为后端 COUNT 治理哨兵（筛选态不计总数），钳为 0 表示未知。
+      setRiskConfirmed(false);
+      setPreflight(null);
       setArchiveTarget({
         mode: "filtered",
         count: Math.max(0, Math.min(total, limit)),
-      }),
+      });
+    },
     [],
   );
   const dismissNotice = useCallback(() => setArchiveNotice(null), []);
   const dismissError = useCallback(() => setArchiveError(null), []);
   const dismissFailure = useCallback(() => setArchiveFailure(null), []);
-  const closeArchiveTarget = useCallback(() => setArchiveTarget(null), []);
+  const closeArchiveTarget = useCallback(() => {
+    setArchiveTarget(null);
+    setPreflight(null);
+    setRiskConfirmed(false);
+  }, []);
 
   return {
     batchMode,
@@ -177,6 +196,9 @@ export function useFileArchive(
     archiveNotice,
     archiveError,
     archiveFailure,
+    preflight,
+    riskConfirmed,
+    setRiskConfirmed,
     enterBatchMode,
     toggleSelect,
     cancelSelection,

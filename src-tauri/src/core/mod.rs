@@ -1,5 +1,6 @@
 pub mod archive;
 pub mod archive_guard;
+pub mod archive_safety;
 pub mod classify;
 pub mod delta;
 pub mod error_codes;
