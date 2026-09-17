@@ -23,7 +23,8 @@ export function useFiles(
   sortDir?: SortDir,
 ) {
   const [items, setItems] = useState<FileRecord[]>([]);
-  const [total, setTotal] = useState(0);
+  /** 精确总数；后端 totalKnown=false 时为 null（前端不得展示未知总数） */
+  const [total, setTotal] = useState<number | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
@@ -35,7 +36,7 @@ export function useFiles(
     queryFiles(query, limit, offset, sortBy, sortDir, cursor)
       .then((page) => {
         if (cancelled) return;
-        setTotal(page.total);
+        setTotal(page.totalKnown ? page.total : null);
         setNextCursor(page.nextCursor);
         setStale(false);
         setItems((prev) =>

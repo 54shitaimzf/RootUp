@@ -98,8 +98,10 @@ pub fn add_watched_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, Str
         Ok(())
     })?;
 
-    let service = app.state::<Mutex<WatchService>>();
-    service.lock().map_err(|e| e.to_string())?.add_dir(&dir)?;
+    // 监视器注册异步化（0.8.8 可靠性加固）：大目录递归注册可能阻塞命令数秒，
+    // 移入后台线程执行；注册前复检设置仍包含该目录（防与移除竞态），
+    // 失败记日志（watched_dirs_overview 的 exists 与重扫可兜底）。
+    crate::infra::startup::spawn_register_watch(&app, dir.clone());
 
     let scanner = app.state::<Mutex<ScanService>>();
     scanner
@@ -143,20 +145,36 @@ pub fn remove_watched_dir(app: AppHandle, dir: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 某目录（含子目录）下非 deleted 的索引记录数（移除确认用）。
+/// 监控目录总览条目（0.8.8 三端点合并：目录 + 存在性 + 索引计数一次返回）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchedDirInfo {
+    pub dir: String,
+    /// 目录当前是否可访问（盘符卸载 / 网络盘断开 / 权限变化时为 false）。
+    pub exists: bool,
+    /// 该目录（含子目录）下非 deleted 的索引记录数。
+    pub indexed_count: i64,
+}
+
+/// 监控目录总览（文件页计数 / 设置页缺失标记 / 移除确认计数共用单一端点）。
 #[tauri::command]
-pub fn count_under_root(
+pub fn watched_dirs_overview(
+    app: AppHandle,
     store: State<'_, Arc<Mutex<dyn IndexStore>>>,
-    root: String,
-) -> Result<i64, String> {
-    let root = normalize_path(&root);
-    if root.is_empty() {
-        return Err("目录不能为空".into());
-    }
-    store
-        .lock()
-        .map_err(|e| e.to_string())?
-        .count_under_root(&root)
+) -> Result<Vec<WatchedDirInfo>, String> {
+    let dirs = storage::load_settings(&app).watched_dirs;
+    let store = store.lock().map_err(|e| e.to_string())?;
+    dirs.into_iter()
+        .map(|dir| {
+            let exists = Path::new(&dir).is_dir();
+            let indexed_count = store.count_under_root(&dir)?;
+            Ok(WatchedDirInfo {
+                dir,
+                exists,
+                indexed_count,
+            })
+        })
+        .collect()
 }
 
 /// 拖拽/粘贴路径解析：目录原样返回；文件返回其父目录；不存在报错。
@@ -217,32 +235,6 @@ pub fn list_common_dirs() -> Vec<CommonDirEntry> {
     common_dirs_from(&base)
 }
 
-/// 当前监控目录列表。
-#[tauri::command]
-pub fn list_watched_dirs(app: AppHandle) -> Vec<String> {
-    storage::load_settings(&app).watched_dirs
-}
-
-/// 监控目录健康状态（设置页缺失标记用）。
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WatchedDirHealth {
-    pub dir: String,
-    pub exists: bool,
-}
-
-#[tauri::command]
-pub fn watched_dir_health(app: AppHandle) -> Vec<WatchedDirHealth> {
-    storage::load_settings(&app)
-        .watched_dirs
-        .iter()
-        .map(|dir| WatchedDirHealth {
-            dir: dir.clone(),
-            exists: Path::new(dir).is_dir(),
-        })
-        .collect()
-}
-
 // 参数即命令线契约（query/limit/offset/sort/cursor/need_total），保留平铺签名。
 #[allow(clippy::too_many_arguments)]
 fn run_query(
@@ -290,7 +282,7 @@ fn run_query(
     let store = store.lock().map_err(|e| e.to_string())?;
     let page = store.query(&parsed)?;
     let ms = started.elapsed().as_millis();
-    let results = if page.total >= 0 {
+    let results = if page.total_known {
         page.total
     } else {
         page.items.len() as i64

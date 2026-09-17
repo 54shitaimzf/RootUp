@@ -30,7 +30,8 @@ export interface FileListProps {
   >;
   offset: number;
   pageSize: number;
-  total: number;
+  /** 精确总数；null 表示后端未计算（COUNT 治理），展示退化为已显示数量 */
+  total: number | null;
   hasMore: boolean;
   onLoadMore: () => void;
 }
@@ -117,7 +118,7 @@ export function FileList({
             })}
           </span>
           <span>
-            {total >= 0
+            {total !== null
               ? t("files.countInfo", {
                   shown: items.length,
                   total,

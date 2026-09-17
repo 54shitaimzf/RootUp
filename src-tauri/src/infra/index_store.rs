@@ -563,7 +563,8 @@ impl IndexStore for SqliteIndexStore {
         }
         let page_where = page_conditions.join(" AND ");
 
-        let total: i64 = if query.need_total {
+        let total_known = query.need_total;
+        let total: i64 = if total_known {
             conn.query_row(
                 &format!("SELECT COUNT(*) FROM units WHERE {where_sql}"),
                 params_from_iter(params.iter()),
@@ -571,7 +572,7 @@ impl IndexStore for SqliteIndexStore {
             )
             .map_err(|e| e.to_string())?
         } else {
-            -1
+            0
         };
 
         let order_sql = if query.cursor.is_some() {
@@ -616,6 +617,8 @@ impl IndexStore for SqliteIndexStore {
         Ok(QueryPage {
             items,
             total,
+            total_known,
+            has_more,
             next_cursor,
         })
     }
@@ -2047,7 +2050,8 @@ mod tests {
                     ..Default::default()
                 })
                 .unwrap();
-            assert_eq!(page.total, -1);
+            assert!(!page.total_known);
+            assert_eq!(page.total, 0);
             cursor_items.extend(page.items.iter().map(|r| r.id));
             cursor = page.next_cursor;
             if cursor.is_none() {
@@ -2078,7 +2082,7 @@ mod tests {
     }
 
     #[test]
-    fn need_total_false_returns_minus_one() {
+    fn need_total_false_marks_unknown_explicitly() {
         let mut store = store();
         store
             .upsert(&FileRecord::new("C:/x/a.txt", 1, 1, "indexed"))
@@ -2089,7 +2093,8 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(page.total, -1);
+        assert!(!page.total_known);
+        assert_eq!(page.total, 0, "未知总数不再使用 -1 哨兵");
         assert_eq!(page.items.len(), 1);
         let page = store
             .query(&FileQuery {
@@ -2097,6 +2102,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
+        assert!(page.total_known);
         assert_eq!(page.total, 1);
     }
 

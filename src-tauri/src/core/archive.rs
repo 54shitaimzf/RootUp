@@ -3,7 +3,9 @@
 //! 纯逻辑与模型层，不依赖 Tauri；文件移动与索引/日志编排在
 //! `infra/archive_engine.rs` 与命令层完成。
 use crate::core::classify::Category;
-use crate::core::error_codes::{coded, code_of, ARCHIVE_CROSS_DISK, ARCHIVE_LOCKED, ARCHIVE_NO_ROOT};
+use crate::core::error_codes::{
+    code_of, coded, ARCHIVE_CROSS_DISK, ARCHIVE_LOCKED, ARCHIVE_NO_ROOT,
+};
 use crate::core::path::{is_subpath, normalize_path, path_key};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -281,7 +283,11 @@ mod tests {
 
     #[test]
     fn failure_extracts_code_and_keeps_phase() {
-        let f = failure("C:/a.pdf", "archive", move_error("C:/a.pdf", std::io::Error::from_raw_os_error(17)));
+        let f = failure(
+            "C:/a.pdf",
+            "archive",
+            move_error("C:/a.pdf", std::io::Error::from_raw_os_error(17)),
+        );
         assert_eq!(f.phase, "archive");
         assert_eq!(f.code.as_deref(), Some("archive.cross_disk"));
         let plain = failure("C:/a.pdf", "undo", "普通错误".to_string());
@@ -295,7 +301,10 @@ mod tests {
         assert!(is_owned_path("C:/Watch", &roots));
         assert!(is_owned_path("C:/Watch/sub/a.pdf", &roots));
         assert!(is_owned_path("d:/projects/app", &roots), "大小写不敏感");
-        assert!(!is_owned_path("C:/Watch2/a.pdf", &roots), "同名前缀不算子路径");
+        assert!(
+            !is_owned_path("C:/Watch2/a.pdf", &roots),
+            "同名前缀不算子路径"
+        );
         assert!(!is_owned_path("E:/Other/a.pdf", &roots));
         assert!(!is_owned_path("", &roots));
         assert!(!is_owned_path("C:/Watch/a.pdf", &[]));

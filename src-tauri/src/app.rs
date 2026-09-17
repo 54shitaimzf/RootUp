@@ -169,6 +169,7 @@ pub fn run() {
             study_commands::course_overview,
             schemes_commands::list_schemes,
             schemes_commands::save_scheme,
+            schemes_commands::apply_scheme,
             schemes_commands::rename_scheme,
             schemes_commands::delete_scheme,
             habits_commands::get_habits,
@@ -178,11 +179,9 @@ pub fn run() {
             labels_commands::delete_label_def,
             files_commands::add_watched_dir,
             files_commands::remove_watched_dir,
-            files_commands::count_under_root,
+            files_commands::watched_dirs_overview,
             files_commands::resolve_dir_target,
             files_commands::list_common_dirs,
-            files_commands::list_watched_dirs,
-            files_commands::watched_dir_health,
             files_commands::query_files,
             files_commands::list_labels,
             files_commands::list_categories,
@@ -395,11 +394,9 @@ pub fn run() {
                 settings.auto_archive,
             );
             app.manage(Mutex::new(archive_service));
-            for dir in &settings.watched_dirs {
-                if let Err(e) = service.add_dir(dir) {
-                    log::warn!("watch: 无法监听 {dir}: {e}");
-                }
-            }
+            // 监视器目录注册不在此处执行（0.8.8 可靠性加固）：大目录递归注册
+            // 阻塞 4–8 秒，移入 start_deferred_services 的后台线程（事件处理
+            // 线程先行启动，注册与扫描并行）。
             app.manage(Mutex::new(service));
             log::info!(
                 "监听服务已装配（{} 个目录，待前端就绪后启动）",

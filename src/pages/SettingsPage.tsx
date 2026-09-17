@@ -18,15 +18,15 @@ import { applyPreset, RULE_PRESETS } from "../lib/presets";
 import { LANGUAGE_OPTIONS } from "../lib/languages";
 import {
   addWatchedDir,
-  countUnderRoot,
+  applyScheme,
   createHomeworkShortcut,
   getLogDir,
   listCategories,
   listClassifyDefaults,
   listLabelDefs,
   listSchemes,
-  watchedDirHealth,
-  type WatchedDirHealth,
+  watchedDirsOverview,
+  type WatchedDirInfo,
   listCommonDirs,
   removeWatchedDir,
   resetSettings,
@@ -196,10 +196,12 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   const [infoEntry, setInfoEntry] = useState<SettingsGuideEntry | null>(null);
 
   useEffect(() => {
-    watchedDirHealth()
-      .then((health: WatchedDirHealth[]) =>
+    watchedDirsOverview()
+      .then((overview: WatchedDirInfo[]) =>
         setMissingDirs(
-          new Set(health.filter((item) => !item.exists).map((item) => item.dir)),
+          new Set(
+            overview.filter((item) => !item.exists).map((item) => item.dir),
+          ),
         ),
       )
       .catch(() => {});
@@ -252,8 +254,10 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
 
   const handleRemoveClick = async (dir: string) => {
     try {
-      const count = await countUnderRoot(dir);
-      setRemoveTarget({ dir, count });
+      // 移除确认计数取自监控目录总览端点（0.8.8 三端点合并）
+      const overview = await watchedDirsOverview();
+      const entry = overview.find((item) => item.dir === dir);
+      setRemoveTarget({ dir, count: entry?.indexedCount ?? 0 });
     } catch (err) {
       setDirError(String(err));
     }
@@ -296,14 +300,19 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     const preset = RULE_PRESETS.find((p) => p.id === id);
     const scheme = schemes.find((s) => s.id === id);
     if (!preset && !scheme) return;
-    const next = preset
-      ? applyPreset(settings, preset)
-      : { ...settings, ...cloneRules(scheme!) };
     try {
-      await commit({
-        ignore_rules: next.ignore_rules,
-        classify_overrides: next.classify_overrides,
-      });
+      if (preset) {
+        // 内置预设仍走前端派生 + 增量设置（无独立真源）
+        const next = applyPreset(settings, preset);
+        await commit({
+          ignore_rules: next.ignore_rules,
+          classify_overrides: next.classify_overrides,
+        });
+      } else {
+        // 自定义方案：后端原子应用（0.8.8 消除「前端读 schemes.json 再
+        // patch 设置」的规则双真相）
+        await applyScheme(scheme!.id);
+      }
       setNotice(t("settings.schemeApplied"));
     } catch (err) {
       setNotice(null);

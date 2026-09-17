@@ -5,7 +5,9 @@ use crate::core::archive::{
 };
 use crate::core::archive_guard::assess_archive_root as assess_archive_root_inner;
 use crate::core::archive_guard::ArchiveAssessment;
-use crate::core::error_codes::{coded, ARCHIVE_FORBIDDEN, ARCHIVE_NO_ROOT, ARCHIVE_TARGET_COLLIDES, ARCHIVE_UNDO_CONFLICT};
+use crate::core::error_codes::{
+    coded, ARCHIVE_FORBIDDEN, ARCHIVE_NO_ROOT, ARCHIVE_TARGET_COLLIDES, ARCHIVE_UNDO_CONFLICT,
+};
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector, ProjectKind};

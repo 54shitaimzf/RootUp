@@ -20,7 +20,7 @@ import {
   getStudyData,
   listCategories,
   listLabels,
-  listWatchedDirs,
+  watchedDirsOverview,
   logEvent,
   openFile,
   openProjectFromFile,
@@ -97,7 +97,7 @@ export function FilePage({
     listLabels()
       .then(setAvailableLabels)
       .catch(() => setAvailableLabels([]));
-    listWatchedDirs()
+    watchedDirsOverview()
       .then((dirs) => setWatchedCount(dirs.length))
       .catch(() => setWatchedCount(0));
   }, []);
@@ -387,11 +387,11 @@ export function FilePage({
         batchMode={archive.batchMode}
         filterActive={filterActive}
         selectedCount={archive.selected.size}
-        filteredCount={total}
+        filteredCount={total ?? -1}
         archiveBatchLimit={ARCHIVE_BATCH_LIMIT}
         onEnterBatchMode={archive.enterBatchMode}
         onArchiveSelected={archive.openArchiveSelected}
-        onArchiveFiltered={() => archive.openArchiveFiltered(total, ARCHIVE_BATCH_LIMIT)}
+        onArchiveFiltered={() => archive.openArchiveFiltered(total ?? -1, ARCHIVE_BATCH_LIMIT)}
         onCancelSelection={archive.cancelSelection}
       />
 

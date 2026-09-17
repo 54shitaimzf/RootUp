@@ -1,4 +1,5 @@
 //! 项目、智能打开与桌面快捷方式命令。
+use crate::commands::files::AddDirOutcome;
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key, validate_dir_path};
 use crate::core::project::{
@@ -112,26 +113,30 @@ pub fn list_projects(app: AppHandle) -> Vec<ProjectInfo> {
     projects
 }
 
+/// 添加项目目录：返回规范化路径与提示消息（与 add_watched_dir 的 AddDirOutcome 对称）。
 #[tauri::command]
-pub fn add_project_dir(app: AppHandle, dir: String) -> Result<(), String> {
+pub fn add_project_dir(app: AppHandle, dir: String) -> Result<AddDirOutcome, String> {
     let dir = validate_dir_path(&dir)?;
     if !Path::new(&dir).is_dir() {
         return Err(format!("目录不存在: {dir}"));
     }
+    let mut message: Option<String> = None;
     settings_io::modify_settings(&app, &["project_dirs"], |settings| {
+        // 锁内复检：重复目录幂等返回提示（与 add_watched_dir 的 Duplicate 语义对齐）。
         if settings
             .project_dirs
             .iter()
             .any(|d| path_key(d) == path_key(&dir))
         {
-            return Err("该目录已在项目列表中".into());
+            message = Some("该目录已在项目列表中".into());
+            return Ok(());
         }
         settings.project_dirs.push(dir.clone());
         Ok(())
     })?;
     log::info!("project: 添加 {dir}");
     schedule_project_sync(&app);
-    Ok(())
+    Ok(AddDirOutcome { message, dir })
 }
 
 #[tauri::command]

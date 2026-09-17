@@ -53,7 +53,7 @@ vi.mock("../lib/tauri", () => ({
   updateSettings: vi.fn(),
   addWatchedDir: vi.fn(),
   removeWatchedDir: vi.fn(),
-  countUnderRoot: vi.fn(),
+  applyScheme: vi.fn(),
   listCommonDirs: vi.fn(),
   resolveDirTarget: vi.fn(),
   openDirectoryDialog: vi.fn(),
@@ -66,8 +66,7 @@ vi.mock("../lib/tauri", () => ({
   listSchemes: vi.fn(),
   listArchiveBatches: vi.fn(),
   undoArchive: vi.fn(),
-  listWatchedDirs: vi.fn(),
-  watchedDirHealth: vi.fn(),
+  watchedDirsOverview: vi.fn(),
   assessArchiveRoot: vi.fn(),
   recommendedArchiveRoots: vi.fn(),
   logEvent: vi.fn(),
@@ -75,7 +74,6 @@ vi.mock("../lib/tauri", () => ({
 
 import {
   addWatchedDir,
-  countUnderRoot,
   createHomeworkShortcut,
   listCommonDirs,
   openDirectoryDialog,
@@ -88,8 +86,7 @@ import {
   listClassifyDefaults,
   listArchiveBatches,
   listSchemes,
-  listWatchedDirs,
-  watchedDirHealth,
+  watchedDirsOverview,
   resetSettings,
   updateSettings,
   undoArchive,
@@ -143,8 +140,7 @@ describe("SettingsPage", () => {
     window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     vi.mocked(getSettings).mockResolvedValue(SETTINGS);
     vi.mocked(updateSettings).mockResolvedValue(undefined);
-    vi.mocked(listWatchedDirs).mockResolvedValue([]);
-    vi.mocked(watchedDirHealth).mockResolvedValue([]);
+    vi.mocked(watchedDirsOverview).mockResolvedValue([]);
     vi.mocked(getLogDir).mockResolvedValue("C:/logs");
     vi.mocked(listCategories).mockResolvedValue(["document", "image"]);
     vi.mocked(listLabelDefs).mockResolvedValue([]);
@@ -152,7 +148,6 @@ describe("SettingsPage", () => {
     vi.mocked(listSchemes).mockResolvedValue([]);
     vi.mocked(listArchiveBatches).mockResolvedValue([]);
     vi.mocked(listCommonDirs).mockResolvedValue([]);
-    vi.mocked(countUnderRoot).mockResolvedValue(0);
     vi.mocked(assessArchiveRoot).mockResolvedValue({
       level: "safe",
       reason: null,
@@ -260,7 +255,9 @@ describe("SettingsPage", () => {
       ...SETTINGS,
       watched_dirs: ["C:/Watch"],
     });
-    vi.mocked(countUnderRoot).mockResolvedValue(3);
+    vi.mocked(watchedDirsOverview).mockResolvedValue([
+      { dir: "C:/Watch", exists: true, indexedCount: 3 },
+    ]);
     renderPage();
     const removeButtons = await screen.findAllByRole("button", {
       name: "移除",

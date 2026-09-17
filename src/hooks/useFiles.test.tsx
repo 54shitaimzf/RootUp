@@ -35,11 +35,17 @@ function rec(
 }
 
 function page(items: FileRecord[], total: number): QueryPage {
-  return { items, total, nextCursor: null };
+  return { items, total, totalKnown: true, hasMore: false, nextCursor: null };
 }
 
 function pageWithCursor(items: FileRecord[], nextCursor: string | null): QueryPage {
-  return { items, total: -1, nextCursor };
+  return {
+    items,
+    total: 0,
+    totalKnown: false,
+    hasMore: nextCursor !== null,
+    nextCursor,
+  };
 }
 
 function deferred<T>() {
@@ -206,14 +212,14 @@ describe("useFiles", () => {
     expect(result.current.hasMore).toBe(false);
   });
 
-  it("total 未知时 hasMore 由 nextCursor 决定", async () => {
+  it("total 未知时 hasMore 由后端显式字段决定", async () => {
     const d = deferred<QueryPage>();
     vi.mocked(queryFiles).mockReturnValue(d.promise);
     const { result } = renderHook(() => useFiles("", 50, 0, 0));
     await act(async () => {
       d.resolve(pageWithCursor([rec("C:/a.txt", 1)], "cursor-1"));
     });
-    expect(result.current.total).toBe(-1);
+    expect(result.current.total).toBeNull();
     expect(result.current.hasMore).toBe(true);
   });
 });

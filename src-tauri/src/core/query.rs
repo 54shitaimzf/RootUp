@@ -70,12 +70,17 @@ impl Default for FileQuery {
     }
 }
 
-/// 查询结果页：记录与总数（分页用）。
+/// 查询结果页：记录 + 显式分页语义（0.8.8 起以 totalKnown/hasMore 取代 total=-1 哨兵）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryPage {
     pub items: Vec<FileRecord>,
+    /// 精确总数；仅 total_known 为 true 时有意义（未知时为 0，前端不得展示）。
     pub total: i64,
+    /// total 是否为精确总数（COUNT 治理显式化：仅首页且无筛选时为 true）。
+    pub total_known: bool,
+    /// 是否还有下一页（与 next_cursor 同源，前端不得自行推导）。
+    pub has_more: bool,
     /// 下一页游标；无更多数据时为 None
     pub next_cursor: Option<String>,
 }

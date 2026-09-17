@@ -84,8 +84,9 @@ fn registry() -> &'static HashMap<&'static str, Severity> {
     use std::sync::OnceLock;
     static REGISTRY: OnceLock<HashMap<&'static str, Severity>> = OnceLock::new();
     REGISTRY.get_or_init(|| {
-        let raw: Registry = serde_json::from_str(include_str!("../../../fixtures/error-codes.json"))
-            .expect("fixtures/error-codes.json 应可解析");
+        let raw: Registry =
+            serde_json::from_str(include_str!("../../../fixtures/error-codes.json"))
+                .expect("fixtures/error-codes.json 应可解析");
         raw.codes
             .into_iter()
             .map(|entry| (leak(entry.code), entry.severity))
@@ -112,11 +113,10 @@ pub fn coded(code: &str, message: impl AsRef<str>) -> String {
 pub fn code_of(error: &str) -> Option<&str> {
     let (code, _) = error.split_once('|')?;
     if code.is_empty()
+        || !code.chars().next().is_some_and(|c| c.is_ascii_lowercase())
         || !code
             .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
-        || !code.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.')
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.')
     {
         return None;
     }
@@ -156,18 +156,18 @@ mod tests {
 
     #[test]
     fn fixture_severities_are_the_three_levels() {
-        let raw: Registry = serde_json::from_str(include_str!("../../../fixtures/error-codes.json"))
-            .unwrap();
-        assert_eq!(
-            raw.severities,
-            vec!["retryable", "ignorable", "needs_user"]
-        );
+        let raw: Registry =
+            serde_json::from_str(include_str!("../../../fixtures/error-codes.json")).unwrap();
+        assert_eq!(raw.severities, vec!["retryable", "ignorable", "needs_user"]);
     }
 
     #[test]
     fn code_of_parses_and_rejects_shapes() {
         assert_eq!(code_of("archive.locked|文件被占用"), Some("archive.locked"));
-        assert_eq!(code_of("archive_guard.blocked|drive_root"), Some("archive_guard.blocked"));
+        assert_eq!(
+            code_of("archive_guard.blocked|drive_root"),
+            Some("archive_guard.blocked")
+        );
         assert_eq!(code_of("普通错误消息"), None);
         assert_eq!(code_of("|缺少码"), None);
         assert_eq!(code_of("Bad Shape|大写"), None);

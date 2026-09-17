@@ -10,6 +10,8 @@ use std::path::PathBuf;
 pub trait SchemeStore: Send + Sync {
     fn list(&self) -> Vec<RuleScheme>;
     fn save(&self, scheme: RuleScheme) -> Result<(), String>;
+    /// 按 id 更新内容（名称不变）；id 不存在返回 scheme.not_found。
+    fn update(&self, scheme: RuleScheme) -> Result<(), String>;
     fn rename(&self, id: &str, name: &str) -> Result<(), String>;
     fn delete(&self, id: &str) -> Result<(), String>;
 }
@@ -57,6 +59,25 @@ impl SchemeStore for JsonSchemeStore {
         }
         schemes.push(scheme);
         self.write_atomic(&schemes)
+    }
+
+    fn update(&self, scheme: RuleScheme) -> Result<(), String> {
+        let schemes = self.load();
+        if !schemes.iter().any(|s| s.id == scheme.id) {
+            return Err("scheme.not_found|方案不存在".to_string());
+        }
+        let mut updated: Vec<RuleScheme> = schemes
+            .into_iter()
+            .map(|mut s| {
+                if s.id == scheme.id {
+                    s.ignore_rules = scheme.ignore_rules.clone();
+                    s.classify_overrides = scheme.classify_overrides.clone();
+                }
+                s
+            })
+            .collect();
+        updated.shrink_to_fit();
+        self.write_atomic(&updated)
     }
 
     fn rename(&self, id: &str, name: &str) -> Result<(), String> {
@@ -165,6 +186,28 @@ mod tests {
         // 自身改名不受影响
         store.rename("s2", "二").unwrap();
         assert!(store.list().iter().any(|s| s.id == "s2" && s.name == "二"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn update_by_id_replaces_content_and_keeps_name() {
+        let dir = temp_dir("update");
+        let store = JsonSchemeStore::new(dir.join("schemes.json"));
+        store.save(scheme("s1", "方案一")).unwrap();
+        let mut changed = scheme("s1", "名称应被忽略");
+        changed.classify_overrides = vec![ClassifyRule {
+            extensions: vec!["mp4".into()],
+            category: "video".into(),
+        }];
+        store.update(changed).unwrap();
+        let list = store.list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "方案一", "update 不改名（改名走 rename）");
+        assert_eq!(list[0].classify_overrides.len(), 1);
+        assert_eq!(list[0].classify_overrides[0].category, "video");
+
+        let err = store.update(scheme("missing", "无名")).unwrap_err();
+        assert!(err.starts_with("scheme.not_found|"), "{err}");
         fs::remove_dir_all(&dir).unwrap();
     }
 

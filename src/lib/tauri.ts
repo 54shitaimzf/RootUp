@@ -216,12 +216,12 @@ export interface FileRecord {
 /** 与 Rust 侧 core::query::QueryPage 对应 */
 export interface QueryPage {
   items: FileRecord[];
-  /**
-   * 精确总数仅在「首页 + 无筛选」查询时返回；其余为 -1 哨兵
-   * （后端 COUNT 治理），前端须以 items.length / nextCursor 判断可加载数。
-   * 0.8.8 将以显式 totalKnown / hasMore 字段替代哨兵。
-   */
+  /** 精确总数；仅 totalKnown 为 true 时有意义（COUNT 治理：仅首页 + 无筛选返回） */
   total: number;
+  /** total 是否为精确总数；false 时不得展示 total（以 items.length / hasMore 判断） */
+  totalKnown: boolean;
+  /** 是否还有下一页（与 nextCursor 同源，显式字段禁止前端自行推导） */
+  hasMore: boolean;
   /** keyset 下一页游标；无更多数据为 null */
   nextCursor: string | null;
 }
@@ -302,12 +302,24 @@ export function listSchemes(): Promise<RuleScheme[]> {
   return invoke<RuleScheme[]>("list_schemes");
 }
 
+/** 保存方案：id 缺省新建，提供时按 id upsert（更新规则内容，名称不变） */
 export function saveScheme(
   name: string,
   ignoreRules: IgnoreRules,
   classifyOverrides: ClassifyRule[],
+  id?: string | null,
 ): Promise<RuleScheme> {
-  return invoke<RuleScheme>("save_scheme", { name, ignoreRules, classifyOverrides });
+  return invoke<RuleScheme>("save_scheme", {
+    id: id ?? null,
+    name,
+    ignoreRules,
+    classifyOverrides,
+  });
+}
+
+/** 原子应用方案：后端读方案并经设置单入口写入（规则双真相收口） */
+export function applyScheme(id: string): Promise<void> {
+  return invoke<void>("apply_scheme", { id });
 }
 
 export function renameScheme(id: string, name: string): Promise<void> {
@@ -334,10 +346,6 @@ export function removeWatchedDir(dir: string): Promise<void> {
   return invoke<void>("remove_watched_dir", { dir });
 }
 
-export function countUnderRoot(root: string): Promise<number> {
-  return invoke<number>("count_under_root", { root });
-}
-
 export function resolveDirTarget(path: string): Promise<string> {
   return invoke<string>("resolve_dir_target", { path });
 }
@@ -352,17 +360,17 @@ export async function openDirectoryDialog(): Promise<string | null> {
   return typeof selected === "string" ? selected : null;
 }
 
-export function listWatchedDirs(): Promise<string[]> {
-  return invoke<string[]>("list_watched_dirs");
-}
-
-export interface WatchedDirHealth {
+/** 监控目录总览条目（0.8.8 三端点合并：目录 + 存在性 + 索引计数单一端点） */
+export interface WatchedDirInfo {
   dir: string;
+  /** 目录当前是否可访问（盘符卸载 / 网络盘断开 / 权限变化时 false） */
   exists: boolean;
+  /** 该目录（含子目录）下非 deleted 的索引记录数 */
+  indexedCount: number;
 }
 
-export function watchedDirHealth(): Promise<WatchedDirHealth[]> {
-  return invoke<WatchedDirHealth[]>("watched_dir_health");
+export function watchedDirsOverview(): Promise<WatchedDirInfo[]> {
+  return invoke<WatchedDirInfo[]>("watched_dirs_overview");
 }
 
 /** 结构化查询（搜索语法 + 分页 + 总数） */
@@ -506,8 +514,9 @@ export function appReady(): Promise<void> {
   return invoke<void>("app_ready");
 }
 
-export function addProjectDir(dir: string): Promise<void> {
-  return invoke<void>("add_project_dir", { dir });
+/** 添加项目目录：返回规范化路径与提示消息（与 addWatchedDir 对称；重复目录幂等提示） */
+export function addProjectDir(dir: string): Promise<AddDirOutcome> {
+  return invoke<AddDirOutcome>("add_project_dir", { dir });
 }
 
 export function removeProjectDir(dir: string): Promise<void> {

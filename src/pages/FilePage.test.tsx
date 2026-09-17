@@ -37,7 +37,7 @@ vi.mock("../lib/tauri", () => ({
   listCategories: vi.fn(),
   listLabelDefs: vi.fn(),
   listLabels: vi.fn(),
-  listWatchedDirs: vi.fn(),
+  watchedDirsOverview: vi.fn(),
   archiveFiles: vi.fn(),
   archiveFiltered: vi.fn(),
   undoArchive: vi.fn(),
@@ -58,7 +58,7 @@ import {
   listCategories,
   listLabelDefs,
   listLabels,
-  listWatchedDirs,
+  watchedDirsOverview,
   openFile,
   openProjectFromFile,
   queryFiles,
@@ -127,12 +127,16 @@ describe("FilePage 行操作", () => {
         },
       ],
       total: 1,
+      totalKnown: true,
+      hasMore: false,
       nextCursor: null,
     });
     vi.mocked(listCategories).mockResolvedValue(["document"]);
     vi.mocked(listLabelDefs).mockResolvedValue([]);
     vi.mocked(listLabels).mockResolvedValue([]);
-    vi.mocked(listWatchedDirs).mockResolvedValue(["C:/docs"]);
+    vi.mocked(watchedDirsOverview).mockResolvedValue([
+      { dir: "C:/docs", exists: true, indexedCount: 1 },
+    ]);
     vi.mocked(getHabits).mockResolvedValue({});
     vi.mocked(getSettings).mockResolvedValue(SETTINGS);
     vi.mocked(saveHabits).mockResolvedValue(undefined);
@@ -188,6 +192,8 @@ describe("FilePage 行操作", () => {
         },
       ],
       total: 1,
+      totalKnown: true,
+      hasMore: false,
       nextCursor: null,
     });
     renderPage();
@@ -329,6 +335,8 @@ describe("FilePage 行操作", () => {
         },
       ],
       total: 1,
+      totalKnown: true,
+      hasMore: false,
       nextCursor: null,
     });
     const { container } = renderPage();
@@ -361,7 +369,9 @@ describe("FilePage 行操作", () => {
           state: "indexed",
         },
       ],
-      total: -1,
+      total: 0,
+      totalKnown: false,
+      hasMore: true,
       nextCursor: "[\"notes.pdf\",1]",
     });
     renderPage();
@@ -397,6 +407,8 @@ describe("FilePage 行操作", () => {
     vi.mocked(queryFiles).mockResolvedValue({
       items,
       total: 300,
+      totalKnown: true,
+      hasMore: true,
       nextCursor: "[\"file-299.txt\",300]",
     });
     renderPage();
@@ -412,6 +424,8 @@ describe("FilePage 行操作", () => {
     vi.mocked(queryFiles).mockResolvedValue({
       items: [],
       total: 0,
+      totalKnown: false,
+      hasMore: false,
       nextCursor: null,
     });
     fireEvent.click(screen.getByRole("tab", { name: "软件" }));
