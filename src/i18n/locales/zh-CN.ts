@@ -308,12 +308,18 @@ export default {
     softwareDirPlaceholder: "输入软件目录路径，如 C:\\Tools\\MyApp",
     softwareEmpty: "尚无手动认定的软件目录（自动识别持续进行）",
     removeSoftware: "取消认定",
+    removeSoftwareConfirmTitle: "取消软件认定",
+    removeSoftwareConfirmDesc:
+      "取消后该目录下的内容将不再作为软件单元识别，需要时可重新认定。",
     softwareExcluded: "软件排除目录",
     softwareExcludedDesc: "排除后该目录不再被识别为软件单元（含压制手动认定）。",
     addSoftwareExclusion: "排除目录",
     softwareExclusionPlaceholder: "输入要排除的目录路径",
     softwareExclusionEmpty: "尚无排除目录",
     removeSoftwareExclusion: "解除排除",
+    removeExclusionConfirmTitle: "解除软件排除",
+    removeExclusionConfirmDesc:
+      "解除后该目录下的内容将重新参与软件单元识别。",
     softwareAdded: "已认定，正在同步软件单元",
     softwareExcludedDone: "已排除，正在同步软件单元",
     watchedDirs: "监控目录",
@@ -498,6 +504,7 @@ export default {
   files: {
     searchPlaceholder: "搜索文件…",
     copyPath: "复制路径",
+    copyPathDone: "已复制到剪贴板",
     copyPathFailed: "复制路径失败",
     openSmart: "智能打开",
     clearSearch: "清空搜索",

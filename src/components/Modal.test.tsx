@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Modal } from "./Modal";
@@ -102,5 +103,79 @@ describe("Modal", () => {
     const names = buttons.map((button) => button.textContent);
     expect(names.indexOf("确认删除")).toBeGreaterThanOrEqual(0);
     expect(names.indexOf("取消")).toBeGreaterThan(names.indexOf("确认删除"));
+  });
+
+  it("嵌套弹层：一次 Esc 只关最顶层，父弹窗不连锁关闭", () => {
+    const parentClose = vi.fn();
+    const childClose = vi.fn();
+    function Nested() {
+      const [childOpen, setChildOpen] = useState(true);
+      return (
+        <Modal
+          open
+          title="父弹窗"
+          onClose={() => {
+            parentClose();
+            setChildOpen(false);
+          }}
+        >
+          <p>父内容</p>
+          {childOpen && (
+            <ConfirmDialog
+              open
+              title="子确认"
+              description="确认？"
+              confirmLabel="确认"
+              onConfirm={() => setChildOpen(false)}
+              onCancel={() => {
+                childClose();
+                setChildOpen(false);
+              }}
+            />
+          )}
+        </Modal>
+      );
+    }
+    render(<Nested />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(childClose).toHaveBeenCalledTimes(1);
+    expect(parentClose).not.toHaveBeenCalled();
+    // 子弹窗关闭后，父弹窗回到栈顶，再次 Esc 才关父
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(parentClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("打开时焦点移入面板，关闭后还原到触发元素", async () => {
+    const trigger = document.createElement("button");
+    trigger.textContent = "触发";
+    document.body.appendChild(trigger);
+    trigger.focus();
+    const { unmount } = render(
+      <Modal open title="焦点" onClose={() => {}}>
+        <button type="button">内部按钮</button>
+      </Modal>,
+    );
+    const panel = screen.getByRole("dialog", { name: "焦点" });
+    expect(panel).toHaveFocus();
+    unmount();
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
+  it("Tab 在面板内循环（末元素后回到首个）", () => {
+    render(
+      <Modal open title="循环" onClose={() => {}}>
+        <button type="button">甲</button>
+        <button type="button">乙</button>
+      </Modal>,
+    );
+    // 面板内首个可聚焦元素是标题栏关闭按钮，其后才是内容按钮
+    const first = screen.getByRole("button", { name: "关闭" });
+    const last = screen.getByRole("button", { name: "乙" });
+    last.focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
   });
 });

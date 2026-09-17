@@ -299,9 +299,9 @@ export function LabelManageDialog({
                       type="button"
                       aria-label={iconKey}
                       onClick={() => setIcon(iconKey)}
-                      className={`flex size-8 items-center justify-center rounded-md transition-colors ${
+                      className={`flex size-8 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand-500/70 ${
                         icon === iconKey
-                          ? "bg-brand-700 text-white"
+                          ? "bg-brand-700 text-white dark:bg-brand-500"
                           : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
                       }`}
                     >

@@ -227,6 +227,49 @@ describe("FilePage 行操作", () => {
     );
   });
 
+  it("IDE 打开成功消息走通知通道（brand 横幅）而非错误通道", async () => {
+    vi.mocked(queryFiles).mockResolvedValue({
+      items: [
+        {
+          id: 2,
+          path: "C:/docs/main.rs",
+          name: "main.rs",
+          size: 100,
+          file_type: "rs",
+          labels: "",
+          first_seen: 1,
+          modified: 2,
+          state: "indexed",
+        },
+      ],
+      total: 1,
+      totalKnown: true,
+      hasMore: false,
+      nextCursor: null,
+    });
+    vi.mocked(openProjectFromFile).mockResolvedValue({
+      openedWith: "ide",
+      tool: "vscode",
+      message: "已用 VS Code 打开",
+    });
+    renderPage();
+    await screen.findByText("main.rs");
+    fireEvent.click(screen.getByLabelText("用 IDE 打开"));
+    expect(await screen.findByText("已用 VS Code 打开")).toBeInTheDocument();
+  });
+
+  it("复制路径成功显示通知并支持关闭", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderPage();
+    await screen.findByText("notes.pdf");
+    fireEvent.click(screen.getByLabelText("复制路径"));
+    expect(writeText).toHaveBeenCalledWith("C:/docs/notes.pdf");
+    expect(await screen.findByText("已复制到剪贴板")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("关闭"));
+    expect(screen.queryByText("已复制到剪贴板")).not.toBeInTheDocument();
+  });
+
   it("归档根配置后单文件归档并显示撤销提示", async () => {
     vi.mocked(getSettings).mockResolvedValue({
       ...SETTINGS,
@@ -475,7 +518,7 @@ describe("FilePage 行操作", () => {
       hasMore: false,
       nextCursor: null,
     });
-    fireEvent.click(screen.getByRole("tab", { name: "软件" }));
+    fireEvent.click(screen.getByRole("button", { name: "软件" }));
     expect(
       await screen.findByText("软件单元即将上线"),
     ).toBeInTheDocument();

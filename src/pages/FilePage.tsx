@@ -6,6 +6,7 @@ import { FilterBar } from "../components/FilterBar";
 import { PageHeader } from "../components/PageHeader";
 import { PageHelpButton } from "../components/PageHelpButton";
 import { SearchAutocomplete } from "../components/SearchAutocomplete";
+import { SegmentedControl } from "../components/SegmentedControl";
 import { useHelpCenter } from "../components/HelpCenter";
 import { useSettings } from "../hooks/useSettings";
 import { useFiles } from "../hooks/useFiles";
@@ -81,7 +82,10 @@ export function FilePage({
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [showLoadingBar, setShowLoadingBar] = useState(false);
+  /** 操作错误（打开/删除/解压失败等）：error 级横幅，可关闭。 */
   const [actionError, setActionError] = useState<string | null>(null);
+  /** 操作通知（复制成功、IDE 已打开等）：brand 级横幅，可关闭。 */
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [autoHintHidden, setAutoHintHidden] = useState(false);
   /** 回收站删除确认（0.8.8）：行级入口，paths 预留批量。 */
   const [deleteTarget, setDeleteTarget] = useState<{ paths: string[] } | null>(
@@ -216,6 +220,7 @@ export function FilePage({
     try {
       await openFile(path);
       setActionError(null);
+      setActionNotice(null);
       void logEvent("info", `ui: 打开文件 path=${path}`);
     } catch (err) {
       setActionError(String(err));
@@ -226,6 +231,7 @@ export function FilePage({
     try {
       await revealInExplorer(path);
       setActionError(null);
+      setActionNotice(null);
       void logEvent("info", `ui: 定位文件 path=${path}`);
     } catch (err) {
       setActionError(String(err));
@@ -247,6 +253,7 @@ export function FilePage({
         setActionError(`${first.path}: ${first.error}`);
       } else {
         setActionError(null);
+        setActionNotice(null);
       }
     } catch (err) {
       setActionError(String(err));
@@ -258,6 +265,7 @@ export function FilePage({
       const outcome = await extractArchive(path);
       setRefreshKey((key) => key + 1);
       setActionError(null);
+      setActionNotice(null);
       void logEvent(
         "info",
         `ui: 解压 path=${path} dest=${outcome.dest} files=${outcome.files}`,
@@ -282,8 +290,10 @@ export function FilePage({
         textarea.remove();
       }
       setActionError(null);
+      setActionNotice(t("files.copyPathDone"));
       void logEvent("info", `ui: 复制路径 path=${path}`);
     } catch {
+      setActionNotice(null);
       setActionError(t("files.copyPathFailed"));
     }
   };
@@ -293,7 +303,7 @@ export function FilePage({
       const outcome = await openProjectFromFile(path);
       setActionError(null);
       void logEvent("info", `ui: 用 IDE 打开文件 path=${path}`);
-      if (outcome.message) setActionError(outcome.message);
+      if (outcome.message) setActionNotice(outcome.message);
     } catch (err) {
       setActionError(String(err));
     }
@@ -315,29 +325,20 @@ export function FilePage({
       />
 
       {/* 四视图切换：全部 / 文件 / 项目 / 软件（kind: 语法，见 model.ts 视图 token） */}
-      <div
-        role="tablist"
-        aria-label={t("files.viewSwitchLabel")}
-        className="mb-2 flex gap-1.5"
-      >
-        {(["all", "file", "project", "software"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={view === value}
-            onClick={() => {
-              setView(value);
-              setOffset(0);
-              void logEvent("info", `ui: 文件页视图 ${value}`);
-            }}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              view === value
-                ? "bg-brand-700 text-white dark:bg-brand-500"
-                : "bg-slate-100 text-secondary hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
-            }`}
-          >
-            {t(
+      <SegmentedControl
+        value={view}
+        onChange={(value) => {
+          setView(value);
+          setOffset(0);
+          void logEvent("info", `ui: 文件页视图 ${value}`);
+        }}
+        variant="pill"
+        ariaLabel={t("files.viewSwitchLabel")}
+        className="mb-2"
+        options={(["all", "file", "project", "software"] as const).map(
+          (value) => ({
+            value,
+            label: t(
               value === "all"
                 ? "filter.all"
                 : value === "file"
@@ -345,10 +346,10 @@ export function FilePage({
                   : value === "project"
                     ? "filter.project"
                     : "filter.software",
-            )}
-          </button>
-        ))}
-      </div>
+            ),
+          }),
+        )}
+      />
 
       <SearchAutocomplete
         text={query}
@@ -412,6 +413,9 @@ export function FilePage({
         stale={stale}
         onRefresh={handleRefresh}
         actionError={actionError}
+        onDismissActionError={() => setActionError(null)}
+        actionNotice={actionNotice}
+        onDismissActionNotice={() => setActionNotice(null)}
         autoArchiveHintVisible={Boolean(autoArchive && archiveRoot && !autoHintHidden)}
         onDismissAutoHint={() => setAutoHintHidden(true)}
         archiveNotice={archive.archiveNotice}
@@ -446,7 +450,7 @@ export function FilePage({
           <div className="h-px bg-brand-500/20" />
         )}
         {loading && items.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+          <div className="px-5 py-10 text-center text-sm text-muted">
             {t("files.loading")}
           </div>
         ) : watchedCount === 0 ? (

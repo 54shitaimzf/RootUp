@@ -158,6 +158,12 @@ section:not(:first-child) > .form-section-divider {
   transition-timing-function: var(--ease-out);
 }
 
+/* 动效令牌统一：颜色过渡一律走令牌时长（非分层规则覆盖 Tailwind 默认 150ms，
+   与 tokens.css「禁止散落硬编码」约定闭环；显式 duration-[var(--duration-*)] 不受影响） */
+.transition-colors {
+  transition-duration: var(--duration-fast);
+}
+
 .micro-press:active:not(:disabled) {
   transform: scale(0.98);
 }

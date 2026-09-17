@@ -158,6 +158,12 @@ export function resolveArchiveDir(labels: string): string {
   return resolveCategoryKey(first);
 }
 
+/**
+ * 项目归档目标子目录名（真源 fixtures/app-contracts.json 的 archiveProjectDir，
+ * 与后端 core::archive::PROJECT_ARCHIVE_DIR 双端测试锁定；改名必须两侧同步）。
+ */
+export const ARCHIVE_PROJECT_DIR = "项目";
+
 /** 以 "/" 连接归档根与子段；根统一为 "/" 分隔并剥除尾部（与后端 normalize_path 一致）。 */
 export function joinArchivePath(root: string, ...segments: string[]): string {
   const cleanRoot = root.trim().replace(/\\/g, "/").replace(/\/+$/, "");

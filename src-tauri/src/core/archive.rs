@@ -203,6 +203,20 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[test]
+    fn project_archive_dir_matches_fixture() {
+        // 前端 ProjectsPage 归档预览同源引用（lib/fileUtils.ts）：
+        // 目录名改动必须双端同步 fixtures/app-contracts.json
+        let raw = include_str!("../../../fixtures/app-contracts.json");
+        let value: serde_json::Value =
+            serde_json::from_str(raw).expect("fixtures/app-contracts.json 应可解析");
+        assert_eq!(
+            value["archiveProjectDir"].as_str(),
+            Some(PROJECT_ARCHIVE_DIR),
+            "PROJECT_ARCHIVE_DIR 与 app-contracts.json 的 archiveProjectDir 漂移"
+        );
+    }
+
     fn temp_root(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "rootup_archive_core_{}_{}",

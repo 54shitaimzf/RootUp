@@ -59,6 +59,7 @@ import { FormSection } from "../components/FormSection";
 import { DirectoryAdder } from "../components/DirectoryAdder";
 import { Modal } from "../components/Modal";
 import { RevealLink } from "../components/RevealLink";
+import { SegmentedControl } from "../components/SegmentedControl";
 import { Select } from "../components/Select";
 import { SettingsInfoDialog } from "../components/SettingsInfoDialog";
 import { Tooltip } from "../components/Tooltip";
@@ -205,6 +206,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
     count: number;
   } | null>(null);
   const [infoEntry, setInfoEntry] = useState<SettingsGuideEntry | null>(null);
+  // 软件目录/排除目录移除确认：与监控目录移除同纪律（影响索引可见性，不可裸删）
+  const [softwareRemove, setSoftwareRemove] = useState<{
+    kind: "software" | "excluded";
+    dir: string;
+  } | null>(null);
   // 变更日志 v1（0.8.8）：查看分类 / 归档 / 撤销 / 删除历史
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actions, setActions] = useState<ActionEntry[]>([]);
@@ -488,17 +494,29 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
         </Banner>
       )}
       {notice && (
-        <Banner variant="brand" className="mt-4">
+        <Banner
+          variant="brand"
+          className="mt-4"
+          onClose={() => setNotice(null)}
+        >
           {notice}
         </Banner>
       )}
       {dirError && (
-        <Banner variant="error" className="mt-4">
+        <Banner
+          variant="error"
+          className="mt-4"
+          onClose={() => setDirError(null)}
+        >
           <span className="block truncate">{dirError}</span>
         </Banner>
       )}
       {ruleError && (
-        <Banner variant="error" className="mt-4">
+        <Banner
+          variant="error"
+          className="mt-4"
+          onClose={() => setRuleError(null)}
+        >
           <span className="block truncate">{ruleError}</span>
         </Banner>
       )}
@@ -514,21 +532,16 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
               <span className="block text-sm font-medium text-strong">
                 {t("settings.theme")}
               </span>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {THEME_OPTIONS.map(({ value, labelKey }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setTheme(value)}
-                    className={`rounded-md px-4 py-2 text-sm transition-colors ${
-                      theme === value
-                        ? "bg-brand-700 font-medium text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    {t(labelKey)}
-                  </button>
-                ))}
+              <div className="mt-2">
+                <SegmentedControl
+                  value={theme}
+                  onChange={setTheme}
+                  variant="pill"
+                  options={THEME_OPTIONS.map(({ value, labelKey }) => ({
+                    value,
+                    label: t(labelKey),
+                  }))}
+                />
               </div>
             </div>
             <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
@@ -777,7 +790,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => void handleRemoveSoftware(dir)}
+                        onClick={() =>
+                          setSoftwareRemove({ kind: "software", dir })
+                        }
                         className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
                       >
                         {t("settings.removeSoftware")}
@@ -819,7 +834,9 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => void handleRemoveSoftwareExclusion(dir)}
+                        onClick={() =>
+                          setSoftwareRemove({ kind: "excluded", dir })
+                        }
                         className="shrink-0 text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500"
                       >
                         {t("settings.removeSoftwareExclusion")}
@@ -1179,6 +1196,43 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
           <Tooltip content={removeTarget.dir} className="mt-2 block">
             <span className="block cursor-default truncate rounded-md bg-slate-50 px-2.5 py-1.5 font-mono text-xs text-secondary dark:bg-slate-800">
               {removeTarget.dir}
+            </span>
+          </Tooltip>
+        )}
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={softwareRemove !== null}
+        title={t(
+          softwareRemove?.kind === "excluded"
+            ? "settings.removeExclusionConfirmTitle"
+            : "settings.removeSoftwareConfirmTitle",
+        )}
+        description={t(
+          softwareRemove?.kind === "excluded"
+            ? "settings.removeExclusionConfirmDesc"
+            : "settings.removeSoftwareConfirmDesc",
+        )}
+        confirmLabel={t(
+          softwareRemove?.kind === "excluded"
+            ? "settings.removeSoftwareExclusion"
+            : "settings.removeSoftware",
+        )}
+        danger
+        onConfirm={() => {
+          if (softwareRemove) {
+            const { kind, dir } = softwareRemove;
+            void (kind === "excluded"
+              ? handleRemoveSoftwareExclusion(dir)
+              : handleRemoveSoftware(dir));
+          }
+          setSoftwareRemove(null);
+        }}
+        onCancel={() => setSoftwareRemove(null)}
+      >
+        {softwareRemove && (
+          <Tooltip content={softwareRemove.dir} className="mt-2 block">
+            <span className="block cursor-default truncate rounded-md bg-slate-50 px-2.5 py-1.5 font-mono text-xs text-secondary dark:bg-slate-800">
+              {softwareRemove.dir}
             </span>
           </Tooltip>
         )}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "../theme/icons";
+import { IconButton } from "./IconButton";
 
 export type BannerVariant = "brand" | "warn" | "error" | "info";
 
@@ -37,14 +38,14 @@ export function Banner({
       <div className="min-w-0 flex-1">{children}</div>
       {actions}
       {onClose && (
-        <button
-          type="button"
+        <IconButton
+          label={t("settings.dialogClose")}
+          icon={X}
+          tone="inherit"
+          size="sm"
           onClick={onClose}
-          aria-label={t("settings.dialogClose")}
-          className="shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
-        >
-          <X className="size-4" />
-        </button>
+          className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
+        />
       )}
     </div>
   );

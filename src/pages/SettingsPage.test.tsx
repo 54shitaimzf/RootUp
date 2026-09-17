@@ -85,6 +85,8 @@ import {
   listCommonDirs,
   openDirectoryDialog,
   removeWatchedDir,
+  removeSoftwareDir,
+  removeSoftwareExclusion,
   resolveDirTarget,
   getLogDir,
   getSettings,
@@ -444,6 +446,36 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "添加" }));
     expect(await screen.findByText("c:/users/x")).toBeInTheDocument();
     expect(addWatchedDir).toHaveBeenCalledWith("C:/Users/X");
+  });
+
+  it("取消软件认定需先确认，确认后才调用 removeSoftwareDir", async () => {
+    vi.mocked(getSettings).mockResolvedValue({
+      ...SETTINGS,
+      software_dirs: ["C:/Tools/App"],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "取消认定" }));
+    const dialog = screen.getByRole("dialog", { name: "取消软件认定" });
+    expect(removeSoftwareDir).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消认定" }));
+    await waitFor(() =>
+      expect(removeSoftwareDir).toHaveBeenCalledWith("C:/Tools/App"),
+    );
+  });
+
+  it("解除软件排除需先确认，确认后才调用 removeSoftwareExclusion", async () => {
+    vi.mocked(getSettings).mockResolvedValue({
+      ...SETTINGS,
+      software_excluded: ["C:/Misc"],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "解除排除" }));
+    const dialog = screen.getByRole("dialog", { name: "解除软件排除" });
+    expect(removeSoftwareExclusion).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "解除排除" }));
+    await waitFor(() =>
+      expect(removeSoftwareExclusion).toHaveBeenCalledWith("C:/Misc"),
+    );
   });
 
   it("重置失败显示 ruleError", async () => {

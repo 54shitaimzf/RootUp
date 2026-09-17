@@ -61,7 +61,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`micro-press inline-flex shrink-0 items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
+      className={`micro-press inline-flex shrink-0 items-center justify-center gap-1.5 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/70 disabled:cursor-not-allowed disabled:opacity-40 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
       {...rest}
     >
       {Icon && <Icon className={ICON_CLASSES[size]} />}

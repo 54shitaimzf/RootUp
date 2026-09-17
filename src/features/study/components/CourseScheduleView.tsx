@@ -305,14 +305,13 @@ export function CourseScheduleView({
             onClick={onManageSemesters}
           />
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label={t("study.previousWeek")}
+            <IconButton
+              label={t("study.previousWeek")}
+              icon={ChevronLeft}
+              size="md"
+              tone="neutral"
               onClick={() => onWeekChange(Math.max(1, currentWeek - 1))}
-              className="flex size-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-            >
-              <ChevronLeft aria-hidden className="size-4" />
-            </button>
+            />
             <span className="min-w-20 text-center text-sm font-medium text-secondary">
               {t("study.weekInfo", {
                 week: currentWeek,
@@ -321,16 +320,15 @@ export function CourseScheduleView({
                 ),
               })}
             </span>
-            <button
-              type="button"
-              aria-label={t("study.nextWeek")}
+            <IconButton
+              label={t("study.nextWeek")}
+              icon={ChevronRight}
+              size="md"
+              tone="neutral"
               onClick={() =>
                 onWeekChange(Math.min(semester.weekCount, currentWeek + 1))
               }
-              className="flex size-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-            >
-              <ChevronRight aria-hidden className="size-4" />
-            </button>
+            />
           </div>
           {currentWeek !== actualWeek && (
             <Button variant="ghost" size="sm" onClick={onResetWeek}>

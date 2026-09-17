@@ -11,7 +11,12 @@ export interface FileBannersProps {
   /** 有实时变更但当前处于筛选/翻页态，提示手动刷新。 */
   stale: boolean;
   onRefresh: () => void;
+  /** 操作错误（打开/删除/解压失败）：error 级，可关闭。 */
   actionError: string | null;
+  onDismissActionError: () => void;
+  /** 操作通知（复制成功、IDE 已打开）：brand 级，可关闭。 */
+  actionNotice: string | null;
+  onDismissActionNotice: () => void;
   autoArchiveHintVisible: boolean;
   onDismissAutoHint: () => void;
   archiveNotice: { batchId: number; count: number } | null;
@@ -23,12 +28,15 @@ export interface FileBannersProps {
   onDismissFailure: () => void;
 }
 
-/** 文件页横幅区：扫描中 / 扫描失败 / 新变更 / 操作错误 / 自动归档提示 / 归档成功与失败。 */
+/** 文件页横幅区：扫描中 / 扫描失败 / 新变更 / 操作通知与错误 / 自动归档提示 / 归档成功与失败。 */
 export function FileBanners({
   scan,
   stale,
   onRefresh,
   actionError,
+  onDismissActionError,
+  actionNotice,
+  onDismissActionNotice,
   autoArchiveHintVisible,
   onDismissAutoHint,
   archiveNotice,
@@ -87,9 +95,15 @@ export function FileBanners({
         </Banner>
       )}
 
+      {actionNotice && (
+        <Banner variant="brand" className="mt-4" onClose={onDismissActionNotice}>
+          <span className="min-w-0 flex-1">{actionNotice}</span>
+        </Banner>
+      )}
+
       {actionError && (
-        <Banner variant="warn" className="mt-4">
-          <span className="min-w-0 flex-1">{actionError}</span>
+        <Banner variant="error" className="mt-4" onClose={onDismissActionError}>
+          <span className="min-w-0 flex-1 break-all">{actionError}</span>
         </Banner>
       )}
 

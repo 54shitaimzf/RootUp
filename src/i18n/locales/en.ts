@@ -314,12 +314,18 @@ export default {
     softwareDirPlaceholder: "Enter a software folder path, e.g. C:\\Tools\\MyApp",
     softwareEmpty: "No manually marked software directories (auto-detection keeps running)",
     removeSoftware: "Unmark",
+    removeSoftwareConfirmTitle: "Unmark software directory",
+    removeSoftwareConfirmDesc:
+      "Contents in this directory will no longer be detected as a software unit. You can mark it again later.",
     softwareExcluded: "Excluded software directories",
     softwareExcludedDesc: "Excluded directories are never detected as software units (overrides manual marks).",
     addSoftwareExclusion: "Exclude directory",
     softwareExclusionPlaceholder: "Enter a folder path to exclude",
     softwareExclusionEmpty: "No excluded directories",
     removeSoftwareExclusion: "Remove exclusion",
+    removeExclusionConfirmTitle: "Remove software exclusion",
+    removeExclusionConfirmDesc:
+      "Contents in this directory will take part in software detection again.",
     softwareAdded: "Marked — syncing software units",
     softwareExcludedDone: "Excluded — syncing software units",
     watchedDirs: "Watched folders",
@@ -509,6 +515,7 @@ export default {
   files: {
     searchPlaceholder: "Search files…",
     copyPath: "Copy path",
+    copyPathDone: "Path copied to clipboard",
     copyPathFailed: "Failed to copy path",
     openSmart: "Smart open",
     clearSearch: "Clear search",

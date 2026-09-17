@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 0.8.8-dev UI 一致性审查修复（弹层栈 / 反馈通道 / 键盘可达性）
+
+全库前端五维审查（一致性/合理性/美观/易用/复用）后的修复批次：
+- **弹层栈与焦点管理**：`Modal` 建立进程内弹层注册表，按 DOM 顺序判定栈顶——一次 Esc 只关最顶层，嵌套确认弹窗（标签管理/课程表单/学期管理/归档设置等）不再连锁关闭父弹窗；打开时焦点移入面板（内容自带 autoFocus 的控件优先），Tab 在面板内循环，关闭后焦点还原到触发元素；`Button`/`IconButton`/`SegmentedControl`/图标选择器补 `focus-visible` 品牌色焦点环，文件行操作区补 `group-focus-within` 显影（键盘 Tab 可见）。
+- **归档设置嵌套确认弹窗移位**：自动归档确认与 warn 二次确认从 `Modal` children 移到兄弟节点——`floating-panel` 的 `backdrop-filter` 会为 fixed 后代创建包含块，嵌在面板内导致确认弹窗遮罩盖不满视口（视觉缺陷）。
+- **文件页通知/错误双通道**：`actionError`（打开/删除/解压失败 → error 红色横幅）与 `actionNotice`（IDE 已打开、复制路径成功 → brand 横幅）拆分，均带关闭按钮；IDE 打开成功消息不再以警告色呈现；复制路径成功新增「已复制到剪贴板」反馈。
+- **软件目录移除确认**：取消软件认定 / 解除排除补 ConfirmDialog（带目录回显），与监控目录移除同纪律——两者都改变索引可见性，不允许裸删；设置页 notice/dirError/ruleError 横幅补关闭按钮。
+- **前后端一致性**：项目归档子目录名「项目」入 `fixtures/app-contracts.json`（`archiveProjectDir`），前端 `ARCHIVE_PROJECT_DIR`（ProjectsPage 归档预览）与后端 `core::archive::PROJECT_ARCHIVE_DIR` 双端测试锁定，消除前端硬编码镜像漂移风险。
+- **一致性清扫**：`SegmentedControl` 新增 `pill` 胶囊变体（含 `ariaLabel`），收编文件页四视图与设置页主题切换；课程时长预设与分类映射「仅看自定义」迁移到 `Chip`；`Chip active` 与标签图标选择器补深色 `dark:bg-brand-500`；`SegmentedControl` 徽标选中色统一 brand-700；课表翻周按钮换 `IconButton`；`Banner` 关闭按钮换 `IconButton`；文件页加载文案颜色统一 `text-muted`。
+- **动效令牌闭环**：`global.css` 以非分层规则把 `.transition-colors` 时长统一为 `--duration-fast`（覆盖 Tailwind 默认 150ms），兑现 tokens.css「动效时长禁止散落硬编码」的约定。
+- 验收：前端 vitest 542 例全绿（新增 9 例：Esc 栈/焦点循环/焦点还原/pill/双通道/软件移除确认×2/契约）、tsc 零错；Rust 393 例全绿（新增契约断言）、fmt/clippy/rust-arch 绿；i18n 双语 618 键对齐；check-arch / check:version 绿。
+
 ### 0.8.8「整理与回收」（功能，开发收官）
 
 - **软件单元识别第一版**（0.8.7 阶段三并入）：`core/software.rs` 权威标记（PAF `App` 目录 + portable 启动器 / Scoop `install.json`+`manifest.json` 清单对 / 便携启动器形态）+ exe 群聚结构启发式 + 用户裁决（认定 / 排除可持久化，排除优先）；`infra/software_sync.rs` 发现结果派生写入 units（kind=software + `software_kind` 识别依据），启动延迟服务与裁决变更后双触发，陈旧单元标 deleted 可重扫恢复；schema v9（`units.software_kind`）。

@@ -9,6 +9,7 @@
     "studyHomeworkOpen": "study-homework-open"
   },
   "fileStates": ["pending", "indexed", "archived", "deleted"],
+  "archiveProjectDir": "项目",
   "categories": [
     "document",
     "image",

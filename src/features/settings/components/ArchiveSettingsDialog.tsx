@@ -150,7 +150,8 @@ export function ArchiveSettingsDialog({
   };
 
   return (
-    <Modal
+    <>
+      <Modal
       open={open}
       title={t("settings.archiveDialogTitle")}
       onClose={onClose}
@@ -289,32 +290,35 @@ export function ArchiveSettingsDialog({
           )}
         </div>
       </div>
-
-      <ConfirmDialog
-        open={autoConfirmOpen}
-        title={t("settings.autoArchiveConfirmTitle")}
-        description={t("settings.autoArchiveConfirmBody")}
-        confirmLabel={t("settings.autoArchiveConfirmAction")}
-        danger
-        onConfirm={() => {
-          setAutoConfirmOpen(false);
-          setAuto(true);
-        }}
-        onCancel={() => setAutoConfirmOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={warnConfirmOpen}
-        title={t("settings.archiveGuardWarn")}
-        description={t(reasonKey(assessment?.reason ?? null))}
-        confirmLabel={t("settings.confirmSave")}
-        danger
-        onConfirm={() => {
-          setWarnConfirmOpen(false);
-          void doSave();
-        }}
-        onCancel={() => setWarnConfirmOpen(false)}
-      />
     </Modal>
+
+    {/* 确认弹窗必须是 Modal 的兄弟节点：floating-panel 的 backdrop-filter
+        会为 fixed 后代创建包含块，嵌在面板内会导致遮罩无法盖满视口。 */}
+    <ConfirmDialog
+      open={autoConfirmOpen}
+      title={t("settings.autoArchiveConfirmTitle")}
+      description={t("settings.autoArchiveConfirmBody")}
+      confirmLabel={t("settings.autoArchiveConfirmAction")}
+      danger
+      onConfirm={() => {
+        setAutoConfirmOpen(false);
+        setAuto(true);
+      }}
+      onCancel={() => setAutoConfirmOpen(false)}
+    />
+
+    <ConfirmDialog
+      open={warnConfirmOpen}
+      title={t("settings.archiveGuardWarn")}
+      description={t(reasonKey(assessment?.reason ?? null))}
+      confirmLabel={t("settings.confirmSave")}
+      danger
+      onConfirm={() => {
+        setWarnConfirmOpen(false);
+        void doSave();
+      }}
+      onCancel={() => setWarnConfirmOpen(false)}
+    />
+  </>
   );
 }

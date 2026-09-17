@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/Button";
+import { Chip } from "../../../components/Chip";
 import { ColorPicker } from "../../../components/ColorPicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { DialogFooter } from "../../../components/DialogFooter";
@@ -386,23 +387,16 @@ export function CourseFormDialog({
                   {t("study.durationPreset")}
                 </span>
                 <div className="mt-1 flex flex-wrap gap-1.5">
-                  {COURSE_DURATION_PRESETS.map((minutes) => {
-                    const active = duration === minutes;
-                    return (
-                      <button
-                        key={minutes}
-                        type="button"
-                        onClick={() => applyDuration(minutes)}
-                        className={`rounded-xs px-2 py-1 text-[10px] font-medium transition-colors ${
-                          active
-                            ? "bg-brand-700 text-white"
-                            : "bg-slate-100 text-slate-600 hover:bg-brand-100 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
-                        }`}
-                      >
-                        {t("study.durationMinutes", { count: minutes })}
-                      </button>
-                    );
-                  })}
+                  {COURSE_DURATION_PRESETS.map((minutes) => (
+                    <Chip
+                      key={minutes}
+                      size="sm"
+                      variant={duration === minutes ? "active" : "selectable"}
+                      onClick={() => applyDuration(minutes)}
+                    >
+                      {t("study.durationMinutes", { count: minutes })}
+                    </Chip>
+                  ))}
                 </div>
               </div>
               <Field label={t("study.weekRule")} htmlFor="course-week-rule">

@@ -11,7 +11,7 @@ import {
 } from "../theme/icons";
 import { useSettings } from "../hooks/useSettings";
 import { APP_EVENTS } from "../lib/events";
-import { joinArchivePath } from "../lib/fileUtils";
+import { joinArchivePath, ARCHIVE_PROJECT_DIR } from "../lib/fileUtils";
 import { RevealLink } from "../components/RevealLink";
 import type { PageKey } from "../lib/nav";
 import {
@@ -431,7 +431,7 @@ export function ProjectsPage({
               path={settings.archive_root.trim()}
               tooltipPath={joinArchivePath(
                 settings.archive_root.trim(),
-                "项目",
+                ARCHIVE_PROJECT_DIR,
                 archiveTarget.name,
               )}
             />

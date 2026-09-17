@@ -135,7 +135,7 @@ export function FileRow({
           </span>
         )}
       </span>
-      <span className="flex min-w-0 flex-1 items-center justify-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="flex min-w-0 flex-1 items-center justify-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         {archiveVisible && (
           <IconButton
             label={t("files.archive")}

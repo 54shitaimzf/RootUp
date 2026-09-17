@@ -23,7 +23,7 @@ const PAD_PLAIN: Record<ChipSize, string> = {
 const VARIANT_CLASSES: Record<ChipVariant, string> = {
   neutral:
     "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-  active: "bg-brand-700 text-white",
+  active: "bg-brand-700 text-white dark:bg-brand-500",
   brand: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
   selectable:
     "bg-slate-100 text-slate-600 hover:bg-brand-100 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-500/15 dark:hover:text-brand-300",

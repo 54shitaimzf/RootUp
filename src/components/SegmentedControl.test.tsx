@@ -119,4 +119,28 @@ describe("SegmentedControl", () => {
     expect(screen.getByText("3").className).toContain("dark:text-slate-100");
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
+
+  it("pill 变体渲染胶囊切换并支持 ariaLabel", () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <SegmentedControl
+        variant="pill"
+        ariaLabel="视图切换"
+        value="a"
+        onChange={onChange}
+        options={[
+          { value: "a", label: "甲" },
+          { value: "b", label: "乙" },
+        ]}
+      />,
+    );
+    const group = container.querySelector('[role="group"]');
+    expect(group).toHaveAttribute("aria-label", "视图切换");
+    const buttons = screen.getAllByRole("button");
+    expect(buttons[0].className).toContain("rounded-full");
+    expect(buttons[0].className).toContain("bg-brand-700");
+    expect(buttons[0].className).toContain("dark:bg-brand-500");
+    fireEvent.click(screen.getByRole("button", { name: "乙" }));
+    expect(onChange).toHaveBeenCalledWith("b");
+  });
 });

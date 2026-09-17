@@ -46,7 +46,7 @@ export function IconButton({
         type="button"
         title={label}
         aria-label={label}
-        className={`micro-press inline-flex shrink-0 items-center justify-center ${SIZE_CLASSES[size]} ${TONE_CLASSES[tone]} ${className}`}
+        className={`micro-press inline-flex shrink-0 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-brand-500/70 ${SIZE_CLASSES[size]} ${TONE_CLASSES[tone]} ${className}`}
         {...rest}
       >
         <Icon />

@@ -152,17 +152,12 @@ export function ClassifyMappingDialog({
             className="w-full pl-8 pr-3"
           />
         </div>
-        <button
-          type="button"
+        <Chip
+          variant={onlyCustom ? "active" : "selectable"}
           onClick={() => setOnlyCustom((value) => !value)}
-          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            onlyCustom
-              ? "bg-brand-700 text-white"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-          }`}
         >
           {t("settings.mappingOnlyCustom")}
-        </button>
+        </Chip>
       </div>
 
       {error && (
