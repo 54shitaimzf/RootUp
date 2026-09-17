@@ -2,7 +2,7 @@
 
 本项目的版本变更记录。首个公开发布为 v0.6.0；此前版本为开发期里程碑，按迭代整理。
 
-## [Unreleased]
+## [0.8.7] - 2026-09-17
 
 ### 0.8.7 工程与体验小修（发布前收尾）
 
@@ -75,11 +75,6 @@
 - 监听热路径修复：`ArchiveService::is_active()`（三态单测），监听回调删除每次批次的 `load_settings` 磁盘读，改经 `managed_state::refresh` 推送的内存缓存；设置写路径（设置保存/恢复默认/托盘切换/启动装配）全覆盖，切换即生效。
 - 文件页拆解：`pages/FilePage.tsx` 收敛为页面壳（951 → 432 行）；`features/files/` 新增 model 纯逻辑、FileRow / FileList / FileToolbar / FileBanners / ArchiveConfirmDialog 五组件与 useFileArchive 归档状态机；FileRow 以「记录 + 展示派生」为 props，供阶段二四视图与 v0.9.4 命令面板复用；FilePage.test 断言零删除全绿，真实应用 9 组深/浅 × 中/英前后矩阵截图对比无回归（`docs/reports/assets/0.8.7-phase1/`）。
 - 修复 tray_menu 种子测试日期漂移（临期判断基准对齐运行日，此前随日期推移必然失败）。
-
-### 0.8.7-dev 开版
-
-- 版本推进 0.8.7-dev；v0.8.7「单元同构」在 ROADMAP 固化为四阶段执行（契约与界面地基 → units 统一索引 → 软件单元 → 监看管道与快速扫描），条目与验收按阶段拆分。
-- 帮助中心更新亮点在开发版（-dev）下隐藏区块，发布定稿时恢复显示并强制补充当前版本条目（测试门禁保留）。
 
 ## [0.8.6] - 2026-08-10
 
