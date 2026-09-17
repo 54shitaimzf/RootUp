@@ -87,8 +87,12 @@ fn extract_zip_to(source: &Path, dest: &Path) -> Result<usize, String> {
     // 第二阶段：按计划落盘（安全分量已校验，逐条再走 safe_entry_components 构造路径）
     let mut extracted = 0usize;
     for meta in &plan.files {
-        let components = safe_entry_components(&meta.name)
-            .ok_or_else(|| coded(crate::core::error_codes::EXTRACT_PATH_TRAVERSAL, meta.name.clone()))?;
+        let components = safe_entry_components(&meta.name).ok_or_else(|| {
+            coded(
+                crate::core::error_codes::EXTRACT_PATH_TRAVERSAL,
+                meta.name.clone(),
+            )
+        })?;
         let mut target = dest.to_path_buf();
         for component in &components {
             target.push(component);
@@ -115,8 +119,7 @@ mod tests {
     use std::io::Write;
 
     fn temp_dir(tag: &str) -> std::path::PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("rootup_extract_{tag}_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rootup_extract_{tag}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -141,7 +144,10 @@ mod tests {
         let dest = dir.join("pack");
         let files = extract_zip_to(&zip_path, &dest).unwrap();
         assert_eq!(files, 2);
-        assert_eq!(std::fs::read_to_string(dest.join("a.txt")).unwrap(), "hello");
+        assert_eq!(
+            std::fs::read_to_string(dest.join("a.txt")).unwrap(),
+            "hello"
+        );
         assert_eq!(
             std::fs::read_to_string(dest.join("sub").join("b.txt")).unwrap(),
             "world"

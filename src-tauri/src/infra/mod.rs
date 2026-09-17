@@ -17,6 +17,7 @@ pub mod settings_io;
 pub mod shortcut;
 pub mod software_sync;
 pub mod startup;
+pub mod startup_reconcile;
 pub mod storage;
 pub mod study_store;
 pub mod time;

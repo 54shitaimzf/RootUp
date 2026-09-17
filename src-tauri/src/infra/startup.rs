@@ -121,6 +121,34 @@ pub fn start_deferred_services(app: &AppHandle) -> Result<(), String> {
         .ok();
     // 软件单元同步：后台执行（识别结果派生写入，失败不影响功能）
     crate::infra::software_sync::schedule_software_sync(app);
+    // 启动对账与清理（0.8.8 可靠性加固）：后台执行，磁盘真源修复索引 + 清理强杀残留
+    let reconcile_app = app.clone();
+    std::thread::Builder::new()
+        .name("rootup-startup-reconcile".into())
+        .spawn(move || {
+            let store = reconcile_app.state::<Arc<Mutex<dyn IndexStore>>>();
+            let store = store.inner().clone();
+            match crate::infra::startup_reconcile::reconcile_archive_ops(&store, 50) {
+                Ok(summary) => {
+                    log::info!(
+                        "reconcile: 归档对账 checked={} fixed={} anomaly={}",
+                        summary.checked,
+                        summary.fixed,
+                        summary.anomaly
+                    );
+                }
+                Err(e) => log::warn!("reconcile: 归档对账失败 {e}"),
+            }
+            let mut dirs = Vec::new();
+            if let Ok(dir) = reconcile_app.path().app_config_dir() {
+                dirs.push(dir);
+            }
+            if let Ok(dir) = reconcile_app.path().app_data_dir() {
+                dirs.push(dir);
+            }
+            crate::infra::startup_reconcile::cleanup_tmp_json(&dirs);
+        })
+        .ok();
     log::info!(
         "startup: 延迟服务已启动 ms={}",
         started.elapsed().as_millis()

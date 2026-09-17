@@ -79,7 +79,11 @@ pub fn plan_extract(entries: &[ZipEntryMeta]) -> Result<ExtractPlan, String> {
     if entries.len() > MAX_ENTRIES {
         return Err(extract_error(
             EXTRACT_TOO_MANY_ENTRIES,
-            &format!("压缩包含 {} 个条目，超过 {} 上限", entries.len(), MAX_ENTRIES),
+            &format!(
+                "压缩包含 {} 个条目，超过 {} 上限",
+                entries.len(),
+                MAX_ENTRIES
+            ),
         ));
     }
     let mut files = Vec::new();
@@ -95,7 +99,10 @@ pub fn plan_extract(entries: &[ZipEntryMeta]) -> Result<ExtractPlan, String> {
         if total > MAX_TOTAL_UNCOMPRESSED {
             return Err(extract_error(
                 EXTRACT_BOMB_SUSPECTED,
-                &format!("总解压体积超过 {} MB 上限", MAX_TOTAL_UNCOMPRESSED / 1024 / 1024),
+                &format!(
+                    "总解压体积超过 {} MB 上限",
+                    MAX_TOTAL_UNCOMPRESSED / 1024 / 1024
+                ),
             ));
         }
         if entry.compressed_size >= RATIO_MIN_COMPRESSED
@@ -159,7 +166,10 @@ mod tests {
         let many: Vec<ZipEntryMeta> = (0..=MAX_ENTRIES)
             .map(|i| entry(&format!("f{i}.txt"), 10, 10, false))
             .collect();
-        assert_eq!(code_of(&plan_extract(&many).unwrap_err()), Some(EXTRACT_TOO_MANY_ENTRIES));
+        assert_eq!(
+            code_of(&plan_extract(&many).unwrap_err()),
+            Some(EXTRACT_TOO_MANY_ENTRIES)
+        );
         // 总体积超限（两条 600MB）
         let bomb = vec![
             entry("a.bin", 600 * 1024 * 1024, 600 * 1024 * 1024, false),
@@ -183,7 +193,10 @@ mod tests {
         let tiny = vec![entry("tiny.txt", 10, 10_000, false)];
         assert!(plan_extract(&tiny).is_ok());
         // 穿越条目整体失败
-        let evil = vec![entry("ok.txt", 10, 10, false), entry("../evil", 0, 0, false)];
+        let evil = vec![
+            entry("ok.txt", 10, 10, false),
+            entry("../evil", 0, 0, false),
+        ];
         assert_eq!(
             code_of(&plan_extract(&evil).unwrap_err()),
             Some(EXTRACT_PATH_TRAVERSAL)
