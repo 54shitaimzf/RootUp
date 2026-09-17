@@ -184,6 +184,30 @@ describe("useFiles", () => {
     expect(result.current.stale).toBe(true);
   });
 
+  it("查询失败暴露 error，成功后清空", async () => {
+    const fail = deferred<QueryPage>();
+    const ok = deferred<QueryPage>();
+    vi.mocked(queryFiles)
+      .mockReturnValueOnce(fail.promise)
+      .mockReturnValueOnce(ok.promise);
+    const { result, rerender } = renderHook(
+      (props) => useFiles("", 50, 0, props.refreshKey),
+      { initialProps: { refreshKey: 0 } },
+    );
+    await act(async () => {
+      fail.reject(new Error("db locked"));
+    });
+    expect(result.current.error).toBe("Error: db locked");
+    expect(result.current.loading).toBe(false);
+
+    rerender({ refreshKey: 1 });
+    await act(async () => {
+      ok.resolve(page([rec("C:/a.txt", 1)], 1));
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.items).toHaveLength(1);
+  });
+
   it("加载更多时向后端传递 keyset 游标", async () => {
     const first = deferred<QueryPage>();
     const second = deferred<QueryPage>();

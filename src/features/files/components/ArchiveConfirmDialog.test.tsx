@@ -35,6 +35,7 @@ function renderDialog(overrides?: {
   items?: FileRecord[];
   selected?: Set<string>;
   preflight?: PreflightReport | null;
+  preflightFailed?: boolean;
   riskConfirmed?: boolean;
 }) {
   const {
@@ -42,6 +43,7 @@ function renderDialog(overrides?: {
     items: list = items,
     selected: sel = selected,
     preflight: report = null,
+    preflightFailed = false,
     riskConfirmed = false,
   } = overrides ?? {};
   return render(
@@ -51,6 +53,7 @@ function renderDialog(overrides?: {
       items={list}
       selected={sel}
       preflight={report}
+      preflightFailed={preflightFailed}
       riskConfirmed={riskConfirmed}
       onRiskConfirmChange={vi.fn()}
       onConfirm={vi.fn()}
@@ -139,6 +142,20 @@ describe("ArchiveConfirmDialog", () => {
     await waitFor(() =>
       expect(revealInExplorer).toHaveBeenCalledWith("C:/Arc"),
     );
+  });
+
+  it("所选模式预检未返回时显示统计中占位", () => {
+    renderDialog();
+    expect(screen.getByText("正在统计归档内容…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "归档 5 个文件" })).toBeEnabled();
+  });
+
+  it("预检失败时不显示统计占位，确认仍可用", () => {
+    renderDialog({ preflightFailed: true });
+    expect(
+      screen.queryByText("正在统计归档内容…"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "归档 5 个文件" })).toBeEnabled();
   });
 
   it("预检报告展示数量/体积/可执行与快捷方式风险", () => {

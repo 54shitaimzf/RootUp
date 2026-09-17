@@ -109,6 +109,7 @@ function CourseCard({
       tabIndex={0}
       data-testid={`course-card-${course.id}`}
       data-density={density}
+      title={course.name}
       onClick={() => onOpenDetail(course)}
       onKeyDown={(event) => {
         if (isComposing(event)) return;
@@ -615,7 +616,10 @@ export function CourseScheduleView({
                                       />
                                     ),
                                   )}
-                                  <div className="absolute inset-0 overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700">
+                                  <div
+                                    title={top.name}
+                                    className="absolute inset-0 overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-slate-200/70 transition-all hover:-translate-y-px hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-700"
+                                  >
                                     <span
                                       className={`absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-xs ${LABEL_COLORS[top.color].dot}`}
                                     />

@@ -18,6 +18,8 @@ export interface ArchiveConfirmDialogProps {
   selected: Set<string>;
   /** 归档预检报告（0.8.8；selected 模式异步获取，filtered 模式为 null） */
   preflight: PreflightReport | null;
+  /** 预检拉取失败：不显示「统计中」占位，确认仍可用。 */
+  preflightFailed: boolean;
   riskConfirmed: boolean;
   onRiskConfirmChange: (checked: boolean) => void;
   onConfirm: () => void;
@@ -37,6 +39,7 @@ export function ArchiveConfirmDialog({
   items,
   selected,
   preflight,
+  preflightFailed,
   riskConfirmed,
   onRiskConfirmChange,
   onConfirm,
@@ -118,6 +121,11 @@ export function ArchiveConfirmDialog({
           {preflight.truncated && (
             <div className="mt-1">{t("files.preflightTruncated")}</div>
           )}
+        </div>
+      )}
+      {target?.mode === "selected" && !preflight && !preflightFailed && (
+        <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          {t("files.preflightLoading")}
         </div>
       )}
       {softwareConflict && (

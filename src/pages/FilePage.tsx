@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
@@ -102,6 +102,18 @@ export function FilePage({
     return () => clearTimeout(timer);
   }, [query]);
 
+  // 查询条件变化后列表回顶：滚动容器是 App 布局的 <main>（与 VirtualRows 同源）。
+  // 翻页（offset）与刷新（refreshKey）不在依赖里——加载更多/刷新保持当前视口；
+  // 首次挂载跳过，避免破坏从其它页面返回时的滚动位置。
+  const scrolledOnMount = useRef(false);
+  useEffect(() => {
+    if (!scrolledOnMount.current) {
+      scrolledOnMount.current = true;
+      return;
+    }
+    document.querySelector("main")?.scrollTo({ top: 0 });
+  }, [debouncedQuery, view, selectedCategories, states, labels, sortField, sortDir]);
+
   useEffect(() => {
     listCategories()
       .then(setCategories)
@@ -171,7 +183,7 @@ export function FilePage({
     [categories, orderedAvailableLabels, mergedLabelDefs, t],
   );
 
-  const { items, total, loading, stale, hasMore } = useFiles(
+  const { items, total, loading, error, stale, hasMore } = useFiles(
     queryString,
     PAGE_SIZE,
     offset,
@@ -468,6 +480,7 @@ export function FilePage({
         selectedCount={archive.selected.size}
         filteredCount={total ?? -1}
         archiveBatchLimit={ARCHIVE_BATCH_LIMIT}
+        archiving={archive.archiving}
         onEnterBatchMode={archive.enterBatchMode}
         onArchiveSelected={archive.openArchiveSelected}
         onArchiveFiltered={() => archive.openArchiveFiltered(total ?? -1, ARCHIVE_BATCH_LIMIT)}
@@ -486,6 +499,16 @@ export function FilePage({
           <div className="px-5 py-10 text-center text-sm text-muted">
             {t("files.loading")}
           </div>
+        ) : error !== null && items.length === 0 ? (
+          <EmptyState
+            title={t("files.loadError")}
+            description={error}
+            action={
+              <Button variant="primary" size="md" onClick={handleRefresh}>
+                {t("files.retry")}
+              </Button>
+            }
+          />
         ) : watchedCount === 0 ? (
           <EmptyState
             title={t("files.empty")}
@@ -512,6 +535,11 @@ export function FilePage({
           <EmptyState
             title={t("files.softwareComingTitle")}
             description={t("files.softwareComingDesc")}
+          />
+        ) : view === "project" && items.length === 0 && !filterActive ? (
+          <EmptyState
+            title={t("files.projectEmptyTitle")}
+            description={t("files.projectEmptyDesc")}
           />
         ) : items.length === 0 ? (
           <EmptyState
@@ -543,6 +571,7 @@ export function FilePage({
             pageSize={PAGE_SIZE}
             total={total}
             hasMore={hasMore}
+            loading={loading}
             onLoadMore={() => {
               const next = offset + PAGE_SIZE;
               setOffset(next);
@@ -557,6 +586,7 @@ export function FilePage({
         items={items}
         selected={archive.selected}
         preflight={archive.preflight}
+        preflightFailed={archive.preflightFailed}
         riskConfirmed={archive.riskConfirmed}
         onRiskConfirmChange={archive.setRiskConfirmed}
         onConfirm={archive.confirmArchive}

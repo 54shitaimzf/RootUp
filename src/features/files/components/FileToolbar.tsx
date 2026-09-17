@@ -11,6 +11,8 @@ export interface FileToolbarProps {
   /** 筛选结果待归档数量（total 已被后端钳制在上限内）。 */
   filteredCount: number;
   archiveBatchLimit: number;
+  /** 归档/撤销执行中：禁用归档入口防重复批次。 */
+  archiving: boolean;
   onEnterBatchMode: () => void;
   onArchiveSelected: () => void;
   onArchiveFiltered: () => void;
@@ -26,6 +28,7 @@ export function FileToolbar({
   selectedCount,
   filteredCount,
   archiveBatchLimit,
+  archiving,
   onEnterBatchMode,
   onArchiveSelected,
   onArchiveFiltered,
@@ -52,6 +55,7 @@ export function FileToolbar({
           variant="danger"
           size="sm"
           icon={Archive}
+          disabled={archiving}
           onClick={onArchiveFiltered}
         >
           {filteredCount > 0
@@ -73,7 +77,7 @@ export function FileToolbar({
             variant="danger"
             size="sm"
             icon={Archive}
-            disabled={selectedCount === 0}
+            disabled={selectedCount === 0 || archiving}
             onClick={onArchiveSelected}
           >
             {t("files.archiveSelected")}

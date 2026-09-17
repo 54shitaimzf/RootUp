@@ -56,15 +56,24 @@ export function CourseDetailDialog({
   const lang = i18n.language === "en" ? "en" : "zh-CN";
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [overview, setOverview] = useState<CourseOverview | null>(null);
+  // 相关文件/项目只读查询的三态：失败只以弱文案提示，不影响详情主体
+  const [overviewState, setOverviewState] = useState<
+    "idle" | "loading" | "done" | "failed"
+  >("idle");
   useEffect(() => {
     if (!open || !course) {
       setOverview(null);
+      setOverviewState("idle");
       return;
     }
-    // 课程挂钩（0.8.7 阶段二）：相关文件/项目为只读查询，失败静默（不影响详情主体）
+    // 课程挂钩（0.8.7 阶段二）：相关文件/项目为只读查询
+    setOverviewState("loading");
     courseOverview(course.id)
-      .then(setOverview)
-      .catch(() => setOverview(null));
+      .then((data) => {
+        setOverview(data);
+        setOverviewState("done");
+      })
+      .catch(() => setOverviewState("failed"));
   }, [open, course?.id]);
   if (!course) return null;
 
@@ -135,43 +144,65 @@ export function CourseDetailDialog({
             </div>
           ))}
         </dl>
-        {overview && (overview.files.length > 0 || overview.projects.length > 0) && (
+        {overviewState !== "idle" && (
           <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800">
             <h4 className="text-sm font-semibold text-secondary">
               {t("study.courseRelated")}
             </h4>
-            {overview.projects.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs text-muted">{t("filter.project")}</p>
-                <ul className="mt-1 space-y-1">
-                  {overview.projects.slice(0, 5).map((project) => (
-                    <li
-                      key={project.id}
-                      title={project.path}
-                      className="truncate rounded-md bg-slate-50 px-3 py-1.5 text-xs text-secondary dark:bg-slate-800"
-                    >
-                      {project.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {overviewState === "loading" && (
+              <p className="mt-3 text-xs text-muted">{t("study.loading")}</p>
             )}
-            {overview.files.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs text-muted">{t("filter.file")}</p>
-                <ul className="mt-1 space-y-1">
-                  {overview.files.slice(0, 5).map((file) => (
-                    <li
-                      key={file.id}
-                      title={file.path}
-                      className="truncate rounded-md bg-slate-50 px-3 py-1.5 text-xs text-secondary dark:bg-slate-800"
-                    >
-                      {file.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {overviewState === "failed" && (
+              <p className="mt-3 text-xs text-muted">
+                {t("study.courseRelatedFailed")}
+              </p>
             )}
+            {overviewState === "done" &&
+              overview &&
+              (overview.files.length > 0 || overview.projects.length > 0) && (
+                <>
+                  {overview.projects.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-muted">{t("filter.project")}</p>
+                      <ul className="mt-1 space-y-1">
+                        {overview.projects.slice(0, 5).map((project) => (
+                          <li
+                            key={project.id}
+                            title={project.path}
+                            className="truncate rounded-md bg-slate-50 px-3 py-1.5 text-xs text-secondary dark:bg-slate-800"
+                          >
+                            {project.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {overview.files.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-muted">{t("filter.file")}</p>
+                      <ul className="mt-1 space-y-1">
+                        {overview.files.slice(0, 5).map((file) => (
+                          <li
+                            key={file.id}
+                            title={file.path}
+                            className="truncate rounded-md bg-slate-50 px-3 py-1.5 text-xs text-secondary dark:bg-slate-800"
+                          >
+                            {file.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            {overviewState === "done" &&
+              overview &&
+              overview.files.length === 0 &&
+              overview.projects.length === 0 && (
+                <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-muted dark:bg-slate-800">
+                  {t("study.noCourseRelated")}
+                </p>
+              )}
           </div>
         )}
         <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800">

@@ -219,6 +219,8 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
   // 变更日志 v1（0.8.8）：查看分类 / 归档 / 撤销 / 删除历史
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actions, setActions] = useState<ActionEntry[]>([]);
+  /** 操作日志弹窗内错误（如撤销失败）：渲染在弹窗内部，页面层横幅会被遮罩挡住。 */
+  const [actionsError, setActionsError] = useState<string | null>(null);
 
   useEffect(() => {
     watchedDirsOverview()
@@ -495,7 +497,25 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
 
       {scan.status?.active && (
         <Banner variant="brand" className="mt-4">
-          {t("settings.scanningNow", { dir: scan.status.dir ?? "" })}
+          <div>
+            <div className="truncate font-medium text-brand-800 dark:text-brand-300">
+              {t("files.scanning", { dir: scan.status.dir ?? "" })}
+            </div>
+            <div className="text-xs text-brand-700/80 dark:text-brand-400/80">
+              {t("files.scanProgress", {
+                processed: scan.status.processed ?? 0,
+                discovered: scan.status.discovered ?? 0,
+              })}
+            </div>
+          </div>
+          <Button variant="primary" size="sm" onClick={() => scan.cancel()}>
+            {t("files.cancelScan")}
+          </Button>
+        </Banner>
+      )}
+      {scan.lastError && (
+        <Banner variant="error" className="mt-4" onClose={scan.clearError}>
+          <span className="block truncate">{scan.lastError}</span>
         </Banner>
       )}
       {notice && (
@@ -612,6 +632,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                   variant="secondary"
                   size="sm"
                   icon={RefreshCw}
+                  disabled={scan.status?.active ?? false}
                   onClick={handleRescanAll}
                 >
                   {t("settings.rescanAll")}
@@ -1033,6 +1054,7 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                   size="sm"
                   onClick={() => {
                     setActionsOpen(true);
+                    setActionsError(null);
                     listActions(ACTIONS_LOG_LIMIT)
                       .then(setActions)
                       .catch(() => setActions([]));
@@ -1072,14 +1094,26 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
       <Modal
         open={actionsOpen}
         title={t("settings.actionLog")}
-        onClose={() => setActionsOpen(false)}
+        onClose={() => {
+          setActionsOpen(false);
+          setActionsError(null);
+        }}
       >
+        {actionsError && (
+          <p className="mb-2 break-all text-xs text-red-600 dark:text-red-400">
+            {actionsError}
+          </p>
+        )}
         {actions.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">
             {t("settings.actionLogEmpty")}
           </p>
         ) : (
-          <ul className="max-h-96 space-y-1.5 overflow-y-auto">
+          <>
+            <p className="mb-2 text-xs text-muted">
+              {t("settings.actionLogRecent", { count: ACTIONS_LOG_LIMIT })}
+            </p>
+            <ul className="max-h-96 space-y-1.5 overflow-y-auto">
             {actions.map((entry) => (
               <li
                 key={entry.id}
@@ -1112,10 +1146,11 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                     onClick={() => {
                       void undoArchive(entry.batchId!)
                         .then(() => {
+                          setActionsError(null);
                           setNotice(t("settings.actionUndoDone"));
                           return listActions(ACTIONS_LOG_LIMIT).then(setActions);
                         })
-                        .catch((err) => setRuleError(String(err)));
+                        .catch((err) => setActionsError(String(err)));
                     }}
                   >
                     {t("settings.actionUndo")}
@@ -1123,7 +1158,8 @@ export function SettingsPage({ scan }: { scan: ScanController }) {
                 )}
               </li>
             ))}
-          </ul>
+            </ul>
+          </>
         )}
       </Modal>
       <IgnoreRulesDialog

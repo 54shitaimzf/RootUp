@@ -33,6 +33,8 @@ export interface FileListProps {
   /** 精确总数；null 表示后端未计算（COUNT 治理），展示退化为已显示数量 */
   total: number | null;
   hasMore: boolean;
+  /** 查询进行中：禁用「加载更多」防连点重复触发翻页查询。 */
+  loading: boolean;
   onLoadMore: () => void;
 }
 
@@ -56,6 +58,7 @@ export function FileList({
   pageSize,
   total,
   hasMore,
+  loading,
   onLoadMore,
 }: FileListProps) {
   const { t } = useTranslation();
@@ -133,6 +136,7 @@ export function FileList({
             variant="secondary"
             size="sm"
             onClick={onLoadMore}
+            disabled={loading}
           >
             {t("files.loadMore")}
           </Button>

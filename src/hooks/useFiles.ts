@@ -28,10 +28,13 @@ export function useFiles(
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
+  /** 查询失败信息；非 null 时首页查询失败，页面应显示错误空态而非「无匹配」。 */
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     const cursor = offset === 0 ? null : nextCursor;
     queryFiles(query, limit, offset, sortBy, sortDir, cursor)
       .then((page) => {
@@ -47,6 +50,7 @@ export function useFiles(
       })
       .catch((err) => {
         if (cancelled) return;
+        setError(String(err));
         void logEvent("error", `加载文件索引失败: ${String(err)}`);
       })
       .finally(() => {
@@ -91,5 +95,5 @@ export function useFiles(
     };
   }, []);
 
-  return { items, total, loading, stale, hasMore: nextCursor !== null };
+  return { items, total, loading, error, stale, hasMore: nextCursor !== null };
 }

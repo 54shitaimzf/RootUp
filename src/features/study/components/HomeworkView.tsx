@@ -265,6 +265,7 @@ export function HomeworkView({
                 />
                 <div className="min-w-0 flex-1">
                   <div
+                    title={item.title}
                     className={`truncate text-sm font-medium ${
                       done || archived
                         ? "text-slate-400 line-through dark:text-slate-500"
@@ -282,7 +283,9 @@ export function HomeworkView({
                     {item.note && (
                       <>
                         <span>·</span>
-                        <span className="max-w-48 truncate">{item.note}</span>
+                        <span className="max-w-48 truncate" title={item.note}>
+                          {item.note}
+                        </span>
                       </>
                     )}
                   </div>

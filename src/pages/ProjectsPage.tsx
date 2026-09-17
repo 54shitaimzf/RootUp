@@ -337,7 +337,10 @@ export function ProjectsPage({
                   <ProjectKindBadge kind={project.kind} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-secondary">
+                      <span
+                        className="truncate text-sm font-semibold text-secondary"
+                        title={project.name}
+                      >
                         {project.name}
                       </span>
                       <span className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
@@ -360,7 +363,10 @@ export function ProjectsPage({
                         </span>
                       )}
                     </div>
-                    <div className="mt-0.5 truncate font-mono text-xs text-muted">
+                    <div
+                      className="mt-0.5 truncate font-mono text-xs text-muted"
+                      title={project.path}
+                    >
                       {project.path}
                     </div>
                   </div>
