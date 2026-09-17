@@ -222,6 +222,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     ],
     keywords: ["更新", "新功能", "0.8.7", "归档", "自动归档", "视图", "kind", "项目", "课程", "安全", "what's", "new"],
   },
+  {
+    // 0.8.8 条目已起草：APP_VERSION 为 0.8.8-dev 时经精确版本匹配自然隐藏，发布定稿即显示
+    version: "0.8.8",
+    items: [
+      "helpWhatsNew.v088Item1",
+      "helpWhatsNew.v088Item2",
+      "helpWhatsNew.v088Item3",
+      "helpWhatsNew.v088Item4",
+    ],
+    keywords: ["更新", "新功能", "0.8.8", "软件", "便携", "隐藏", "回收站", "删除", "解压", "zip", "预检", "变更日志", "安全", "what's", "new"],
+  },
 ];
 
 /** 帮助内搜索的全部条目：文章 + 设置说明 + 语法 + 更新亮点。 */

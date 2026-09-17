@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 0.8.8「整理与回收」（功能，开发收官）
+
+- **软件单元识别第一版**（0.8.7 阶段三并入）：`core/software.rs` 权威标记（PAF `App` 目录 + portable 启动器 / Scoop `install.json`+`manifest.json` 清单对 / 便携启动器形态）+ exe 群聚结构启发式 + 用户裁决（认定 / 排除可持久化，排除优先）；`infra/software_sync.rs` 发现结果派生写入 units（kind=software + `software_kind` 识别依据），启动延迟服务与裁决变更后双触发，陈旧单元标 deleted 可重扫恢复；schema v9（`units.software_kind`）。
+- **图标 key 注册表（下半）**：`fixtures/icon-keys.json` 真源 + `lib/iconKeys.ts`（labels / units / softwareKinds 三段键空间 + `resolveIconKey` 统一未知回退），双端 fixture 门禁测试（Rust `DETECTED_BY_ALL` 同源断言 + TS `LABEL_ICONS` 键空间对齐）；文件行 project=Folder / software=Package 单元视觉（文件行沿用类别图标零回归）。
+- **文件页隐藏系统与组件内部文件**：单一设置项（整体开关），展示层过滤 desktop.ini / Thumbs.db / .DS_Store、已识别软件组件内部全部文件、项目内 exe/dll/sys；索引保留，搜索与统计口径同步，关闭立即完整还原（`query_files` 读设置 `hide_internal_files`）。
+- **归档安全收口**：`archive_preflight` 预检（数量 / 体积 / exe/dll / 符号链接 / 软件冲突 / 指向源树的快捷方式引用报告，5 万条上限显式 truncated）——确认弹窗展示报告，软件冲突需勾选风险确认（`archive.software_protected` 拒绝整树移动，`allow_software` 显式放行，归档三入口同守卫）；命令层归属校验 `archive.forbidden` 随 G 批落地。
+- **应用内删除走回收站**：`delete_to_trash` 统一删除走系统回收站（可恢复），归属校验与软件保护与归档同源；错误映射 `delete.failed` / `delete.locked`；文件页行级删除 + 确认弹窗。
+- **文件分类变更日志 v1**：schema v10 `action_log` 追溯表——归档 / 撤销 / 回收站删除 / 定向重分类 / 解压全量记录；设置页高级区「变更日志」弹窗（最近 50 条、类型徽标、归档条目一键撤销）。
+- **智能解压**：zip 解压到同级独立文件夹并入队扫描接入索引链路；两阶段安全边界（条目清单先整体校验：路径穿越 / 绝对路径 / 盘符拒绝、总体积 1GB 上限、压缩比 200:1 炸弹检测、条目数 1 万上限，后落盘）；`extract.not_archive` / `path_traversal` / `bomb_suspected` / `too_many_entries` / `failed` 五错误码；文件页 zip 行「解压到独立文件夹」入口。
+- **信息来源单一化收口**（0.8.7 审计阶段三）：`query_files` 显式 `totalKnown`/`hasMore` 取代 total=-1 哨兵；监控目录三端点合并为 `watched_dirs_overview`；`apply_scheme(id)` 后端原子应用 + `save_scheme` 按 id upsert（消 schemes.json 与 settings 规则双真相）；`add_project_dir` 返回规范化路径（AddDirOutcome 对称）；`ArchiveFailure` path+phase 语义统一。
+- **错误响应与对账机制**：错误码注册表（G 批）——`fixtures/error-codes.json` 真源 22 码 × 三级分级（retryable/ignorable/needs_user），`core/error_codes.rs` 与 `lib/errorCodes.ts` 双端镜像，归档链路错误全面 `code|message` 结构化；可靠性加固（H 批）——启动归档对账（磁盘真源修复索引 / 标记异常）、启动清理 `*.json.tmp` 残留、子进程强杀中断集成测试与环境变动（手工还原 / 两侧皆失 / 盘符卸载形态）用例全绿。
+- **可靠性加固·监视器异步化**：大目录首次启动的监视器注册移入延迟服务后台线程（消除 10k/20k 目录 4–8 秒启动阻塞）；运行期「添加监控目录」同样后台注册（注册前复检设置成员资格防移除竞态）。
+
 ### 0.8.8-dev 开版
 
 - 版本推进 0.8.8-dev「整理与回收」：软件单元识别第一版（0.8.7 阶段三并入）、智能解压、应用内删除走回收站、归档安全收口（软件组件保护 / 归档预检 / 整树移动引用报告 / 命令层归属校验）、文件分类变更日志 v1、信息来源单一化阶段三收口（命令面收紧）、可靠性加固（大目录启动与运行期添加监控目录的监视器注册异步化）。

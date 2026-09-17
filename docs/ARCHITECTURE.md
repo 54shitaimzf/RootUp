@@ -282,6 +282,21 @@ labels/schemes/habits/study 四个领域文件统一走 `infra/local_file.rs` �
 - **前端**：文件页行内归档 + 批量模式（复选）/ 筛选结果归档（危险色确认弹窗）、成功横幅带撤销、自动归档常驻提示条（可关闭本次，warn 色）；项目页归档确认；设置页「归档设置」弹窗（根目录实时评估告警 + 推荐位置、开关带确认、最近归档）；首启向导第③步「选择归档位置」必须四选一（推荐候选 / 浏览 / 暂不启用）才能继续。
 - **清理原语与对账预留**：移除监控目录即调用 `mark_under_roots_deleted`（作为 v0.8.8 分类变更日志的「删除事件」来源）；启动归档对账挂载在 `app.rs setup` 紧随 `refresh_managed_state`；`local_file` 临时文件统一 `*.json.tmp` 供启动清理；`archive_ops` 的 source/dest/undone_at 结构即对账依据（v0.8.8 实现，约定已固化）。
 
+## 0.8.8 软件单元与整理回收
+
+- **软件单元识别（core/software.rs）**：判定顺序先权威后启发——PAF（`App` 目录 + portable 命名启动器）、Scoop（`install.json`+`manifest.json` 清单对）、便携启动器（唯一 exe + `Data` 目录 / stem 含 portable / 与目录同名）、启发式（≥2 exe 或 exe+dll）；目录探针以 `DirProbe` trait 注入（生产 `FsProbe` / 测试内存探针）。发现口径与项目同构：监控目录直接子目录 + 手动 `software_dirs` 并集 − `software_excluded`（排除最高优先），项目噪音目录跳过，`path_key` 去重。识别键空间（manual/paf/scoop/portable/heuristic）入 `fixtures/icon-keys.json` 双端同源断言。
+- **软件单元同步（infra/software_sync.rs）**：与 project_sync 同构——发现逻辑唯一真源，units 只作派生查询层（kind=software + software_kind），陈旧单元标 deleted 可重扫恢复；触发点：启动延迟服务 + 裁决命令（add/remove_software_dir / exclude/remove_software_exclusion，认定与排除互斥、重复幂等提示）。
+- **units 扩展与变更日志 schema**：v9 `units.software_kind TEXT`（识别依据）；v10 `action_log`（action ∈ archive/undo/delete/classify/extract，detail 人读摘要，batch_id 关联可撤销批次）。写入失败仅告警不阻断主流程（追溯数据非关键路径）；`list_actions` 上限 200。
+- **整树移动软件保护**：归档三入口（archive_files/filtered/project）与回收站删除共用 `software_guard`——源与任一软件单元相同 / 内部 / 包含（双向 `path_key` 前缀）即拒绝（错误码 `archive.software_protected`），前端风险勾选后以 `allow_software=true` 显式放行。
+- **归档预检（core/archive_safety.rs）**：`archive_preflight` 返回统计（count/totalSize/exeCount/dllCount/symlinkCount，5 万条上限显式 `truncated`）+ softwareUnits 冲突 + 指向源树的快捷方式引用；前端确认弹窗展示报告，快捷方式命中提示「归档后将失效」。
+- **回收站删除（commands/trash.rs）**：`delete_to_trash` 统一删除入口（trash crate），错误映射 `delete.failed`/`delete.locked`；归属校验（require_owned）与软件保护与归档同源；成功路径索引标 deleted。
+- **智能解压（core/extract.rs + commands/extract.rs）**：v1 仅 zip（扩展名白名单）；**两阶段**——条目清单先整体校验（穿越形态拒绝：绝对路径 / `..` / 盘符分量；总体积 1GB 上限；压缩比 200:1 且压缩体积 ≥64B 才判炸弹；条目数 1 万上限），通过后落盘到同级独立文件夹（`unique_dest` 冲突递增）；解压目录入队扫描接入索引链路并记 action_log（action=extract）。错误码 `extract.not_archive` / `path_traversal` / `bomb_suspected` / `too_many_entries` / `failed`。
+- **错误码注册表（core/error_codes.rs）**：真源 `fixtures/error-codes.json`（22 码 × retryable/ignorable/needs_user），Rust 常量 + TS `lib/errorCodes.ts` 双端镜像同源断言；错误串统一 `code|message` 形状（`coded()` 构造 / `code_of()` 校验），前端禁止解析文案只认 code。新增错误码 = fixture + 双端常量各一项。
+- **隐藏系统与组件内部文件**：设置 v4 `hide_internal_files`（整体开关不做细分），`query_files` 读设置在 SQL 层过滤（desktop.ini/Thumbs.db/.DS_Store；软件单元内部全部文件；项目内 exe/dll/sys）——**仅展示层过滤**：索引保留、分页/统计口径同步、软件与项目单元本身恒可见；关闭立即完整还原。
+- **启动可靠性（infra/startup_reconcile.rs）**：启动归档对账以磁盘为真源修复索引（四象限：dest 在/source 不在→半写补迁移；dest 不在/source 在→手工还原迁回 indexed + op 标 undone；两侧皆失→archived 标 deleted；双存→不动作），范围最近 50 批次；启动清理 config/data 目录 `*.json.tmp` 残留（精确后缀）。均挂 `start_deferred_services` 后台线程（`rootup-startup-reconcile`），失败仅告警。
+- **监视器注册异步化**：setup 阶段不再同步递归注册（10k/20k 目录 4–8 秒启动阻塞）——`start_deferred_services` 在 `WatchService.start()` 之后由后台线程统一注册（事件处理线程先行）；运行期 `add_watched_dir` 同样后台注册，注册前复检设置成员资格防移除竞态。
+- **图标 key 注册表（lib/iconKeys.ts）**：真源 `fixtures/icon-keys.json`（labels/units/softwareKinds 三段），`resolveIconKey` 统一未知回退；文件行 project=Folder / software=Package 单元视觉（`FileTypeIcon` 增 `unitKind`），文件行沿用类别图标零回归；`LABEL_ICONS` 键空间与注册表门禁互锁，禁止平行硬编码。
+
 ## 文件页搜索与筛选
 
 - **搜索为核心**：`components/SearchAutocomplete.tsx` 为搜索框 + 自动补全（combobox），候选来自 `list_categories` / `list_labels` / 固定状态集（状态仅存在于搜索语法与补全，不在界面筛选行），经 `lib/autocomplete.ts` 纯函数匹配与插入（维度前缀补全、子串匹配、替换/追加）。

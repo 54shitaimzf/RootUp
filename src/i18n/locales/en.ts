@@ -880,6 +880,10 @@ export default {
     v087Item2: "Auto archive with confidence: enabling now asks for confirmation, and the tray no longer toggles it",
     v087Item3: "New view switcher on the Files page: All / Files / Projects / Software, plus kind: search syntax",
     v087Item4: "Course details now show related files and projects, and courses support aliases",
+    v088Item1: "Software unit detection: portable apps (PortableApps / Scoop / portable layout) are detected automatically, with manual mark & exclude",
+    v088Item2: "One switch to hide system and component internal files on the Files page (desktop.ini, software internals, exe/dll inside projects) — always restorable",
+    v088Item3: "Safer archiving: preflight reports size and shortcut risks up front, whole-tree moves of detected software need risk confirmation; deletes go to the recycle bin and stay restorable",
+    v088Item4: "A change log you can inspect and undo (archive / undo / delete / classify), plus one-click zip extraction into its own folder (path traversal & zip bomb protected)",
   },
   helpSearch: {
     placeholder: "Search help: archive, schedule, IDE…",
