@@ -517,9 +517,17 @@ export function daysUntilDue(dueAt: string, now: Date): number {
   return Math.ceil((new Date(dueAt).getTime() - now.getTime()) / 86_400_000);
 }
 
+/** 解析截止时间：纯日期串（YYYY-MM-DD）按 ES 规范会以 UTC 午夜解析，西偏移时区下日期回退一天；
+ * 补本地正午强制按本地时区解析，与后端 parse_due_date 的「纯日期=当天」口径一致。 */
+function parseDueLocal(dueAt: string): Date {
+  return new Date(
+    /^\d{4}-\d{2}-\d{2}$/.test(dueAt) ? `${dueAt}T12:00:00` : dueAt,
+  );
+}
+
 /** 按自然日差计算剩余天数（今天=0、明天=1、昨天=-1）。 */
 export function calendarDaysUntil(dueAt: string, now: Date): number {
-  const due = new Date(dueAt);
+  const due = parseDueLocal(dueAt);
   const startDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
   const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((startDue.getTime() - startNow.getTime()) / 86_400_000);
@@ -527,7 +535,7 @@ export function calendarDaysUntil(dueAt: string, now: Date): number {
 
 /** 按自然日差计算“已逾期 N 天”，最少为 1。 */
 export function overdueDays(dueAt: string, now: Date): number {
-  const due = new Date(dueAt);
+  const due = parseDueLocal(dueAt);
   const startDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
   const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diff = Math.round(
