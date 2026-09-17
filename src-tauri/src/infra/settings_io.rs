@@ -4,6 +4,7 @@
 //! 背景：写路径曾有命令 / 托盘 / 归档 journal 多处各自 load→改→save，
 //! 互不感知且不发事件，前端只能拿快照补偿，产生「旧快照覆盖丢字段」类 bug。
 use crate::core::archive_guard::assess_archive_root;
+use crate::core::error_codes::{coded, ARCHIVE_GUARD_BLOCKED};
 use crate::core::events::{SettingsChangedEvent, EVENT_SETTINGS_CHANGED};
 use crate::core::settings::{archive_root_conflicts, Settings};
 use crate::infra::managed_state;
@@ -59,7 +60,7 @@ pub fn guard_archive_root_dirty(dirty: &[&str], archive_root: &str) -> Result<()
     let check = assess_archive_root(archive_root);
     if check.level == "blocked" {
         let reason = check.reason.unwrap_or_else(|| "protected_tree".to_string());
-        return Err(format!("archive_guard.blocked|{reason}"));
+        return Err(coded(ARCHIVE_GUARD_BLOCKED, reason));
     }
     Ok(())
 }

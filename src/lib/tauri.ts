@@ -154,10 +154,12 @@ export interface ArchiveBatch {
   sampleDest: string;
 }
 
-/** 与 Rust 侧 core::archive::ArchiveFailure 对应 */
+/** 与 Rust 侧 core::archive::ArchiveFailure 对应：phase 区分阶段（archive/undo），code 为注册表错误码（可缺失） */
 export interface ArchiveFailure {
   path: string;
   error: string;
+  phase?: string;
+  code?: string | null;
 }
 
 /** 一次成功的移动映射（dest 为后端实际结果，含冲突改名） */

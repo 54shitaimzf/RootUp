@@ -1,7 +1,11 @@
 //! 归档引擎：文件级移动 + 索引迁移 + 操作日志（不依赖 Tauri，可测试）。
 use crate::core::archive::{
-    move_error, plan_file_target, target_collides, unique_dest, ArchiveFailure, ArchiveMove,
-    ArchiveOp, ArchiveOutcome, UNDO_KEEP_BATCHES,
+    failure, move_error, plan_file_target, target_collides, unique_dest, ArchiveMove, ArchiveOp,
+    ArchiveOutcome, PHASE_ARCHIVE, PHASE_UNDO, UNDO_KEEP_BATCHES,
+};
+use crate::core::error_codes::{
+    coded, ARCHIVE_INDEX_WRITE_FAILED, ARCHIVE_NOT_INDEXED, ARCHIVE_TARGET_COLLIDES,
+    ARCHIVE_UNDO_CONFLICT,
 };
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
@@ -162,10 +166,9 @@ pub fn archive_files(
                     dest,
                 });
             }
-            Err(error) => outcome.failed.push(ArchiveFailure {
-                path: normalize_path(path),
-                error,
-            }),
+            Err(error) => outcome
+                .failed
+                .push(failure(normalize_path(path), PHASE_ARCHIVE, error)),
         }
     }
     store
@@ -189,9 +192,12 @@ fn archive_one(
         .lock()
         .map_err(|e| e.to_string())?
         .get_by_path(&path)?
-        .ok_or_else(|| format!("文件不在索引中: {path}"))?;
+        .ok_or_else(|| coded(ARCHIVE_NOT_INDEXED, format!("文件不在索引中: {path}")))?;
     if record.state != "indexed" {
-        return Err(format!("文件状态不是已索引: {path}"));
+        return Err(coded(
+            ARCHIVE_NOT_INDEXED,
+            format!("文件状态不是已索引: {path}"),
+        ));
     }
     let file_name = Path::new(&path)
         .file_name()
@@ -201,7 +207,7 @@ fn archive_one(
     let planned = plan_file_target(root, &file_name, &record.labels)?;
     let dest = unique_dest(Path::new(&planned))?;
     if target_collides(&path, &dest.to_string_lossy()) {
-        return Err("目标与源路径冲突".to_string());
+        return Err(coded(ARCHIVE_TARGET_COLLIDES, "目标与源路径冲突"));
     }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建归档目录失败: {e}"))?;
@@ -225,7 +231,10 @@ fn archive_one(
     if let Err(e) = journal_result {
         // 索引/日志失败则把文件移回，保证不留半成品。
         let _ = std::fs::rename(&dest, &path);
-        return Err(format!("索引更新失败，已还原: {e}"));
+        return Err(coded(
+            ARCHIVE_INDEX_WRITE_FAILED,
+            format!("索引更新失败，已还原: {e}"),
+        ));
     }
     log::info!("archive: 移动 file={path} -> {dest_str}");
     Ok(dest_str)
@@ -253,10 +262,9 @@ pub fn undo_file_batch(
         }
         match undo_one_file(store, &op) {
             Ok(()) => outcome.archived += 1,
-            Err(error) => outcome.failed.push(ArchiveFailure {
-                path: op.dest.clone(),
-                error,
-            }),
+            Err(error) => outcome
+                .failed
+                .push(failure(op.dest.clone(), PHASE_UNDO, error)),
         }
     }
     Ok(outcome)
@@ -264,10 +272,16 @@ pub fn undo_file_batch(
 
 pub fn undo_one_file(store: &Arc<Mutex<dyn IndexStore>>, op: &ArchiveOp) -> Result<(), String> {
     if Path::new(&op.source).exists() {
-        return Err(format!("原位置已有文件，未还原: {}", op.source));
+        return Err(coded(
+            ARCHIVE_UNDO_CONFLICT,
+            format!("原位置已有文件，未还原: {}", op.source),
+        ));
     }
     if !Path::new(&op.dest).exists() {
-        return Err(format!("目标文件已不存在: {}", op.dest));
+        return Err(coded(
+            ARCHIVE_UNDO_CONFLICT,
+            format!("目标文件已不存在: {}", op.dest),
+        ));
     }
     std::fs::rename(&op.dest, &op.source).map_err(|e| move_error(&op.dest, e))?;
     let result = store
@@ -277,7 +291,10 @@ pub fn undo_one_file(store: &Arc<Mutex<dyn IndexStore>>, op: &ArchiveOp) -> Resu
     if let Err(e) = result {
         // 索引/日志失败则把文件移回，保证磁盘与索引一致。
         let _ = std::fs::rename(&op.source, &op.dest);
-        return Err(format!("索引更新失败，已还原: {e}"));
+        return Err(coded(
+            ARCHIVE_INDEX_WRITE_FAILED,
+            format!("索引更新失败，已还原: {e}"),
+        ));
     }
     log::info!("archive: 撤销 file={} <- {}", op.source, op.dest);
     Ok(())

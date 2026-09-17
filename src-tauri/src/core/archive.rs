@@ -3,6 +3,7 @@
 //! 纯逻辑与模型层，不依赖 Tauri；文件移动与索引/日志编排在
 //! `infra/archive_engine.rs` 与命令层完成。
 use crate::core::classify::Category;
+use crate::core::error_codes::{coded, code_of, ARCHIVE_CROSS_DISK, ARCHIVE_LOCKED, ARCHIVE_NO_ROOT};
 use crate::core::path::{is_subpath, normalize_path, path_key};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -15,6 +16,10 @@ pub const UNDO_KEEP_BATCHES: i64 = 200;
 pub const AUTO_QUEUE_CAPACITY: usize = 1000;
 /// 项目归档目标子目录名。
 pub const PROJECT_ARCHIVE_DIR: &str = "项目";
+/// 失败阶段：归档（移动入库）。
+pub const PHASE_ARCHIVE: &str = "archive";
+/// 失败阶段：撤销（移回原位）。
+pub const PHASE_UNDO: &str = "undo";
 
 /// 归档操作（每个被移动的文件/项目一条，按 batch_id 聚合撤销）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,12 +67,27 @@ pub struct ArchiveMove {
     pub dest: String,
 }
 
-/// 单条失败信息。
+/// 单条失败信息。`phase` 区分失败发生的阶段（"archive" | "undo"），
+/// `path` 统一为被操作文件的本体路径（归档=源、撤销=归档目标）；
+/// `code` 为注册表错误码（`error|code` 形状解析所得，未结构化的错误为 None）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveFailure {
     pub path: String,
     pub error: String,
+    pub phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+}
+
+/// 构造失败信息：`phase` 标注阶段，错误串符合 `code|message` 形状时自动提取错误码。
+pub fn failure(path: impl Into<String>, phase: &str, error: String) -> ArchiveFailure {
+    ArchiveFailure {
+        path: path.into(),
+        code: code_of(&error).map(str::to_string),
+        phase: phase.to_string(),
+        error,
+    }
 }
 
 /// 快捷方式归属记录（目标被归档移动后用于重建）。
@@ -93,7 +113,7 @@ pub fn plan_file_target(root: &str, file_name: &str, labels: &str) -> Result<Str
     let root = normalize_path(root);
     let root = root.trim_end_matches('/');
     if root.is_empty() {
-        return Err("归档根目录未配置".to_string());
+        return Err(coded(ARCHIVE_NO_ROOT, "归档根目录未配置"));
     }
     if file_name.trim().is_empty() {
         return Err("文件名为空".to_string());
@@ -131,16 +151,39 @@ pub fn unique_dest(dest: &Path) -> Result<PathBuf, String> {
     }
 }
 
-/// 把移动失败映射为用户可读信息（跨卷/占用优先）。
+/// 把移动失败映射为结构化错误串（跨卷/占用优先，携带注册表错误码）。
 pub fn move_error(path: &str, err: std::io::Error) -> String {
     let code = err.raw_os_error();
     if err.kind() == std::io::ErrorKind::CrossesDevices || code == Some(17) {
-        format!("{path}: 跨磁盘归档暂不支持，请把归档根放在同一磁盘")
+        coded(
+            ARCHIVE_CROSS_DISK,
+            format!("{path}: 跨磁盘归档暂不支持，请把归档根放在同一磁盘"),
+        )
     } else if code == Some(32) || code == Some(5) {
-        format!("{path}: 文件可能被占用，请关闭相关程序后重试")
+        coded(
+            ARCHIVE_LOCKED,
+            format!("{path}: 文件可能被占用，请关闭相关程序后重试"),
+        )
     } else {
         format!("{path}: {err}")
     }
+}
+
+/// 归档源归属校验：路径必须等于或位于任一根（监控/项目目录）之内，防越权路径。
+pub fn is_owned_path(path: &str, roots: &[String]) -> bool {
+    let path = normalize_path(path);
+    if path.is_empty() {
+        return false;
+    }
+    let key = path_key(&path);
+    roots.iter().any(|root| {
+        let root = normalize_path(root);
+        if root.is_empty() {
+            return false;
+        }
+        let root_key = path_key(&root);
+        key == root_key || is_subpath(&path, &root)
+    })
 }
 
 /// 源与目标互相包含（含相等）时拒绝，防止目录移进自身 / 归档根位于源内部。
@@ -186,7 +229,7 @@ mod tests {
         );
         assert_eq!(
             plan_file_target("", "a.pdf", "document").unwrap_err(),
-            "归档根目录未配置"
+            "archive.no_root|归档根目录未配置"
         );
         assert_eq!(
             plan_file_target("C:/Archive", "  ", "document").unwrap_err(),
@@ -224,12 +267,38 @@ mod tests {
 
     #[test]
     fn move_error_maps_cross_device_and_busy() {
-        let e = std::io::Error::from_raw_os_error(17);
-        assert!(move_error("C:/a", e).contains("跨磁盘"));
-        let e = std::io::Error::from_raw_os_error(32);
-        assert!(move_error("C:/a", e).contains("占用"));
+        let e17 = std::io::Error::from_raw_os_error(17);
+        let msg = move_error("C:/a", e17);
+        assert!(msg.contains("跨磁盘"));
+        assert!(msg.starts_with("archive.cross_disk|"));
+        let e32 = std::io::Error::from_raw_os_error(32);
+        let msg = move_error("C:/a", e32);
+        assert!(msg.contains("占用"));
+        assert!(msg.starts_with("archive.locked|"));
         let e = std::io::Error::other("boom");
         assert!(move_error("C:/a", e).contains("boom"));
+    }
+
+    #[test]
+    fn failure_extracts_code_and_keeps_phase() {
+        let f = failure("C:/a.pdf", "archive", move_error("C:/a.pdf", std::io::Error::from_raw_os_error(17)));
+        assert_eq!(f.phase, "archive");
+        assert_eq!(f.code.as_deref(), Some("archive.cross_disk"));
+        let plain = failure("C:/a.pdf", "undo", "普通错误".to_string());
+        assert_eq!(plain.code, None);
+        assert_eq!(plain.phase, "undo");
+    }
+
+    #[test]
+    fn is_owned_path_accepts_root_and_children_only() {
+        let roots = vec!["C:/Watch".to_string(), "D:/Projects".to_string()];
+        assert!(is_owned_path("C:/Watch", &roots));
+        assert!(is_owned_path("C:/Watch/sub/a.pdf", &roots));
+        assert!(is_owned_path("d:/projects/app", &roots), "大小写不敏感");
+        assert!(!is_owned_path("C:/Watch2/a.pdf", &roots), "同名前缀不算子路径");
+        assert!(!is_owned_path("E:/Other/a.pdf", &roots));
+        assert!(!is_owned_path("", &roots));
+        assert!(!is_owned_path("C:/Watch/a.pdf", &[]));
     }
 
     #[test]

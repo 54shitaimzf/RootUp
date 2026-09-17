@@ -1,0 +1,27 @@
+{
+  "severities": ["retryable", "ignorable", "needs_user"],
+  "codes": [
+    { "code": "archive.no_root", "severity": "needs_user", "summary": "归档根目录未配置" },
+    { "code": "archive.forbidden", "severity": "needs_user", "summary": "归档源不在监控或项目目录内" },
+    { "code": "archive.software_protected", "severity": "needs_user", "summary": "已识别软件目录禁止整树移动" },
+    { "code": "archive.not_indexed", "severity": "ignorable", "summary": "文件不在索引中或状态不允许归档" },
+    { "code": "archive.target_collides", "severity": "needs_user", "summary": "源与目标路径互相包含" },
+    { "code": "archive.cross_disk", "severity": "needs_user", "summary": "跨磁盘移动暂不支持" },
+    { "code": "archive.locked", "severity": "retryable", "summary": "文件被占用，关闭程序后可重试" },
+    { "code": "archive.index_write_failed", "severity": "retryable", "summary": "索引更新失败，文件已还原原位" },
+    { "code": "archive.undo_conflict", "severity": "needs_user", "summary": "撤销冲突：源已存在或归档目标缺失" },
+    { "code": "archive.too_many", "severity": "needs_user", "summary": "单批数量超出上限" },
+    { "code": "delete.failed", "severity": "needs_user", "summary": "移入回收站失败" },
+    { "code": "delete.locked", "severity": "retryable", "summary": "删除时文件被占用，关闭程序后可重试" },
+    { "code": "extract.not_archive", "severity": "ignorable", "summary": "不是受支持的压缩包（仅 zip）" },
+    { "code": "extract.path_traversal", "severity": "needs_user", "summary": "压缩包内条目路径越界，拒绝解压" },
+    { "code": "extract.bomb_suspected", "severity": "needs_user", "summary": "解压总大小超出上限，疑似压缩炸弹" },
+    { "code": "extract.too_many_entries", "severity": "needs_user", "summary": "压缩包条目数超出上限" },
+    { "code": "extract.failed", "severity": "retryable", "summary": "解压失败" },
+    { "code": "archive_guard.blocked", "severity": "needs_user", "summary": "归档根位于受保护位置" },
+    { "code": "scheme.duplicate", "severity": "needs_user", "summary": "方案名称已存在" },
+    { "code": "scheme.limit", "severity": "needs_user", "summary": "方案数量达到上限" },
+    { "code": "scheme.not_found", "severity": "needs_user", "summary": "方案不存在" },
+    { "code": "watch.register_failed", "severity": "retryable", "summary": "监听注册失败（目录不可访问）" }
+  ]
+}

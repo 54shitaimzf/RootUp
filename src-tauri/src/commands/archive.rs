@@ -1,10 +1,11 @@
 //! 归档命令：手动/筛选批量/项目归档、撤销、最近归档列表。
 use crate::core::archive::{
-    move_error, target_collides, unique_dest, ArchiveBatch, ArchiveFailure, ArchiveMove, ArchiveOp,
-    ArchiveOutcome, MAX_BATCH_FILES, PROJECT_ARCHIVE_DIR,
+    failure, is_owned_path, move_error, target_collides, unique_dest, ArchiveBatch, ArchiveMove,
+    ArchiveOp, ArchiveOutcome, MAX_BATCH_FILES, PHASE_UNDO, PROJECT_ARCHIVE_DIR,
 };
 use crate::core::archive_guard::assess_archive_root as assess_archive_root_inner;
 use crate::core::archive_guard::ArchiveAssessment;
+use crate::core::error_codes::{coded, ARCHIVE_FORBIDDEN, ARCHIVE_NO_ROOT, ARCHIVE_TARGET_COLLIDES, ARCHIVE_UNDO_CONFLICT};
 use crate::core::index::IndexStore;
 use crate::core::path::{normalize_path, path_key};
 use crate::core::project::{discover_projects, FeatureDetector, ProjectDetector, ProjectKind};
@@ -25,9 +26,24 @@ use tauri::{AppHandle, Manager, State};
 fn require_root(app: &AppHandle) -> Result<String, String> {
     let root = storage::load_settings(app).archive_root;
     if root.trim().is_empty() {
-        return Err("请先在设置中配置归档根目录".to_string());
+        return Err(coded(ARCHIVE_NO_ROOT, "请先在设置中配置归档根目录"));
     }
     Ok(root)
+}
+
+/// 命令层归属校验：显式传入的归档源必须位于监控/项目目录内（防越权路径）。
+/// 筛选归档的源来自索引重查，不经此校验。
+fn require_owned(app: &AppHandle, paths: &[String]) -> Result<(), String> {
+    let settings = storage::load_settings(app);
+    let mut roots = settings.watched_dirs.clone();
+    roots.extend(settings.project_dirs.iter().cloned());
+    if let Some(path) = paths.iter().find(|p| !is_owned_path(p, &roots)) {
+        return Err(coded(
+            ARCHIVE_FORBIDDEN,
+            format!("{path}: 不在监控或项目目录内，禁止归档"),
+        ));
+    }
+    Ok(())
 }
 
 fn store(app: &AppHandle) -> State<'_, Arc<Mutex<dyn IndexStore>>> {
@@ -42,6 +58,7 @@ pub fn archive_files(app: AppHandle, paths: Vec<String>) -> Result<ArchiveOutcom
         return Err("没有选择文件".to_string());
     }
     let paths: Vec<String> = paths.into_iter().map(|p| normalize_path(&p)).collect();
+    require_owned(&app, &paths)?;
     let batch_id = next_batch_id();
     let outcome = engine_archive_files(&store(&app), &root, &paths, batch_id)?;
     if outcome.archived == 0 {
@@ -70,9 +87,12 @@ pub fn archive_filtered(app: AppHandle, query: String) -> Result<ArchiveOutcome,
         .map_err(|e| e.to_string())?
         .query(&file_query)?;
     if page.total > MAX_BATCH_FILES as i64 {
-        return Err(format!(
-            "当前筛选共 {} 个文件，超过单次 200 上限，请先收窄筛选",
-            page.total
+        return Err(coded(
+            crate::core::error_codes::ARCHIVE_TOO_MANY,
+            format!(
+                "当前筛选共 {} 个文件，超过单次 200 上限，请先收窄筛选",
+                page.total
+            ),
         ));
     }
     if page.items.is_empty() {
@@ -119,7 +139,10 @@ pub fn archive_project(app: AppHandle, path: String) -> Result<ArchiveOutcome, S
         .ok_or_else(|| "项目名为空".to_string())?;
     let dest = unique_dest(Path::new(&format!("{root}/{PROJECT_ARCHIVE_DIR}/{name}")))?;
     if target_collides(&path, &dest.to_string_lossy()) {
-        return Err("归档根不能位于项目内部或与项目相同".to_string());
+        return Err(coded(
+            ARCHIVE_TARGET_COLLIDES,
+            "归档根不能位于项目内部或与项目相同",
+        ));
     }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建归档目录失败: {e}"))?;
@@ -233,10 +256,9 @@ pub fn undo_archive(app: AppHandle, batch_id: i64) -> Result<ArchiveOutcome, Str
                     dest: op.source.clone(),
                 });
             }
-            Err(error) => outcome.failed.push(ArchiveFailure {
-                path: op.dest.clone(),
-                error,
-            }),
+            Err(error) => outcome
+                .failed
+                .push(failure(op.dest.clone(), PHASE_UNDO, error)),
         }
     }
     log::info!(
@@ -253,10 +275,16 @@ fn undo_project(
     op: &ArchiveOp,
 ) -> Result<(), String> {
     if Path::new(&op.source).exists() {
-        return Err(format!("原位置已有内容，未还原: {}", op.source));
+        return Err(coded(
+            ARCHIVE_UNDO_CONFLICT,
+            format!("原位置已有内容，未还原: {}", op.source),
+        ));
     }
     if !Path::new(&op.dest).is_dir() {
-        return Err(format!("归档目标已不存在: {}", op.dest));
+        return Err(coded(
+            ARCHIVE_UNDO_CONFLICT,
+            format!("归档目标已不存在: {}", op.dest),
+        ));
     }
     let kind = FeatureDetector
         .detect(Path::new(&op.dest))

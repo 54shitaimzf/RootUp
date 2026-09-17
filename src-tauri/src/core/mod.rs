@@ -2,6 +2,7 @@ pub mod archive;
 pub mod archive_guard;
 pub mod classify;
 pub mod delta;
+pub mod error_codes;
 pub mod events;
 pub mod habits;
 pub mod ignore;
