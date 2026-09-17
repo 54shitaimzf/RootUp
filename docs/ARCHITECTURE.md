@@ -80,6 +80,7 @@ pages → features / components / hooks → lib(API) → Tauri commands → core
 - **组件样式自包含**：组件不得依赖外部容器的文字颜色等样式继承，关键文本必须显式声明浅色/深色两类颜色；弹窗等浮层即使渲染在布局容器之外也要完整可读。
 - **生命周期契约必做项**：桌面壳改动必须对照"后台生命周期"一节核对 `CloseRequested`、`ExitRequested`、单实例三件事，避免破坏后台常驻行为。
 - **共享一致性 fixtures**：`fixtures/` 下的 JSON 由 Rust（`include_str!`）与 TS（JSON import）共同消费；新增跨语言语义（如提醒分组、默认值）一律先落 fixture 再实现/断言，不引入代码生成工具链。
+- **时区无关的日期语义**：双端对纯日期串（`YYYY-MM-DD`）的语义钉死为「本地当天」——Rust `parse_due_date` 与 TS `parseDueLocal`（补本地正午解析，正午在任意时区 / DST 下都不跨日）口径对齐；共享 fixture 的日期断言必须在任意宿主时区下双端成立。CI 含非 UTC 时区（美东）前端测试变体守住该约定（PR #1 教训：windows-latest 固定 UTC，西偏移时区缺陷线上永不触发）。
 - **应用级事件名注册表**：真源为 `fixtures/app-contracts.json` 的 `events`；Rust 侧 `core/events.rs` 常量（`EVENT_*` + `all_app_events()`），前端镜像 `lib/events.ts`（`APP_EVENTS`），双端测试断言与 fixture 一致。emit/listen 一律引用常量，`check-arch` / `check-rust-arch` 门禁禁止注册表外出现裸事件名字面量（测试断言除外）。新增事件 = fixture + 双端常量 + 测试各一处，门禁自动防漂移。
 - **文件状态单一来源**：`fileStates` 同在 `fixtures/app-contracts.json`；TS 侧 `lib/tauri.ts` 导出 `FILE_STATES` 联合类型（`FileRecord.state` 消费），Rust 侧 `core/events.rs::FileState` 枚举（`as_str`/`from_str` round-trip 单测），比较与迁移一律经枚举，不裸串。
 - **类别视觉注册表**：`categories` 真源同 fixture；前端 `lib/categoryDefs.ts` 统一「图标 + 圆底配色」（`resolveCategoryKey` / `resolveCategoryVisual`，未知回退 other），`FileTypeIcon`/`FilterIcon`/归档预览共用，Rust 测试断言 `Category::ALL` 与 fixture 一致；禁止平行硬编码。阶段三标签/方案/软件单元的数据图标 key 注册表沿用同一「key → 视觉」形态。

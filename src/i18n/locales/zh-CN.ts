@@ -478,6 +478,9 @@ export default {
     helpGettingStarted: "了解整理流程",
     noResults: "没有匹配的文件，试试调整筛选条件或搜索语法。",
     helpSearchTips: "查看搜索技巧",
+    softwareComingTitle: "软件单元即将上线",
+    softwareComingDesc:
+      "软件视图依赖软件组件识别（后续版本提供），数据就绪后会自动展示。",
     countInfo: "共 {{total}} 个文件，已显示 {{shown}} 个",
     countShown: "已显示 {{shown}} 个",
     loadMore: "加载更多",

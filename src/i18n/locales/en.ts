@@ -489,6 +489,9 @@ export default {
     helpGettingStarted: "Learn the workflow",
     noResults: "No matching files. Try adjusting filters or syntax.",
     helpSearchTips: "See search tips",
+    softwareComingTitle: "Software units coming soon",
+    softwareComingDesc:
+      "The software view relies on software detection (a later release); entries will appear automatically once data is ready.",
     countInfo: "{{total}} files, showing {{shown}}",
     countShown: "Showing {{shown}} files",
     loadMore: "Load more",

@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 0.8.7 工程与体验小修（发布前收尾）
+
+- **CI 时区盲区防护**：新增非 UTC 时区前端测试变体 job（windows-latest 切美东时区跑 vitest）——PR #1 暴露 CI 运行器固定 UTC，西偏移时区缺陷线上永不触发；共享 fixture「任意宿主时区双端一致」约定自此有 CI 守护。
+- **软件视图预留空态**：文件页软件视图（`kind:software`，数据待 0.8.8 软件单元识别）空结果时显示「软件单元即将上线」说明（中英双语），不再误报「没有匹配的文件」。
+- **ROADMAP 状态重建**：FTS5 全文启用评估从「后续规划（未排期）」正式归入 v0.8.9 决策门制（0.8.6 评估原文「目标 0.8.6 阶段二或 0.8.7」已滑档，消除无归属漂移）；v0.8.8 可靠性加固补「运行期添加监控目录的监视器注册同样异步化」（当前同步递归注册在大目录下阻塞命令数秒，与启动阻塞同源）；0.8.7 状态行补记收官后修复并入情况。ARCHITECTURE 工程约定新增「时区无关的日期语义」（纯日期串语义钉死本地当天，双端口径对齐）。
+
+### 0.8.7 缺陷修复（Fixed，PR #1）
+
+- **自然日差时区缺陷**：`calendarDaysUntil` / `overdueDays` 对纯日期串（`YYYY-MM-DD`）经 `new Date` 按 ES 规范以 UTC 午夜解析，宿主时区为西偏移（如 UTC-4）时日期回退一天——共享 fixture 用例 `due_at=2026-08-06, expected=0` 实得 -1（CI 的 UTC 机器不触发，本地审计暴露）。新增 `parseDueLocal`：纯日期串补本地正午解析，与后端 `parse_due_date` 的「纯日期=当天」口径对齐，跨语言契约 fixture 在任意宿主时区下双端一致。
+- **FileList 行渲染缺 key**：非虚拟路径（`<ul>` 直排）的 `FileRow` 无 key，触发 React「unique key」警告；补 `key={file.path}`（稳定唯一，虚拟滚动路径由 VirtualRows 自行包裹不受影响）。
+- **dev 依赖漏洞清零**：`npm audit fix`（`@vitest/mocker` moderate ×2 路径遍历 / `nanoid` high 零尺寸死循环），仅 patch 级 lockfile 变更，不进产品产物。
+
 ### 0.8.7 归档安全与自动归档强化（功能）
 
 - **归档根安全评估**（`core/archive_guard.rs`，规则真源）：三级判定——系统目录树（Windows / Program Files / ProgramData）与软件存盘区（AppData 三分支整树）及盘根为 **blocked**（后端直接拒绝）；用户根与桌面 / 文档 / 下载等核心目录本身为 **warn**（前端二次确认）；其余及上述目录的**子目录**为 safe（「文档下新建专用子目录」即推荐形态）。判定矩阵入 `fixtures/archive-guard-cases.json`。
@@ -68,12 +80,6 @@
 
 - 版本推进 0.8.7-dev；v0.8.7「单元同构」在 ROADMAP 固化为四阶段执行（契约与界面地基 → units 统一索引 → 软件单元 → 监看管道与快速扫描），条目与验收按阶段拆分。
 - 帮助中心更新亮点在开发版（-dev）下隐藏区块，发布定稿时恢复显示并强制补充当前版本条目（测试门禁保留）。
-
-### 0.8.7 缺陷修复（Fixed）
-
-- **自然日差时区缺陷**：`calendarDaysUntil` / `overdueDays` 对纯日期串（`YYYY-MM-DD`）经 `new Date` 按 ES 规范以 UTC 午夜解析，宿主时区为西偏移（如 UTC-4）时日期回退一天——共享 fixture 用例 `due_at=2026-08-06, expected=0` 实得 -1（CI 的 UTC 机器不触发，本地审计暴露）。新增 `parseDueLocal`：纯日期串补本地正午解析，与后端 `parse_due_date` 的「纯日期=当天」口径对齐，跨语言契约 fixture 在任意宿主时区下双端一致。
-- **FileList 行渲染缺 key**：非虚拟路径（`<ul>` 直排）的 `FileRow` 无 key，触发 React「unique key」警告；补 `key={file.path}`（稳定唯一，虚拟滚动路径由 VirtualRows 自行包裹不受影响）。
-- **dev 依赖漏洞清零**：`npm audit fix`（`@vitest/mocker` moderate ×2 路径遍历 / `nanoid` high 零尺寸死循环），仅 patch 级 lockfile 变更，不进产品产物。
 
 ## [0.8.6] - 2026-08-10
 

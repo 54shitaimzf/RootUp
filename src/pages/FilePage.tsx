@@ -429,6 +429,11 @@ export function FilePage({
               </div>
             }
           />
+        ) : view === "software" && items.length === 0 ? (
+          <EmptyState
+            title={t("files.softwareComingTitle")}
+            description={t("files.softwareComingDesc")}
+          />
         ) : items.length === 0 ? (
           <EmptyState
             title={t("files.noResults")}

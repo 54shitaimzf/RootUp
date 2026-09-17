@@ -405,4 +405,20 @@ describe("FilePage 行操作", () => {
     expect(screen.queryByText("file-299.txt")).not.toBeInTheDocument();
     expect(screen.getAllByRole("listitem").length).toBeLessThan(300);
   });
+
+  it("软件视图空结果时显示预留说明而非无结果", async () => {
+    renderPage();
+    await screen.findByText("notes.pdf");
+    vi.mocked(queryFiles).mockResolvedValue({
+      items: [],
+      total: 0,
+      nextCursor: null,
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "软件" }));
+    expect(
+      await screen.findByText("软件单元即将上线"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/没有匹配的文件/)).not.toBeInTheDocument();
+    expect(screen.queryByText("查看搜索技巧")).not.toBeInTheDocument();
+  });
 });

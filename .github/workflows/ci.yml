@@ -113,6 +113,31 @@ jobs:
           path: release-artifacts
           if-no-files-found: error
 
+  frontend-tz:
+    # 时区盲区防护：windows-latest 固定 UTC，西偏移时区缺陷（如 PR #1 的
+    # calendarDaysUntil 纯日期串 UTC 解析回退）在线上永不触发。本 job 把
+    # 运行器切到美东时区（夏令时 UTC-4）跑一遍前端测试，守住共享 fixture
+    # 「任意宿主时区双端一致」的约定。
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Switch to non-UTC timezone (US Eastern, UTC-4 in DST)
+        run: Set-TimeZone -Id "Eastern Standard Time"
+
+      - name: Frontend tests (non-UTC timezone)
+        run: npm test
+
   smoke:
     needs: ci
     runs-on: windows-latest
