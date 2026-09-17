@@ -2921,7 +2921,7 @@ dependencies = [
 
 [[package]]
 name = "rootup"
-version = "0.8.8-dev"
+version = "0.8.8"
 dependencies = [
  "aho-corasick",
  "chrono",

@@ -208,7 +208,7 @@ describe("HelpCenter", () => {
       return;
     }
     expect(screen.getByText(`更新亮点（${APP_VERSION}）`)).toBeInTheDocument();
-    expect(screen.getByText(/kind: 语法/)).toBeInTheDocument();
+    expect(screen.getByText(/软件单元识别/)).toBeInTheDocument();
   });
 
   it("相关帮助跳转到另一篇文章", () => {
